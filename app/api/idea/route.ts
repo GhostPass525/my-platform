@@ -1,25 +1,28 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+  const { idea } = await req.json();
 
-    if (!body?.idea) {
-      return NextResponse.json(
-        { error: "Missing idea input" },
-        { status: 400 }
-      );
-    }
-
-    // TEMP test response (no OpenAI yet)
-    return NextResponse.json({
-      result: `Your idea is: ${body.idea}`,
-    });
-  } catch (err) {
-    console.error("API ERROR:", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+  if (!idea) {
+    return NextResponse.json({ error: "No idea provided" }, { status: 400 });
   }
+
+  const result = `
+Business Snapshot
+• Business Type: Online brand
+• Core Idea: ${idea}
+• Best Starting Model: Simple, low-risk launch
+
+Recommended First Move
+• Start with 1–2 core products
+• Use print-on-demand or digital delivery
+• Focus on clarity, not scale
+
+Next Steps
+1. Name your business
+2. Define your target customer
+3. Launch a simple landing page
+  `;
+
+  return NextResponse.json({ result });
 }

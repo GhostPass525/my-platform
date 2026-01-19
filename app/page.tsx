@@ -45,10 +45,11 @@ export default function Home() {
       </button>
 
       {result && (
-        <p style={{ marginTop: 20 }}>
-          <strong>Result:</strong> {result}
-        </p>
-      )}
+  <div style={{ marginTop: 30, whiteSpace: "pre-line" }}>
+    {result}
+  </div>
+)}
+
     </main>
   );
 }
