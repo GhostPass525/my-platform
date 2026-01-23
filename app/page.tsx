@@ -4,88 +4,75 @@ import { useState } from "react";
 
 export default function Home() {
   const [idea, setIdea] = useState("");
-  const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
-  const [count, setCount] = useState(0);
+  const [data, setData] = useState<any>(null);
 
-  const handleSubmit = async () => {
-    if (!idea) return;
-
+  async function handleSubmit() {
     setLoading(true);
-    setResult("");
+    setData(null);
 
-    try {
-      const res = await fetch("/api/idea", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idea, count }),
-      });
+    const res = await fetch("/api/idea", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idea }),
+    });
 
-      const data = await res.json();
-      setResult(data.result || data.error);
-      setCount((c) => c + 1);
-    } catch (err) {
-      setResult("Something went wrong. Please try again.");
-    }
-
+    const result = await res.json();
+    setData(result);
     setLoading(false);
-  };
+  }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <div style={{ maxWidth: 600, width: "100%" }}>
-        <h1 style={{ fontSize: 28, marginBottom: 8 }}>
-          What do you want to build?
-        </h1>
+    <main className="min-h-screen p-8 max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold mb-2">
+        What do you want to build?
+      </h1>
+      <p className="text-gray-600 mb-6">
+        You don’t need a perfect idea. Just describe what you’re thinking.
+      </p>
 
-        <p style={{ color: "#666", marginBottom: 20 }}>
-          You don’t need a perfect idea. Just describe what you’re thinking.
-        </p>
+      <input
+        value={idea}
+        onChange={(e) => setIdea(e.target.value)}
+        placeholder="e.g. a gym clothing brand"
+        className="w-full p-3 border rounded mb-4"
+      />
 
-        <input
-          value={idea}
-          onChange={(e) => setIdea(e.target.value)}
-          placeholder="e.g. gym clothing brand, ai agency, supplement company"
-          style={{
-            width: "100%",
-            padding: 12,
-            fontSize: 16,
-            marginBottom: 12,
-          }}
-        />
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className="bg-black text-white px-6 py-3 rounded"
+      >
+        {loading ? "Thinking..." : "Get Started"}
+      </button>
 
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          style={{
-            padding: "10px 18px",
-            fontSize: 16,
-            cursor: "pointer",
-          }}
-        >
-          {loading ? "Thinking..." : "Get Started"}
-        </button>
-
-        {result && (
-          <div
-            style={{
-              marginTop: 30,
-              whiteSpace: "pre-line",
-              lineHeight: 1.6,
-            }}
-          >
-            {result}
+      {data && (
+        <div className="mt-10 space-y-6">
+          <div>
+            <p className="font-semibold">{data.hook.recognition}</p>
+            <p>{data.hook.insight}</p>
+            <p className="italic">{data.hook.momentum}</p>
           </div>
-        )}
-      </div>
+
+          <div>
+            <h2 className="font-bold">Business Snapshot</h2>
+            <ul className="list-disc ml-6">
+              <li><strong>Type:</strong> {data.snapshot.businessType}</li>
+              <li><strong>Edge:</strong> {data.snapshot.edge}</li>
+              <li><strong>Main Risk:</strong> {data.snapshot.risk}</li>
+            </ul>
+          </div>
+
+          <div>
+            <h2 className="font-bold">Your First Moves</h2>
+            <ol className="list-decimal ml-6">
+              {data.actionPlan.map((step: string, i: number) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
