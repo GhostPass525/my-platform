@@ -50,10 +50,22 @@ Return JSON ONLY in this exact structure:
       ],
     });
 
-    const content = completion.choices[0].message.content;
+    // Safely handle null
+    const content = completion.choices[0].message?.content;
+    if (!content) {
+      return NextResponse.json(
+        { error: "No response from OpenAI" },
+        { status: 500 }
+      );
+    }
 
-if (!content) {
-  throw new Error("No content returned from OpenAI");
+    return NextResponse.json(JSON.parse(content));
+
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Failed to generate response" },
+      { status: 500 }
+    );
+  }
 }
-
-return NextResponse.json(JSON.parse(content))
