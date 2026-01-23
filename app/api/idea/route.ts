@@ -52,12 +52,8 @@ Return JSON ONLY in this exact structure:
 
     const content = completion.choices[0].message.content;
 
-    return NextResponse.json(JSON.parse(content));
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "Failed to generate response" },
-      { status: 500 }
-    );
-  }
+if (!content) {
+  throw new Error("No content returned from OpenAI");
 }
+
+return NextResponse.json(JSON.parse(content))
