@@ -9,73 +9,79 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const idea = body.idea;
+    const context = body.context || "";
 
     if (!idea) {
       return NextResponse.json(
-        { error: "No idea provided" },
+        { error: "Missing idea" },
         { status: 400 }
       );
     }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `
+    const prompt = `
 You are an AI business partner and mentor.
-Return ONLY valid JSON in the exact structure below.
-DO NOT include markdown, explanations, or extra text.
+
+Original idea:
+${idea}
+
+User follow-up (if any):
+${context || "None"}
+
+Respond thoughtfully, personally, and specifically.
+Avoid generic advice.
+Make the user feel understood, capable, and motivated.
+
+Return ONLY valid JSON in this exact format:
 
 {
   "hook": {
-    "recognition": "string",
-    "insight": "string",
-    "momentum": "string"
+    "recognition": "",
+    "insight": "",
+    "momentum": ""
   },
   "snapshot": {
-    "businessType": "string",
-    "edge": "string",
-    "risk": "string"
+    "businessType": "",
+    "edge": "",
+    "risk": ""
   },
-  "actionPlan": ["string", "string", "string"]
+  "actionPlan": []
 }
-          `,
-        },
-        {
-          role: "user",
-          content: idea,
-        },
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a sharp, encouraging startup mentor." },
+        { role: "user", content: prompt }
       ],
+      temperature: 0.8,
     });
 
     const content = completion.choices[0].message?.content;
 
     if (!content) {
       return NextResponse.json(
-        { error: "OpenAI returned empty response" },
+        { error: "No response from OpenAI" },
         { status: 500 }
       );
     }
 
-    // ✅ SAFELY PARSE JSON
-    let parsed;
+    // ✅ SAFE JSON PARSE
     try {
-      parsed = JSON.parse(content);
-    } catch (err) {
-      console.error("Invalid JSON from OpenAI:", content);
+      const parsed = JSON.parse(content);
+      return NextResponse.json(parsed);
+    } catch (parseError) {
+      console.error("JSON parse failed:", content);
       return NextResponse.json(
-        { error: "Invalid JSON returned by AI", raw: content },
+        { error: "Invalid AI response format" },
         { status: 500 }
       );
     }
-
-    return NextResponse.json(parsed);
 
   } catch (error) {
-    console.error("Route error:", error);
+    console.error("API error:", error);
     return NextResponse.json(
-      { error: "Server error generating idea" },
+      { error: "Failed to generate response" },
       { status: 500 }
     );
   }

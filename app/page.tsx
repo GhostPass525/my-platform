@@ -2,76 +2,92 @@
 
 import { useState } from "react";
 
-export default function Home() {
+export default function Page() {
   const [idea, setIdea] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [step, setStep] = useState<"initial" | "followup">("initial");
 
-  async function handleSubmit() {
+  async function submitIdea(context?: string) {
     setLoading(true);
-    setData(null);
 
-    const res = await fetch("/api/idea", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea }),
-    });
+    try {
+      const res = await fetch("/api/idea", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idea,
+          context,
+        }),
+      });
 
-    const result = await res.json();
-    setData(result);
-    setLoading(false);
+      const data = await res.json();
+      setResult(data);
+      setStep("followup");
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong. Try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <main className="min-h-screen p-8 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">
-        What do you want to build?
-      </h1>
-      <p className="text-gray-600 mb-6">
-        You don’t need a perfect idea. Just describe what you’re thinking.
-      </p>
+    <main style={{ maxWidth: 700, margin: "60px auto", padding: 20 }}>
+      <h1>What do you want to build?</h1>
+      <p>You don’t need a perfect idea. Just describe what you’re thinking.</p>
 
-      <input
-        value={idea}
-        onChange={(e) => setIdea(e.target.value)}
-        placeholder="e.g. a gym clothing brand"
-        className="w-full p-3 border rounded mb-4"
-      />
+      {step === "initial" && (
+        <>
+          <input
+            value={idea}
+            onChange={(e) => setIdea(e.target.value)}
+            placeholder="e.g. a gym clothing brand"
+            style={{ width: "100%", padding: 12, marginBottom: 12 }}
+          />
+          <button onClick={() => submitIdea()} disabled={loading}>
+            {loading ? "Thinking..." : "Get Started"}
+          </button>
+        </>
+      )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        className="bg-black text-white px-6 py-3 rounded"
-      >
-        {loading ? "Thinking..." : "Get Started"}
-      </button>
+      {result && (
+        <>
+          <div style={{ marginTop: 40 }}>
+            {result.hook?.recognition && <p>{result.hook.recognition}</p>}
+            {result.hook?.insight && <p>{result.hook.insight}</p>}
+            {result.hook?.momentum && <p>{result.hook.momentum}</p>}
 
-      {data && (
-        <div className="mt-10 space-y-6">
-          <div>
-            <p className="font-semibold">{data.hook.recognition}</p>
-            <p>{data.hook.insight}</p>
-            <p className="italic">{data.hook.momentum}</p>
-          </div>
+            <h3>Business Snapshot</h3>
+            <p><strong>Type:</strong> {result.snapshot?.businessType}</p>
+            <p><strong>Edge:</strong> {result.snapshot?.edge}</p>
+            <p><strong>Main Risk:</strong> {result.snapshot?.risk}</p>
 
-          <div>
-            <h2 className="font-bold">Business Snapshot</h2>
-            <ul className="list-disc ml-6">
-              <li><strong>Type:</strong> {data.snapshot.businessType}</li>
-              <li><strong>Edge:</strong> {data.snapshot.edge}</li>
-              <li><strong>Main Risk:</strong> {data.snapshot.risk}</li>
+            <h3>Your First Moves</h3>
+            <ul>
+              {result.actionPlan?.map((step: string, i: number) => (
+                <li key={i}>{step}</li>
+              ))}
             </ul>
           </div>
 
-          <div>
-            <h2 className="font-bold">Your First Moves</h2>
-            <ol className="list-decimal ml-6">
-              {data.actionPlan.map((step: string, i: number) => (
-                <li key={i}>{step}</li>
-              ))}
-            </ol>
+          <div style={{ marginTop: 40 }}>
+            <h3>Want to refine this?</h3>
+            <p>Add constraints, goals, or what you’re unsure about.</p>
+
+            <input
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              placeholder="e.g. I only have $500 and want this to feel premium"
+              style={{ width: "100%", padding: 12, marginBottom: 12 }}
+            />
+
+            <button onClick={() => submitIdea(followUp)} disabled={loading}>
+              {loading ? "Refining..." : "Continue"}
+            </button>
           </div>
-        </div>
+        </>
       )}
     </main>
   );
