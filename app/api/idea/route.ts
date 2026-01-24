@@ -2,69 +2,80 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export async function POST(req: Request) {
   try {
-    const { idea } = await req.json();
+    const body = await req.json();
+    const idea = body.idea;
 
-    const systemPrompt = `
-You are Inflection Point — an AI business partner and mentor.
-
-Your job:
-- Make the user feel understood
-- Show them this idea is REAL and doable
-- Give specific, non-generic insight
-- Speak like a calm, confident human mentor
-
-Return JSON ONLY in this exact structure:
-{
-  "hook": {
-    "recognition": "...",
-    "insight": "...",
-    "momentum": "..."
-  },
-  "snapshot": {
-    "businessType": "...",
-    "edge": "...",
-    "risk": "..."
-  },
-  "actionPlan": [
-    "...",
-    "...",
-    "..."
-  ]
-}
-`;
+    if (!idea) {
+      return NextResponse.json(
+        { error: "No idea provided" },
+        { status: 400 }
+      );
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.85,
       messages: [
-        { role: "system", content: systemPrompt },
+        {
+          role: "system",
+          content: `
+You are an AI business partner and mentor.
+Return ONLY valid JSON in the exact structure below.
+DO NOT include markdown, explanations, or extra text.
+
+{
+  "hook": {
+    "recognition": "string",
+    "insight": "string",
+    "momentum": "string"
+  },
+  "snapshot": {
+    "businessType": "string",
+    "edge": "string",
+    "risk": "string"
+  },
+  "actionPlan": ["string", "string", "string"]
+}
+          `,
+        },
         {
           role: "user",
-          content: `The business idea is: ${idea}`,
+          content: idea,
         },
       ],
     });
 
-    // Safely handle null
     const content = completion.choices[0].message?.content;
+
     if (!content) {
       return NextResponse.json(
-        { error: "No response from OpenAI" },
+        { error: "OpenAI returned empty response" },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(JSON.parse(content));
+    // ✅ SAFELY PARSE JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      console.error("Invalid JSON from OpenAI:", content);
+      return NextResponse.json(
+        { error: "Invalid JSON returned by AI", raw: content },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(parsed);
 
   } catch (error) {
-    console.error(error);
+    console.error("Route error:", error);
     return NextResponse.json(
-      { error: "Failed to generate response" },
+      { error: "Server error generating idea" },
       { status: 500 }
     );
   }
