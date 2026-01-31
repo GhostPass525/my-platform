@@ -7,62 +7,55 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { idea, count } = await req.json();
+    const { messages } = await req.json();
 
-    if (!idea) {
+    if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
-        { error: "No idea provided." },
+        { error: "Invalid message format." },
         { status: 400 }
       );
     }
 
-    // 3-response free limit
-    if (count >= 3) {
-      return NextResponse.json({
-        result:
-          "You’re at an inflection point.\n\nYou’ve got something real here — and this is usually where clarity turns into momentum.\n\nTo keep building with guidance and turn this into something concrete, continue with Inflection Point.",
-        locked: true,
-      });
-    }
-
     const systemPrompt = `
-You are Inflection Point — an experienced business partner and operator.
+You are Inflection Point — a calm, experienced business partner.
 
-Your job is to help everyday people turn vague ideas into real businesses.
-
-Rules:
-- Speak directly to the user
-- Be calm, confident, and encouraging
-- Be specific to the idea provided
-- Avoid generic advice
+Your role:
+- Help the user think clearly
+- Respond like a real human mentor
+- Be specific to THEIR idea
+- Avoid generic startup advice
 - Reduce overwhelm
-- Give one strong, grounded opinion
-- Keep responses short and powerful
-- Make the user feel: "I can actually do this"
+- Encourage momentum
+- Ask at most ONE thoughtful question per reply
 
-Do not hype. Do not overexplain.
+Tone:
+Grounded. Honest. Supportive.
+Make the user feel:
+"I can actually do this."
+"I’m closer than I thought."
+
+Do NOT pitch.
+Do NOT overexplain.
+Do NOT repeat yourself.
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `The business idea is: ${idea}`,
-        },
+        ...messages,
       ],
-      temperature: 0.8,
+      temperature: 0.85,
     });
 
-    const response =
-      completion.choices[0].message.content ||
-      "Something went wrong generating a response.";
+    const reply =
+      completion.choices[0].message.content ??
+      "I’m thinking — try that again.";
 
-    return NextResponse.json({ result: response });
-  } catch (err) {
+    return NextResponse.json({ reply });
+  } catch (error) {
     return NextResponse.json(
-      { error: "Error generating idea." },
+      { error: "Error generating response." },
       { status: 500 }
     );
   }
