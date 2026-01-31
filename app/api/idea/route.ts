@@ -2,86 +2,67 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const idea = body.idea;
-    const context = body.context || "";
+    const { idea, count } = await req.json();
 
     if (!idea) {
       return NextResponse.json(
-        { error: "Missing idea" },
+        { error: "No idea provided." },
         { status: 400 }
       );
     }
 
-    const prompt = `
-You are an AI business partner and mentor.
+    // 3-response free limit
+    if (count >= 3) {
+      return NextResponse.json({
+        result:
+          "You’re at an inflection point.\n\nYou’ve got something real here — and this is usually where clarity turns into momentum.\n\nTo keep building with guidance and turn this into something concrete, continue with Inflection Point.",
+        locked: true,
+      });
+    }
 
-Original idea:
-${idea}
+    const systemPrompt = `
+You are Inflection Point — an experienced business partner and operator.
 
-User follow-up (if any):
-${context || "None"}
+Your job is to help everyday people turn vague ideas into real businesses.
 
-Respond thoughtfully, personally, and specifically.
-Avoid generic advice.
-Make the user feel understood, capable, and motivated.
+Rules:
+- Speak directly to the user
+- Be calm, confident, and encouraging
+- Be specific to the idea provided
+- Avoid generic advice
+- Reduce overwhelm
+- Give one strong, grounded opinion
+- Keep responses short and powerful
+- Make the user feel: "I can actually do this"
 
-Return ONLY valid JSON in this exact format:
-
-{
-  "hook": {
-    "recognition": "",
-    "insight": "",
-    "momentum": ""
-  },
-  "snapshot": {
-    "businessType": "",
-    "edge": "",
-    "risk": ""
-  },
-  "actionPlan": []
-}
+Do not hype. Do not overexplain.
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are a sharp, encouraging startup mentor." },
-        { role: "user", content: prompt }
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `The business idea is: ${idea}`,
+        },
       ],
       temperature: 0.8,
     });
 
-    const content = completion.choices[0].message?.content;
+    const response =
+      completion.choices[0].message.content ||
+      "Something went wrong generating a response.";
 
-    if (!content) {
-      return NextResponse.json(
-        { error: "No response from OpenAI" },
-        { status: 500 }
-      );
-    }
-
-    // ✅ SAFE JSON PARSE
-    try {
-      const parsed = JSON.parse(content);
-      return NextResponse.json(parsed);
-    } catch (parseError) {
-      console.error("JSON parse failed:", content);
-      return NextResponse.json(
-        { error: "Invalid AI response format" },
-        { status: 500 }
-      );
-    }
-
-  } catch (error) {
-    console.error("API error:", error);
+    return NextResponse.json({ result: response });
+  } catch (err) {
     return NextResponse.json(
-      { error: "Failed to generate response" },
+      { error: "Error generating idea." },
       { status: 500 }
     );
   }
