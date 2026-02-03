@@ -44,9 +44,28 @@ export default function Home() {
         body: JSON.stringify({ messages: updatedMessages }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      setMessages((prev) => [...prev, { role: "assistant", content: data.result }]);
+if (!res.ok) {
+  const msg =
+    data?.error ||
+    "The server hit an issue. Try again in a moment.";
+  setMessages((prev) => [
+    ...prev,
+    { role: "assistant", content: msg },
+  ]);
+  return;
+}
+
+const msg =
+  data?.result ||
+  "I got your message — but I didn’t generate a reply. Try again.";
+
+setMessages((prev) => [
+  ...prev,
+  { role: "assistant", content: msg },
+]);
+
 
       // After ~3 assistant replies, allow generation
       const assistantCount =

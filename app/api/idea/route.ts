@@ -1,85 +1,54 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-function safeJsonParse(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Attempt to extract JSON block if the model wraps it
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      return JSON.parse(match[0]);
-    }
-    throw new Error("Invalid JSON");
-  }
-}
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const messages = body?.messages;
 
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "No messages provided" }, { status: 400 });
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json(
+        { error: "No conversation messages received." },
+        { status: 400 }
+      );
     }
 
     const systemPrompt = `
 You are Inflection Point — an experienced business partner and operator.
 
-The user has been having a conversation with you about their business.
-Your task now is to generate a FIRST VERSION of a high-converting landing page.
-
-Return ONLY valid JSON (no markdown, no commentary). The JSON must match this schema exactly:
-
-{
-  "brandName": "string",
-  "tagline": "string",
-  "heroHeadline": "string",
-  "heroSubheadline": "string",
-  "primaryCTA": "string",
-  "audience": "string",
-  "offer": "string",
-  "firstProductOrService": "string",
-  "sections": [
-    { "title": "string", "bullets": ["string","string","string"] }
-  ],
-  "faq": [
-    { "q": "string", "a": "string" }
-  ]
-}
+This is an ongoing conversation.
+You must remember prior decisions and NEVER ask questions already answered.
 
 Rules:
-- Make it specific to what the user said in the conversation.
-- No vague filler.
-- The landing page should feel credible and exciting.
-- Keep bullets practical and clear.
+- Speak like a calm, thoughtful mentor
+- Build on what the user already said
+- Avoid repeating the same structure every time
+- Keep it short and powerful
+- Ask at most ONE question per reply
+- Reduce overwhelm and push toward clarity
 `;
 
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
-      input: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-        {
-          role: "user",
-          content:
-            "Generate the landing page JSON now. Return ONLY JSON, matching the schema exactly.",
-        },
-      ],
-      temperature: 0.8,
+      input: [{ role: "system", content: systemPrompt }, ...messages],
+      temperature: 0.85,
     });
 
-    const text = resp.output_text || "";
-    const site = safeJsonParse(text);
+    const text = resp.output_text?.trim();
+    if (!text) {
+      return NextResponse.json(
+        { error: "OpenAI returned an empty response." },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ site });
-  } catch (err) {
-    console.error("GENERATION ERROR:", err);
+    return NextResponse.json({ result: text });
+  } catch (err: any) {
+    console.error("IDEA ROUTE ERROR:", err);
     return NextResponse.json(
-      { error: "Failed to generate site." },
+      { error: "Server error in /api/idea." },
       { status: 500 }
     );
   }
