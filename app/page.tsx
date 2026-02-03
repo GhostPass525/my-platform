@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -27,6 +27,11 @@ export default function Home() {
 
   const [site, setSite] = useState<SiteSpec | null>(null);
 
+  const assistantCount = useMemo(
+    () => messages.filter((m) => m.role === "assistant").length,
+    [messages]
+  );
+
   const sendMessage = async () => {
     if (!input.trim() || loadingChat) return;
 
@@ -46,35 +51,35 @@ export default function Home() {
 
       const data = await res.json().catch(() => ({}));
 
-if (!res.ok) {
-  const msg =
-    data?.error ||
-    "The server hit an issue. Try again in a moment.";
-  setMessages((prev) => [
-    ...prev,
-    { role: "assistant", content: msg },
-  ]);
-  return;
-}
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              data?.error ||
+              "The server hit an issue. Try again in a moment.",
+          },
+        ]);
+        return;
+      }
 
-const msg =
-  data?.result ||
-  "I got your message — but I didn’t generate a reply. Try again.";
+      const reply =
+        data?.result ||
+        "I got your message — but I didn’t generate a reply. Try again.";
 
-setMessages((prev) => [
-  ...prev,
-  { role: "assistant", content: msg },
-]);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
-
-      // After ~3 assistant replies, allow generation
-      const assistantCount =
-        updatedMessages.filter((m) => m.role === "assistant").length + 1; // +1 because we just added one assistant reply
-      if (assistantCount >= 3) setCanGenerate(true);
+      // After 3 assistant replies, show generation CTA
+      const nextAssistantCount = assistantCount + 1;
+      if (nextAssistantCount >= 3) setCanGenerate(true);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Something went wrong. Try again." },
+        {
+          role: "assistant",
+          content: "Something went wrong. Try again.",
+        },
       ]);
     } finally {
       setLoadingChat(false);
@@ -93,17 +98,40 @@ setMessages((prev) => [
         body: JSON.stringify({ messages }),
       });
 
-      const data = await res.json();
-      if (!data.site) throw new Error("No site returned");
+      const data = await res.json().catch(() => ({}));
 
-      setSite(data.site);
-    } catch {
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              data?.error ||
+              "Generation failed — but we’re close. Try again.",
+          },
+        ]);
+        return;
+      }
+
+      if (!data.site) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              "I didn’t receive the site blueprint. Try generating again.",
+          },
+        ]);
+        return;
+      }
+
+      setSite(data.site as SiteSpec);
+    } catch (e: any) {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            "I couldn’t generate the site that time. Try again — we’re close.",
+          content: `Generation error: ${e?.message || "Unknown error"}`,
         },
       ]);
     } finally {
@@ -111,7 +139,7 @@ setMessages((prev) => [
     }
   };
 
-  // If we generated a site, show the editor + preview
+  // If a site exists, show editor + preview
   if (site) {
     return (
       <main className="min-h-screen px-6 py-10">
@@ -129,7 +157,9 @@ setMessages((prev) => [
                 <input
                   className="w-full border rounded-lg px-4 py-2"
                   value={site.brandName}
-                  onChange={(e) => setSite({ ...site, brandName: e.target.value })}
+                  onChange={(e) =>
+                    setSite({ ...site, brandName: e.target.value })
+                  }
                 />
               </label>
 
@@ -170,11 +200,13 @@ setMessages((prev) => [
                 <input
                   className="w-full border rounded-lg px-4 py-2"
                   value={site.primaryCTA}
-                  onChange={(e) => setSite({ ...site, primaryCTA: e.target.value })}
+                  onChange={(e) =>
+                    setSite({ ...site, primaryCTA: e.target.value })
+                  }
                 />
               </label>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   className="bg-black text-white px-5 py-2 rounded-lg hover:opacity-80"
                   onClick={() => setSite(null)}
@@ -185,7 +217,9 @@ setMessages((prev) => [
                 <button
                   className="border px-5 py-2 rounded-lg hover:bg-gray-50"
                   onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(site, null, 2));
+                    navigator.clipboard.writeText(
+                      JSON.stringify(site, null, 2)
+                    );
                     alert("Copied website JSON to clipboard.");
                   }}
                 >
@@ -194,7 +228,8 @@ setMessages((prev) => [
               </div>
 
               <p className="text-xs text-gray-500 pt-2">
-                Deploy + paywall comes next. For now you can edit and copy the blueprint.
+                Deploy + subscription gate comes next. For now you can edit and
+                copy the blueprint.
               </p>
             </div>
           </div>
@@ -204,7 +239,9 @@ setMessages((prev) => [
             <div className="text-sm text-gray-500 mb-2">{site.tagline}</div>
             <div className="text-2xl font-semibold mb-2">{site.brandName}</div>
 
-            <h2 className="text-3xl font-semibold mt-6 mb-3">{site.heroHeadline}</h2>
+            <h2 className="text-3xl font-semibold mt-6 mb-3">
+              {site.heroHeadline}
+            </h2>
             <p className="text-gray-700 mb-5 whitespace-pre-line">
               {site.heroSubheadline}
             </p>
@@ -219,7 +256,8 @@ setMessages((prev) => [
                 <br />
                 <strong>Offer:</strong> {site.offer}
                 <br />
-                <strong>First Product/Service:</strong> {site.firstProductOrService}
+                <strong>First Product/Service:</strong>{" "}
+                {site.firstProductOrService}
               </div>
 
               {site.sections.map((s, idx) => (
