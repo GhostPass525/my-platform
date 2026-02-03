@@ -7,57 +7,56 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { idea } = await req.json();
 
-    if (!messages || !Array.isArray(messages)) {
+    if (!idea) {
       return NextResponse.json(
-        { error: "Invalid message format." },
+        { error: "No idea provided" },
         { status: 400 }
       );
     }
 
     const systemPrompt = `
-You are Inflection Point — a calm, experienced business partner.
+You are Inflection Point — an experienced business partner and operator.
 
 Your role:
-- Help the user think clearly
-- Respond like a real human mentor
+Help everyday people turn vague ideas into real, achievable online businesses.
+
+Rules:
+- Speak directly to the user
+- Be calm, grounded, and encouraging
 - Be specific to THEIR idea
-- Avoid generic startup advice
+- Avoid generic advice
 - Reduce overwhelm
-- Encourage momentum
-- Ask at most ONE thoughtful question per reply
-
-Tone:
-Grounded. Honest. Supportive.
-Make the user feel:
-"I can actually do this."
-"I’m closer than I thought."
-
-Do NOT pitch.
-Do NOT overexplain.
-Do NOT repeat yourself.
+- Give clear, realistic direction
+- Keep it concise but meaningful
+- Make the user feel: "I can actually do this"
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: `The business idea is: ${idea}`,
+        },
       ],
-      temperature: 0.85,
     });
 
-    const reply =
-      completion.choices[0].message.content ??
-      "I’m thinking — try that again.";
+    const output =
+      response.output_text ||
+      "I see potential here, but let’s slow down and clarify it.";
 
-    return NextResponse.json({ reply });
+    return NextResponse.json({ result: output });
   } catch (error) {
+    console.error("API ERROR:", error);
     return NextResponse.json(
-      { error: "Error generating response." },
+      { error: "Failed to generate response" },
       { status: 500 }
     );
   }
 }
-
