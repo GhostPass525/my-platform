@@ -7,55 +7,60 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { idea } = await req.json();
+    const { messages } = await req.json();
 
-    if (!idea) {
+    if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
-        { error: "No idea provided" },
+        { error: "No messages provided" },
         { status: 400 }
       );
     }
 
+    const assistantMessages = messages.filter(
+      (m: any) => m.role === "assistant"
+    ).length;
+
     const systemPrompt = `
 You are Inflection Point — an experienced business partner and operator.
 
-Your role:
-Help everyday people turn vague ideas into real, achievable online businesses.
+This is an ongoing conversation.
+You remember prior decisions and NEVER ask questions already answered.
 
 Rules:
-- Speak directly to the user
-- Be calm, grounded, and encouraging
-- Be specific to THEIR idea
-- Avoid generic advice
+- Speak like a calm, thoughtful mentor
+- Build on what the user already said
+- Do NOT repeat advice
+- Avoid lists unless necessary
 - Reduce overwhelm
-- Give clear, realistic direction
-- Keep it concise but meaningful
-- Make the user feel: "I can actually do this"
+- Guide toward clarity and commitment
+- After clarity forms, gently suggest generation
+
+Tone:
+Grounded. Human. Encouraging. Precise.
+
+Do NOT reset the conversation.
 `;
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: `The business idea is: ${idea}`,
-        },
+        { role: "system", content: systemPrompt },
+        ...messages,
       ],
     });
 
     const output =
       response.output_text ||
-      "I see potential here, but let’s slow down and clarify it.";
+      "Let’s slow down and make sure we’re aligned.";
 
-    return NextResponse.json({ result: output });
+    return NextResponse.json({
+      result: output,
+      canGenerate: assistantMessages >= 2,
+    });
   } catch (error) {
-    console.error("API ERROR:", error);
+    console.error(error);
     return NextResponse.json(
-      { error: "Failed to generate response" },
+      { error: "Generation failed" },
       { status: 500 }
     );
   }

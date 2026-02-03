@@ -11,16 +11,18 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [canGenerate, setCanGenerate] = useState(false);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const sendMessage = async (customMessage?: string) => {
+    if ((!input.trim() && !customMessage) || loading) return;
 
     const userMessage: Message = {
       role: "user",
-      content: input,
+      content: customMessage || input,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
@@ -29,21 +31,21 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idea: input,
+          messages: updatedMessages,
         }),
       });
 
       const data = await res.json();
 
-      const aiMessage: Message = {
-        role: "assistant",
-        content:
-          data.result ||
-          "Let’s pause for a second and make sure we’re aligned.",
-      };
+      if (data.canGenerate) {
+        setCanGenerate(true);
+      }
 
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.result },
+      ]);
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -59,12 +61,11 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center px-6 py-10">
       <div className="w-full max-w-2xl flex flex-col flex-1">
-        {/* Header */}
         <h1 className="text-3xl font-semibold mb-6 text-center">
           Inflection Point
         </h1>
 
-        {/* Chat Area */}
+        {/* Chat */}
         <div className="flex-1 space-y-6 overflow-y-auto mb-6">
           {messages.length === 0 && (
             <p className="text-center text-gray-500">
@@ -85,24 +86,34 @@ export default function Home() {
             </div>
           ))}
 
-          {loading && (
-            <div className="text-left text-gray-400">
-              Thinking…
-            </div>
-          )}
+          {loading && <div className="text-gray-400">Thinking…</div>}
         </div>
 
-        {/* Input Bar */}
+        {/* Generate CTA */}
+        {canGenerate && (
+          <button
+            onClick={() =>
+              sendMessage(
+                "Yes, generate my business and first website."
+              )
+            }
+            className="mb-4 bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium hover:opacity-90"
+          >
+            Generate My Business
+          </button>
+        )}
+
+        {/* Input */}
         <div className="flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             placeholder="Continue the conversation…"
             className="flex-1 px-4 py-3 border rounded-lg"
           />
           <button
-            onClick={handleSend}
+            onClick={() => sendMessage()}
             disabled={loading}
             className={`px-5 py-3 rounded-lg font-medium transition ${
               loading
