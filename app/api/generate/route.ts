@@ -1,28 +1,31 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-export async function POST(req: Request) {
+// ---------- helper to safely parse JSON ----------
+function tryParseJSON(text: string) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const messages = body?.messages;
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: "No conversation messages received in /api/generate." },
-        { status: 400 }
-      );
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      return JSON.parse(match[0]);
     }
+    throw new Error("Invalid JSON returned by model.");
+  }
+}
 
-    // Strong instruction: return ONLY JSON
-    const systemPrompt = `
+// ---------- generate once ----------
+async function generateOnce(messages: any[]) {
+  const systemPrompt = `
 You are Inflection Point.
 
-Task:
-Generate a first-version landing page blueprint based on the conversation.
+Generate a first-version landing page blueprint from the conversation.
 
-Return ONLY valid JSON with EXACTLY this structure (no markdown, no extra text):
+Return ONLY valid JSON with EXACTLY this structure:
 
 {
   "brandName": "string",
@@ -42,84 +45,65 @@ Return ONLY valid JSON with EXACTLY this structure (no markdown, no extra text):
 }
 
 Rules:
-- Specific to this user's conversation (motivational gym brand, breathable quality materials)
-- No vague filler
-- 3–6 sections
-- 3–6 FAQs
-- Output MUST be valid JSON. No trailing commas.
+- No markdown
+- No explanation
+- No extra text
+- Must be valid JSON
 `;
 
-    const resp = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-        {
-          role: "user",
-          content:
-            "Generate the landing page JSON now. Output ONLY the JSON object.",
-        },
-      ],
-      temperature: 0.7,
-    });
+  const resp = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    temperature: 0.7,
+    input: [
+      { role: "system", content: systemPrompt },
+      ...messages,
+      {
+        role: "user",
+        content: "Generate the landing page JSON now.",
+      },
+    ],
+  });
 
-    const raw = (resp.output_text || "").trim();
+  const text = resp.output_text?.trim();
+  if (!text) throw new Error("Empty model response");
 
-    if (!raw) {
+  return tryParseJSON(text);
+}
+
+// ---------- route handler ----------
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const messages = body?.messages;
+
+    if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
-        { error: "OpenAI returned empty output_text in /api/generate." },
-        { status: 500 }
+        { error: "No conversation messages provided." },
+        { status: 400 }
       );
     }
 
-    // Try parse as JSON. If model wrapped it, extract the first {...} block.
-    let jsonText = raw;
-    if (!raw.startsWith("{")) {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match?.[0]) jsonText = match[0];
-    }
+    let site;
 
-    let site: any;
     try {
-      site = JSON.parse(jsonText);
-    } catch (e: any) {
-      return NextResponse.json(
-        {
-          error:
-            "Generation returned non-JSON. Here is the raw output (first 800 chars):\n\n" +
-            raw.slice(0, 800),
-        },
-        { status: 500 }
-      );
+      site = await generateOnce(messages);
+    } catch {
+      // automatic retry once
+      site = await generateOnce(messages);
     }
 
-    // Minimal schema validation so you don’t get a blank editor
-    const required = [
-      "brandName",
-      "tagline",
-      "heroHeadline",
-      "heroSubheadline",
-      "primaryCTA",
-      "audience",
-      "offer",
-      "firstProductOrService",
-      "sections",
-      "faq",
-    ];
-    for (const key of required) {
-      if (!(key in site)) {
-        return NextResponse.json(
-          { error: `Missing "${key}" in generated JSON.` },
-          { status: 500 }
-        );
-      }
+    if (!site) {
+      return NextResponse.json(
+        { error: "Generation failed after retry." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ site });
   } catch (err: any) {
     console.error("GENERATE ROUTE ERROR:", err);
     return NextResponse.json(
-      { error: `Server error in /api/generate: ${err?.message || err}` },
+      { error: err?.message || "Server generation error" },
       { status: 500 }
     );
   }
