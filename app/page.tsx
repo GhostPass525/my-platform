@@ -58,13 +58,15 @@ type SiteSpec = {
   heroImageDataUrl?: string;
 
   products: Product[];
-
-  // NEW: multi-page
   pages: Page[];
 };
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
@@ -76,7 +78,7 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// Bright default: white background + blue accents
+// Bright default (white + blue)
 const LIGHT_THEME: Theme = {
   accent: "#2563eb",
   accent2: "#06b6d4",
@@ -129,8 +131,6 @@ const FONT_OPTIONS: FontChoice[] = [
 ];
 
 function fontStack(font: FontChoice) {
-  // We’re not loading Google Fonts yet; this uses system fallbacks.
-  // Later we’ll load real font files.
   switch (font) {
     case "Georgia":
       return `Georgia, "Times New Roman", Times, serif`;
@@ -156,7 +156,6 @@ export default function Home() {
     "quick" | "content" | "design" | "pages" | "products" | "sections"
   >("quick");
 
-  // Preview page selection
   const [activePageId, setActivePageId] = useState<string>("");
 
   const logoPickerRef = useRef<HTMLInputElement | null>(null);
@@ -168,7 +167,7 @@ export default function Home() {
   );
   const canGenerate = assistantCount >= 3 && !generating;
 
-  const appTheme = site?.theme ?? LIGHT_THEME;
+  const theme = site?.theme ?? LIGHT_THEME;
 
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
@@ -193,10 +192,7 @@ export default function Home() {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content: data?.error || "Server issue. Try again in a moment.",
-          },
+          { role: "assistant", content: data?.error || "Server issue. Try again." },
         ]);
         return;
       }
@@ -222,11 +218,7 @@ export default function Home() {
     if (messages.length === 0) {
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content:
-            "Tell me what you’re building first. After a few messages, hit Generate.",
-        },
+        { role: "assistant", content: "Tell me what you’re building first." },
       ]);
       return;
     }
@@ -234,21 +226,23 @@ export default function Home() {
     setGenerating(true);
 
     try {
-      const res = await fetch("/api/generate", {
+      // Force at least 5 seconds of loading (feels intentional)
+      const minDelay = sleep(5000);
+
+      const resPromise = fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
       });
+
+      const [res] = await Promise.all([resPromise, minDelay]);
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content: data?.error || "Generation failed — try again.",
-          },
+          { role: "assistant", content: data?.error || "Generation failed — try again." },
         ]);
         return;
       }
@@ -294,7 +288,7 @@ export default function Home() {
         {
           role: "assistant",
           content:
-            "Generated.\n\nNext: add a hero image + make your Products page feel real. I’ll guide what increases trust and conversions.",
+            "Generated.\n\nNext: upload a hero image + make your Products page look real.",
         },
       ]);
     } catch (e: any) {
@@ -312,10 +306,7 @@ export default function Home() {
     if (!site) return;
     setSite({
       ...site,
-      products: [
-        ...site.products,
-        { id: uid(), name: "New Product", price: "$00" },
-      ],
+      products: [...site.products, { id: uid(), name: "New Product", price: "$00" }],
     });
   };
 
@@ -366,7 +357,6 @@ export default function Home() {
     if (!site) return;
     const remaining = site.pages.filter((p) => p.id !== id);
     if (remaining.length === 0) return;
-
     setSite({ ...site, pages: remaining });
     if (activePageId === id) setActivePageId(remaining[0].id);
   };
@@ -376,24 +366,16 @@ export default function Home() {
     alert("Copied site JSON to clipboard.");
   };
 
-  // IMPORTANT: Make panes scroll independently
-  // - main: overflow-hidden
-  // - each column: h-full + overflow-y-auto where needed
   return (
-    <main
-      className="min-h-screen overflow-hidden"
-      style={{ background: appTheme.bg, color: appTheme.text }}
-    >
+    // KEY: h-screen + flex-col + overflow-hidden so panes control their own scroll
+    <main className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
       {/* Top bar */}
-      <div
-        className="h-14 border-b flex items-center justify-between px-4"
-        style={{ background: appTheme.panel, borderColor: appTheme.border }}
-      >
+      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: theme.panel, borderColor: theme.border }}>
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded" style={{ background: appTheme.accent }} />
+          <div className="h-8 w-8 rounded" style={{ background: theme.accent }} />
           <div className="leading-tight">
             <div className="font-semibold">VentureOS</div>
-            <div className="text-xs" style={{ color: appTheme.mutedText }}>
+            <div className="text-xs" style={{ color: theme.mutedText }}>
               Build • Launch • Operate
             </div>
           </div>
@@ -405,9 +387,8 @@ export default function Home() {
             disabled={!canGenerate || generating}
             className="px-4 py-2 rounded-lg text-sm font-medium transition"
             style={{
-              background:
-                !canGenerate || generating ? "rgba(2,6,23,0.08)" : appTheme.accent,
-              color: !canGenerate || generating ? appTheme.mutedText : "#fff",
+              background: !canGenerate || generating ? "rgba(2,6,23,0.08)" : theme.accent,
+              color: !canGenerate || generating ? theme.mutedText : "#fff",
               cursor: !canGenerate || generating ? "not-allowed" : "pointer",
             }}
           >
@@ -416,11 +397,7 @@ export default function Home() {
 
           <button
             className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
-            style={{
-              borderColor: appTheme.border,
-              background: "transparent",
-              color: appTheme.text,
-            }}
+            style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
             onClick={exportJson}
           >
             Export
@@ -428,27 +405,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 3 panes */}
-      <div className="grid grid-cols-12 h-[calc(100vh-56px)]">
-        {/* Left: chat (scrolls independently) */}
-        <aside
-          className="col-span-12 md:col-span-3 border-r flex flex-col h-full"
-          style={{ background: appTheme.panel, borderColor: appTheme.border }}
-        >
-          <div className="p-4 border-b" style={{ borderColor: appTheme.border }}>
+      {/* Workspace (fills remaining height) */}
+      <div className="grid grid-cols-12 flex-1 min-h-0">
+        {/* Left: chat (scrolls inside itself) */}
+        <aside className="col-span-12 md:col-span-3 border-r flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
+          <div className="p-4 border-b" style={{ borderColor: theme.border }}>
             <div className="font-semibold">VentureOS Guide</div>
-            <div className="text-xs" style={{ color: appTheme.mutedText }}>
-              I’ll recommend what works and what doesn’t.
+            <div className="text-xs" style={{ color: theme.mutedText }}>
+              Operator-style guidance + execution.
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* IMPORTANT: min-h-0 allows this flex child to actually scroll */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
-              <div className="text-sm" style={{ color: appTheme.mutedText }}>
-                Start with:{" "}
-                <span style={{ color: appTheme.text, fontWeight: 600 }}>
-                  “I want to build…”
-                </span>
+              <div className="text-sm" style={{ color: theme.mutedText }}>
+                Start with: <span style={{ color: theme.text, fontWeight: 600 }}>“I want to build…”</span>
               </div>
             )}
 
@@ -457,10 +429,9 @@ export default function Home() {
                 <div
                   className="inline-block max-w-[95%] rounded-xl px-3 py-2 whitespace-pre-line"
                   style={{
-                    background: m.role === "user" ? "rgba(37,99,235,0.08)" : "rgba(2,6,23,0.04)",
-                    border: `1px solid ${appTheme.border}`,
+                    background: m.role === "user" ? "rgba(37,99,235,0.10)" : "rgba(2,6,23,0.04)",
+                    border: `1px solid ${theme.border}`,
                     marginLeft: m.role === "user" ? "auto" : undefined,
-                    color: appTheme.text,
                   }}
                 >
                   {m.content}
@@ -468,14 +439,10 @@ export default function Home() {
               </div>
             ))}
 
-            {loadingChat && (
-              <div className="text-xs" style={{ color: appTheme.mutedText }}>
-                Thinking…
-              </div>
-            )}
+            {loadingChat && <div className="text-xs" style={{ color: theme.mutedText }}>Thinking…</div>}
           </div>
 
-          <div className="p-3 border-t" style={{ borderColor: appTheme.border }}>
+          <div className="p-3 border-t" style={{ borderColor: theme.border }}>
             <div className="flex gap-2">
               <input
                 value={input}
@@ -483,151 +450,86 @@ export default function Home() {
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 placeholder="Ask VentureOS…"
                 className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-                style={{
-                  background: "rgba(2,6,23,0.03)",
-                  border: `1px solid ${appTheme.border}`,
-                  color: appTheme.text,
-                }}
+                style={{ background: "rgba(2,6,23,0.03)", border: `1px solid ${theme.border}`, color: theme.text }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
                 className="px-3 py-2 rounded-lg text-sm font-medium transition"
                 style={{
-                  background: loadingChat ? "rgba(2,6,23,0.08)" : appTheme.accent,
-                  color: loadingChat ? appTheme.mutedText : "#fff",
+                  background: loadingChat ? "rgba(2,6,23,0.08)" : theme.accent,
+                  color: loadingChat ? theme.mutedText : "#fff",
                   cursor: loadingChat ? "not-allowed" : "pointer",
                 }}
               >
                 Send
               </button>
             </div>
-
-            <div className="mt-2 flex gap-2">
-              <SmallButton
-                theme={appTheme}
-                onClick={() =>
-                  sendMessage(
-                    site
-                      ? `Audit my site like an operator. Give 3 specific improvements that increase trust + conversions. Here is my site JSON:\n${JSON.stringify(
-                          site,
-                          null,
-                          2
-                        )}`
-                      : "Give me the best next move and why."
-                  )
-                }
-              >
-                Operator review
-              </SmallButton>
-              <SmallButton
-                theme={appTheme}
-                onClick={() =>
-                  sendMessage("Take the lead: tell me what to do next and why. Don’t ask me questions unless needed.")
-                }
-              >
-                Take the lead
-              </SmallButton>
-            </div>
           </div>
         </aside>
 
-        {/* Center: preview (scrolls independently) */}
-        <section className="col-span-12 md:col-span-6 h-full overflow-y-auto p-6">
+        {/* Center: preview (scrolls inside itself) */}
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-6">
           <div className="max-w-4xl mx-auto">
-            {!site ? (
-              <EmptyPreview theme={appTheme} />
-            ) : (
-              <SitePreview
-                site={site}
-                activePageId={activePageId || site.pages[0]?.id}
-                onSelectPage={setActivePageId}
-              />
-            )}
+            {!site ? <EmptyPreview theme={theme} /> : <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />}
           </div>
         </section>
 
-        {/* Right: builder controls (scrolls independently) */}
-        <aside
-          className="col-span-12 md:col-span-3 border-l flex flex-col h-full"
-          style={{ background: appTheme.panel, borderColor: appTheme.border }}
-        >
-          <div className="p-4 border-b" style={{ borderColor: appTheme.border }}>
+        {/* Right: builder (scrolls inside itself) */}
+        <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
+          <div className="p-4 border-b" style={{ borderColor: theme.border }}>
             <div className="font-semibold">Builder</div>
-            <div className="text-xs" style={{ color: appTheme.mutedText }}>
+            <div className="text-xs" style={{ color: theme.mutedText }}>
               Pages • Design • Fonts • Products
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <Tab label="Quick" active={rightTab === "quick"} theme={appTheme} onClick={() => setRightTab("quick")} />
-              <Tab label="Pages" active={rightTab === "pages"} theme={appTheme} onClick={() => setRightTab("pages")} />
-              <Tab label="Design" active={rightTab === "design"} theme={appTheme} onClick={() => setRightTab("design")} />
-              <Tab label="Content" active={rightTab === "content"} theme={appTheme} onClick={() => setRightTab("content")} />
-              <Tab label="Products" active={rightTab === "products"} theme={appTheme} onClick={() => setRightTab("products")} />
-              <Tab label="Sections" active={rightTab === "sections"} theme={appTheme} onClick={() => setRightTab("sections")} />
+              <Tab label="Quick" active={rightTab === "quick"} theme={theme} onClick={() => setRightTab("quick")} />
+              <Tab label="Pages" active={rightTab === "pages"} theme={theme} onClick={() => setRightTab("pages")} />
+              <Tab label="Design" active={rightTab === "design"} theme={theme} onClick={() => setRightTab("design")} />
+              <Tab label="Content" active={rightTab === "content"} theme={theme} onClick={() => setRightTab("content")} />
+              <Tab label="Products" active={rightTab === "products"} theme={theme} onClick={() => setRightTab("products")} />
+              <Tab label="Sections" active={rightTab === "sections"} theme={theme} onClick={() => setRightTab("sections")} />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {!site ? (
-              <div className="text-sm" style={{ color: appTheme.mutedText }}>
+              <div className="text-sm" style={{ color: theme.mutedText }}>
                 Generate a site first. Then customization appears here.
               </div>
             ) : (
               <>
                 {/* hidden file pickers */}
-                <input
-                  ref={logoPickerRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => setLogoFromFile(e.target.files?.[0])}
-                />
-                <input
-                  ref={heroPickerRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])}
-                />
+                <input ref={logoPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setLogoFromFile(e.target.files?.[0])} />
+                <input ref={heroPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])} />
 
                 {rightTab === "quick" && (
                   <div className="space-y-3">
-                    <Card theme={appTheme} title="Start here">
-                      <div className="text-sm" style={{ color: appTheme.mutedText }}>
-                        These make your page look real fast.
+                    <Card theme={theme} title="Start here">
+                      <div className="text-sm" style={{ color: theme.mutedText }}>
+                        These make your site feel real fast.
                       </div>
                       <div className="mt-3 space-y-2">
-                        <ActionButton theme={appTheme} onClick={() => heroPickerRef.current?.click()}>
+                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>
                           Upload Hero Image
                         </ActionButton>
-                        <ActionButton theme={appTheme} onClick={() => logoPickerRef.current?.click()}>
+                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>
                           Upload Logo
                         </ActionButton>
-                        <ActionButton
-                          theme={appTheme}
-                          onClick={() =>
-                            sendMessage(
-                              `Rewrite my hero headline/subheadline to be more premium + conversion-focused. Keep it short.\nHeadline: ${site.heroHeadline}\nSubheadline: ${site.heroSubheadline}`
-                            )
-                          }
-                        >
-                          Ask Guide: Improve Hero Copy
+                        <ActionButton theme={theme} onClick={() => addProduct()}>
+                          + Add Product
                         </ActionButton>
                       </div>
                     </Card>
 
-                    <Card theme={appTheme} title="Theme presets">
-                      <div className="grid grid-cols-1 gap-2">
+                    <Card theme={theme} title="Theme presets">
+                      <div className="grid gap-2">
                         {THEME_PRESETS.map((p) => (
                           <button
                             key={p.name}
                             className="text-sm px-3 py-2 rounded-lg border text-left transition hover:opacity-90"
-                            style={{
-                              borderColor: appTheme.border,
-                              background: "rgba(2,6,23,0.02)",
-                              color: appTheme.text,
-                            }}
+                            style={{ borderColor: theme.border, background: "rgba(2,6,23,0.02)" }}
                             onClick={() => setSite({ ...site, theme: { ...p.theme } })}
                           >
                             {p.name}
@@ -639,59 +541,46 @@ export default function Home() {
                 )}
 
                 {rightTab === "pages" && (
-                  <div className="space-y-3">
-                    <Card theme={appTheme} title="Pages">
-                      <div className="text-sm" style={{ color: appTheme.mutedText }}>
-                        Add multiple pages like Shopify: Products, About, etc.
-                      </div>
+                  <Card theme={theme} title="Pages">
+                    <div className="text-sm" style={{ color: theme.mutedText }}>
+                      Add multiple pages: Products, About, etc.
+                    </div>
 
-                      <div className="mt-3 space-y-2">
-                        {site.pages.map((p) => (
-                          <div key={p.id} className="flex gap-2 items-center">
-                            <input
-                              className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-                              style={{
-                                background: "rgba(2,6,23,0.03)",
-                                border: `1px solid ${appTheme.border}`,
-                                color: appTheme.text,
-                              }}
-                              value={p.name}
-                              onChange={(e) => renamePage(p.id, e.target.value)}
-                            />
-                            <button
-                              className="px-2 py-2 rounded-lg border text-xs hover:opacity-90"
-                              style={{ borderColor: appTheme.border }}
-                              onClick={() => removePage(p.id)}
-                              title="Remove"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="mt-3 space-y-2">
+                      {site.pages.map((p) => (
+                        <div key={p.id} className="flex gap-2 items-center">
+                          <input
+                            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border"
+                            style={{ borderColor: theme.border }}
+                            value={p.name}
+                            onChange={(e) => renamePage(p.id, e.target.value)}
+                          />
+                          <button
+                            className="px-2 py-2 rounded-lg border text-xs hover:opacity-90"
+                            style={{ borderColor: theme.border }}
+                            onClick={() => removePage(p.id)}
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
 
-                      <div className="mt-3">
-                        <ActionButton theme={appTheme} onClick={addPage}>
-                          + Add Page
-                        </ActionButton>
-                      </div>
-                    </Card>
-                  </div>
+                    <div className="mt-3">
+                      <ActionButton theme={theme} onClick={addPage}>
+                        + Add Page
+                      </ActionButton>
+                    </div>
+                  </Card>
                 )}
 
                 {rightTab === "design" && (
                   <div className="space-y-3">
-                    <Card theme={appTheme} title="Fonts">
-                      <div className="text-sm" style={{ color: appTheme.mutedText }}>
-                        Choose a site-wide font.
-                      </div>
+                    <Card theme={theme} title="Fonts">
                       <select
-                        className="mt-2 w-full px-3 py-2 rounded-lg text-sm outline-none"
-                        style={{
-                          background: "rgba(2,6,23,0.03)",
-                          border: `1px solid ${appTheme.border}`,
-                          color: appTheme.text,
-                        }}
+                        className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
+                        style={{ borderColor: theme.border }}
                         value={site.font}
                         onChange={(e) => setSite({ ...site, font: e.target.value as FontChoice })}
                       >
@@ -701,42 +590,38 @@ export default function Home() {
                           </option>
                         ))}
                       </select>
-                    </Card>
-
-                    <Card theme={appTheme} title="Colors">
-                      <ColorField theme={appTheme} label="Accent" value={site.theme.accent} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent: v } })} />
-                      <div className="h-2" />
-                      <ColorField theme={appTheme} label="Accent 2" value={site.theme.accent2} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent2: v } })} />
-                      <div className="h-2" />
-                      <ColorField theme={appTheme} label="Background" value={site.theme.bg} onChange={(v) => setSite({ ...site, theme: { ...site.theme, bg: v } })} />
-                      <div className="h-2" />
-                      <ColorField theme={appTheme} label="Surface" value={site.theme.surface} onChange={(v) => setSite({ ...site, theme: { ...site.theme, surface: v } })} />
-                      <div className="h-2" />
-                      <ColorField theme={appTheme} label="Text" value={site.theme.text} onChange={(v) => setSite({ ...site, theme: { ...site.theme, text: v } })} />
-                      <div className="h-2" />
-                      <ColorField theme={appTheme} label="Border" value={site.theme.border} onChange={(v) => setSite({ ...site, theme: { ...site.theme, border: v } })} />
-                    </Card>
-
-                    <Card theme={appTheme} title="Images">
-                      <div className="space-y-2">
-                        <ActionButton theme={appTheme} onClick={() => logoPickerRef.current?.click()}>
-                          Upload Logo
-                        </ActionButton>
-                        <ActionButton theme={appTheme} onClick={() => heroPickerRef.current?.click()}>
-                          Upload Hero Image
-                        </ActionButton>
+                      <div className="mt-2 text-xs" style={{ color: theme.mutedText }}>
+                        (We’ll load real web fonts later. This is MVP.)
                       </div>
+                    </Card>
+
+                    <Card theme={theme} title="Colors">
+                      <ColorField theme={theme} label="Accent" value={site.theme.accent} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent: v } })} />
+                      <div className="h-2" />
+                      <ColorField theme={theme} label="Accent 2" value={site.theme.accent2} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent2: v } })} />
+                      <div className="h-2" />
+                      <ColorField theme={theme} label="Background" value={site.theme.bg} onChange={(v) => setSite({ ...site, theme: { ...site.theme, bg: v } })} />
+                      <div className="h-2" />
+                      <ColorField theme={theme} label="Text" value={site.theme.text} onChange={(v) => setSite({ ...site, theme: { ...site.theme, text: v } })} />
+                      <div className="h-2" />
+                      <ColorField theme={theme} label="Border" value={site.theme.border} onChange={(v) => setSite({ ...site, theme: { ...site.theme, border: v } })} />
                     </Card>
                   </div>
                 )}
 
                 {rightTab === "content" && (
                   <div className="space-y-3">
-                    <Field theme={appTheme} label="Brand Name" value={site.brandName} onChange={(v) => setSite({ ...site, brandName: v })} />
-                    <Field theme={appTheme} label="Tagline" value={site.tagline} onChange={(v) => setSite({ ...site, tagline: v })} />
-                    <Field theme={appTheme} label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
-                    <TextField theme={appTheme} label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
-                    <Field theme={appTheme} label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
+                    <Field theme={theme} label="Brand Name" value={site.brandName} onChange={(v) => setSite({ ...site, brandName: v })} />
+                    <Field theme={theme} label="Tagline" value={site.tagline} onChange={(v) => setSite({ ...site, tagline: v })} />
+                    <Field theme={theme} label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
+                    <TextField theme={theme} label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
+                    <Field theme={theme} label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
+                    <Card theme={theme} title="Images">
+                      <div className="space-y-2">
+                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>Upload Logo</ActionButton>
+                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>Upload Hero Image</ActionButton>
+                      </div>
+                    </Card>
                   </div>
                 )}
 
@@ -744,24 +629,18 @@ export default function Home() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">Catalog</div>
-                      <button
-                        className="text-xs px-2 py-1 rounded-lg border hover:opacity-90"
-                        style={{ borderColor: appTheme.border }}
-                        onClick={addProduct}
-                      >
+                      <button className="text-xs px-2 py-1 rounded-lg border hover:opacity-90" style={{ borderColor: theme.border }} onClick={addProduct}>
                         + Add
                       </button>
                     </div>
 
                     {site.products.map((p) => (
-                      <Card key={p.id} theme={appTheme} title={p.name || "Product"}>
-                        <Field theme={appTheme} label="Name" value={p.name} onChange={(v) => updateProduct(p.id, { name: v })} />
+                      <Card key={p.id} theme={theme} title={p.name || "Product"}>
+                        <Field theme={theme} label="Name" value={p.name} onChange={(v) => updateProduct(p.id, { name: v })} />
                         <div className="h-2" />
-                        <Field theme={appTheme} label="Price" value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
+                        <Field theme={theme} label="Price" value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
                         <div className="h-3" />
-                        <div className="text-xs font-medium" style={{ color: appTheme.mutedText }}>
-                          Image
-                        </div>
+                        <div className="text-xs font-medium" style={{ color: theme.mutedText }}>Image</div>
                         <input
                           type="file"
                           accept="image/*"
@@ -774,11 +653,7 @@ export default function Home() {
                           }}
                         />
                         <div className="h-3" />
-                        <button
-                          className="text-xs px-2 py-1 rounded-lg border hover:opacity-90"
-                          style={{ borderColor: appTheme.border }}
-                          onClick={() => removeProduct(p.id)}
-                        >
+                        <button className="text-xs px-2 py-1 rounded-lg border hover:opacity-90" style={{ borderColor: theme.border }} onClick={() => removeProduct(p.id)}>
                           Remove
                         </button>
                       </Card>
@@ -787,25 +662,9 @@ export default function Home() {
                 )}
 
                 {rightTab === "sections" && (
-                  <Card theme={appTheme} title="Sections">
-                    <div className="text-sm" style={{ color: appTheme.mutedText }}>
+                  <Card theme={theme} title="Sections">
+                    <div className="text-sm" style={{ color: theme.mutedText }}>
                       Next: reorder/add/remove controls. For now, ask VentureOS to rewrite.
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <ActionButton
-                        theme={appTheme}
-                        onClick={() =>
-                          sendMessage(
-                            `Rewrite sections to be premium + conversion-focused (no generic wording). Sections:\n${JSON.stringify(
-                              site.sections,
-                              null,
-                              2
-                            )}`
-                          )
-                        }
-                      >
-                        Ask Guide: Rewrite Sections
-                      </ActionButton>
                     </div>
                   </Card>
                 )}
@@ -813,11 +672,34 @@ export default function Home() {
             )}
           </div>
 
-          <div className="p-4 border-t text-xs" style={{ borderColor: appTheme.border, color: appTheme.mutedText }}>
-            Next: launch/publish flow (custom domain + share link + deploy).
+          <div className="p-4 border-t text-xs" style={{ borderColor: theme.border, color: theme.mutedText }}>
+            Next: publish flow (share link + custom domain + deploy).
           </div>
         </aside>
       </div>
+
+      {/* Generate Loading Overlay */}
+      {generating && (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.75)" }}>
+          <div className="rounded-2xl border bg-white p-6 w-[320px] shadow-sm" style={{ borderColor: theme.border }}>
+            <div className="flex items-center gap-3">
+              <Spinner color={theme.accent} />
+              <div>
+                <div className="font-semibold">Generating your site…</div>
+                <div className="text-sm" style={{ color: theme.mutedText }}>
+                  Building pages, layout, and storefront structure
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 h-2 rounded-full" style={{ background: "rgba(2,6,23,0.08)" }}>
+              <div className="h-2 rounded-full animate-pulse" style={{ width: "70%", background: theme.accent }} />
+            </div>
+            <div className="mt-2 text-xs" style={{ color: theme.mutedText }}>
+              This takes a few seconds…
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -835,16 +717,11 @@ function SitePreview({
 }) {
   const t = site.theme;
   const activePage = site.pages.find((p) => p.id === activePageId) ?? site.pages[0];
-
   const fontFamily = fontStack(site.font);
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden border"
-      style={{ borderColor: t.border, background: t.surface, color: t.text, fontFamily }}
-    >
-      {/* Site header + nav */}
-      <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: t.border, background: "#ffffff" }}>
+    <div className="rounded-2xl overflow-hidden border" style={{ borderColor: t.border, background: t.surface, color: t.text, fontFamily }}>
+      <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: t.border, background: "#fff" }}>
         <div className="flex items-center gap-3">
           {site.logoDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -852,7 +729,6 @@ function SitePreview({
           ) : (
             <div className="h-9 w-9 rounded" style={{ background: t.accent }} />
           )}
-
           <div>
             <div className="text-xs" style={{ color: t.mutedText }}>{site.tagline}</div>
             <div className="text-lg font-semibold">{site.brandName}</div>
@@ -864,7 +740,6 @@ function SitePreview({
         </button>
       </div>
 
-      {/* Nav */}
       <div className="px-5 py-3 border-b flex gap-2 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
         {site.pages.map((p) => {
           const active = p.id === activePage.id;
@@ -875,7 +750,7 @@ function SitePreview({
               className="px-3 py-1.5 rounded-lg text-sm border transition"
               style={{
                 borderColor: t.border,
-                background: active ? "rgba(37,99,235,0.10)" : "#ffffff",
+                background: active ? "rgba(37,99,235,0.10)" : "#fff",
                 color: t.text,
               }}
             >
@@ -885,7 +760,6 @@ function SitePreview({
         })}
       </div>
 
-      {/* Page body */}
       <div className="p-6 md:p-8" style={{ background: t.bg }}>
         {activePage.key === "products" ? (
           <ProductsPage site={site} />
@@ -910,15 +784,10 @@ function HomePage({ site }: { site: SiteSpec }) {
 
   return (
     <>
-      {/* Hero */}
       <div className="grid gap-6 md:grid-cols-2 items-center">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-            {site.heroHeadline}
-          </h1>
-          <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>
-            {site.heroSubheadline}
-          </p>
+          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">{site.heroHeadline}</h1>
+          <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
 
           <div className="mt-5 flex gap-2">
             <button className="px-5 py-3 rounded-lg font-medium" style={{ background: t.accent, color: "#fff" }}>
@@ -944,13 +813,12 @@ function HomePage({ site }: { site: SiteSpec }) {
             <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-64 object-cover" />
           ) : (
             <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>
-              Upload a hero image (Builder → Design)
+              Upload a hero image (Builder → Content or Quick)
             </div>
           )}
         </div>
       </div>
 
-      {/* Sections */}
       <div className="mt-10 space-y-6">
         {site.sections.map((s, idx) => (
           <section key={idx} className="rounded-2xl border p-5" style={{ borderColor: t.border, background: "#fff" }}>
@@ -964,7 +832,6 @@ function HomePage({ site }: { site: SiteSpec }) {
         ))}
       </div>
 
-      {/* FAQ */}
       <div className="mt-10">
         <h3 className="text-lg font-semibold mb-3">FAQ</h3>
         <div className="space-y-3">
@@ -1017,7 +884,7 @@ function ProductsPage({ site }: { site: SiteSpec }) {
       </div>
 
       <div className="mt-3 text-xs" style={{ color: t.mutedText }}>
-        Checkout will come later (Stripe). This is storefront UX for now.
+        Checkout later (Stripe). This is storefront UX for now.
       </div>
     </>
   );
@@ -1067,7 +934,7 @@ function ContactPage({ site }: { site: SiteSpec }) {
   );
 }
 
-/* ---------------- Shared UI ---------------- */
+/* ---------------- UI helpers ---------------- */
 
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
@@ -1081,15 +948,7 @@ function EmptyPreview({ theme }: { theme: Theme }) {
   );
 }
 
-function Card({
-  theme,
-  title,
-  children,
-}: {
-  theme: Theme;
-  title: string;
-  children: React.ReactNode;
-}) {
+function Card({ theme, title, children }: { theme: Theme; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border p-4" style={{ borderColor: theme.border, background: "#fff" }}>
       <div className="font-semibold text-sm">{title}</div>
@@ -1098,17 +957,7 @@ function Card({
   );
 }
 
-function Tab({
-  label,
-  active,
-  theme,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  theme: Theme;
-  onClick: () => void;
-}) {
+function Tab({ label, active, theme, onClick }: { label: string; active: boolean; theme: Theme; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -1124,15 +973,7 @@ function Tab({
   );
 }
 
-function ActionButton({
-  theme,
-  children,
-  onClick,
-}: {
-  theme: Theme;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
+function ActionButton({ theme, children, onClick }: { theme: Theme; children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -1144,15 +985,7 @@ function ActionButton({
   );
 }
 
-function SmallButton({
-  theme,
-  children,
-  onClick,
-}: {
-  theme: Theme;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
+function SmallButton({ theme, children, onClick }: { theme: Theme; children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -1164,90 +997,44 @@ function SmallButton({
   );
 }
 
-function Field({
-  theme,
-  label,
-  value,
-  onChange,
-}: {
-  theme: Theme;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function Field({ theme, label, value, onChange }: { theme: Theme; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>
-        {label}
-      </div>
-      <input
-        className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
-        style={{ borderColor: theme.border, color: theme.text }}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
+      <input className="w-full px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
 
-function TextField({
-  theme,
-  label,
-  value,
-  onChange,
-}: {
-  theme: Theme;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function TextField({ theme, label, value, onChange }: { theme: Theme; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>
-        {label}
-      </div>
-      <textarea
-        className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
-        style={{ borderColor: theme.border, color: theme.text }}
-        rows={4}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
+      <textarea className="w-full px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
 
-function ColorField({
-  theme,
-  label,
-  value,
-  onChange,
-}: {
-  theme: Theme;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function ColorField({ theme, label, value, onChange }: { theme: Theme; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>
-        {label}
-      </div>
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
       <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-12 p-0 border rounded"
-          style={{ borderColor: theme.border }}
-        />
-        <input
-          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border"
-          style={{ borderColor: theme.border, color: theme.text }}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 p-0 border rounded" style={{ borderColor: theme.border }} />
+        <input className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} value={value} onChange={(e) => onChange(e.target.value)} />
       </div>
     </label>
+  );
+}
+
+function Spinner({ color }: { color: string }) {
+  return (
+    <div
+      className="h-6 w-6 rounded-full border-2 animate-spin"
+      style={{
+        borderColor: "rgba(2,6,23,0.15)",
+        borderTopColor: color,
+      }}
+    />
   );
 }
