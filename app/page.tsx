@@ -5,10 +5,13 @@ import { useMemo, useRef, useState } from "react";
 type Message = { role: "user" | "assistant"; content: string };
 
 type Theme = {
-  primary: string; // buttons
-  bg: string; // page bg
+  accent: string; // blue accent
+  bg: string; // app background
+  panel: string; // left/right panels
+  surface: string; // cards/surfaces
   text: string; // main text
-  card: string; // card bg
+  mutedText: string; // secondary
+  border: string; // borders
 };
 
 type Product = {
@@ -30,7 +33,6 @@ type SiteSpec = {
   sections: { title: string; bullets: string[] }[];
   faq: { q: string; a: string }[];
 
-  // NEW
   theme: Theme;
   logoDataUrl?: string;
   heroImageDataUrl?: string;
@@ -50,6 +52,45 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+const THEME_PRESETS: { name: string; theme: Theme }[] = [
+  {
+    name: "VentureOS Dark",
+    theme: {
+      accent: "#2563eb", // blue-600
+      bg: "#0b0f14", // near-black
+      panel: "#0f141b", // dark gray
+      surface: "#111827", // slate-900-ish
+      text: "#f8fafc", // off-white
+      mutedText: "#9ca3af", // gray-400
+      border: "rgba(255,255,255,0.08)",
+    },
+  },
+  {
+    name: "Midnight Blue",
+    theme: {
+      accent: "#3b82f6", // blue-500
+      bg: "#070b10",
+      panel: "#0b1220",
+      surface: "#0f1b2d",
+      text: "#f8fafc",
+      mutedText: "#a1a1aa",
+      border: "rgba(255,255,255,0.10)",
+    },
+  },
+  {
+    name: "Clean Light",
+    theme: {
+      accent: "#2563eb",
+      bg: "#f6f7fb",
+      panel: "#ffffff",
+      surface: "#ffffff",
+      text: "#0b1220",
+      mutedText: "#4b5563",
+      border: "rgba(0,0,0,0.08)",
+    },
+  },
+];
+
 export default function Home() {
   // --- chat state ---
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,8 +103,8 @@ export default function Home() {
 
   // Right panel UI state
   const [rightTab, setRightTab] = useState<
-    "content" | "design" | "products" | "structure" | "store"
-  >("content");
+    "quick" | "content" | "design" | "products" | "sections"
+  >("quick");
 
   const logoPickerRef = useRef<HTMLInputElement | null>(null);
   const heroPickerRef = useRef<HTMLInputElement | null>(null);
@@ -148,10 +189,7 @@ export default function Home() {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content: data?.error || "Generation failed — try again.",
-          },
+          { role: "assistant", content: data?.error || "Generation failed — try again." },
         ]);
         return;
       }
@@ -169,15 +207,9 @@ export default function Home() {
         "theme" | "products" | "logoDataUrl" | "heroImageDataUrl"
       >;
 
-      // Add defaults for new builder features
       const hydrated: SiteSpec = {
         ...base,
-        theme: {
-          primary: "#4f46e5", // indigo
-          bg: "#f8fafc", // slate-50
-          text: "#0f172a", // slate-900
-          card: "#ffffff",
-        },
+        theme: THEME_PRESETS[0].theme,
         products: [
           { id: uid(), name: "Runner’s Core Shorts", price: "$48" },
           { id: uid(), name: "BreathLite Performance Tee", price: "$36" },
@@ -186,13 +218,14 @@ export default function Home() {
       };
 
       setSite(hydrated);
+      setRightTab("quick");
 
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content:
-            "Generated. Now we build it into a real storefront.\n\nStart on the right: add a hero image + 3 products. I’ll tell you what to improve as you go.",
+            "Generated.\n\nStart here: add a hero image + tighten your headline. Then we’ll refine products and positioning.",
         },
       ]);
     } catch (e: any) {
@@ -210,10 +243,7 @@ export default function Home() {
     if (!site) return;
     setSite({
       ...site,
-      products: [
-        ...site.products,
-        { id: uid(), name: "New Product", price: "$00" },
-      ],
+      products: [...site.products, { id: uid(), name: "New Product", price: "$00" }],
     });
   };
 
@@ -247,17 +277,28 @@ export default function Home() {
     alert("Copied site JSON to clipboard.");
   };
 
-  // ---------------- UI ----------------
+  // If no site, still use app theme (dark polished)
+  const appTheme = site?.theme ?? THEME_PRESETS[0].theme;
+
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main
+      className="min-h-screen"
+      style={{ background: appTheme.bg, color: appTheme.text }}
+    >
       {/* Top bar */}
-      <div className="h-14 border-b bg-white flex items-center justify-between px-4">
+      <div
+        className="h-14 border-b flex items-center justify-between px-4"
+        style={{ background: appTheme.panel, borderColor: appTheme.border }}
+      >
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded bg-black" />
+          <div
+            className="h-8 w-8 rounded"
+            style={{ background: appTheme.accent }}
+          />
           <div className="leading-tight">
-            <div className="font-semibold">Inflection Point</div>
-            <div className="text-xs text-gray-500">
-              Chat + Build + Launch
+            <div className="font-semibold">VentureOS</div>
+            <div className="text-xs" style={{ color: appTheme.mutedText }}>
+              Build • Launch • Operate
             </div>
           </div>
         </div>
@@ -266,17 +307,24 @@ export default function Home() {
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              !canGenerate || generating
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:opacity-90"
-            }`}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition"
+            style={{
+              background:
+                !canGenerate || generating ? "rgba(255,255,255,0.10)" : appTheme.accent,
+              color: !canGenerate || generating ? appTheme.mutedText : "#fff",
+              cursor: !canGenerate || generating ? "not-allowed" : "pointer",
+            }}
           >
             {generating ? "Generating…" : "Generate"}
           </button>
 
           <button
-            className="px-4 py-2 rounded-lg text-sm font-medium border hover:bg-gray-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium border transition hover:opacity-90"
+            style={{
+              borderColor: appTheme.border,
+              background: "transparent",
+              color: appTheme.text,
+            }}
             onClick={exportJson}
           >
             Export
@@ -286,30 +334,38 @@ export default function Home() {
 
       {/* 3-pane workspace */}
       <div className="grid grid-cols-12 min-h-[calc(100vh-56px)]">
-        {/* Left: Chat */}
-        <aside className="col-span-12 md:col-span-3 border-r bg-white flex flex-col">
-          <div className="p-4 border-b">
-            <div className="font-semibold">Mentor Chat</div>
-            <div className="text-xs text-gray-500">
-              I’ll guide strategy + tell you what works.
+        {/* Left: Mentor chat */}
+        <aside
+          className="col-span-12 md:col-span-3 border-r flex flex-col"
+          style={{ background: appTheme.panel, borderColor: appTheme.border }}
+        >
+          <div className="p-4 border-b" style={{ borderColor: appTheme.border }}>
+            <div className="font-semibold">VentureOS Guide</div>
+            <div className="text-xs" style={{ color: appTheme.mutedText }}>
+              Operator-style advice + execution.
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
-              <div className="text-sm text-gray-500">
-                Start with: <span className="font-medium">“I want to build…”</span>
+              <div className="text-sm" style={{ color: appTheme.mutedText }}>
+                Start with: <span style={{ color: appTheme.text, fontWeight: 600 }}>
+                  “I want to build…”
+                </span>
               </div>
             )}
 
             {messages.map((m, i) => (
               <div key={i} className="text-sm">
                 <div
-                  className={`inline-block max-w-[95%] rounded-xl px-3 py-2 whitespace-pre-line ${
-                    m.role === "user"
-                      ? "bg-black text-white ml-auto"
-                      : "bg-gray-100 text-gray-900"
-                  }`}
+                  className="inline-block max-w-[95%] rounded-xl px-3 py-2 whitespace-pre-line"
+                  style={{
+                    background:
+                      m.role === "user" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${appTheme.border}`,
+                    marginLeft: m.role === "user" ? "auto" : undefined,
+                    color: appTheme.text,
+                  }}
                 >
                   {m.content}
                 </div>
@@ -317,251 +373,288 @@ export default function Home() {
             ))}
 
             {loadingChat && (
-              <div className="text-xs text-gray-400">Thinking…</div>
+              <div className="text-xs" style={{ color: appTheme.mutedText }}>
+                Thinking…
+              </div>
             )}
           </div>
 
-          <div className="p-3 border-t">
+          <div className="p-3 border-t" style={{ borderColor: appTheme.border }}>
             <div className="flex gap-2">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder="Message Inflection Point…"
-                className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="Ask VentureOS…"
+                className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${appTheme.border}`,
+                  color: appTheme.text,
+                }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  loadingChat
-                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                    : "bg-black text-white hover:opacity-80"
-                }`}
+                className="px-3 py-2 rounded-lg text-sm font-medium transition"
+                style={{
+                  background: loadingChat ? "rgba(255,255,255,0.10)" : appTheme.accent,
+                  color: loadingChat ? appTheme.mutedText : "#fff",
+                  cursor: loadingChat ? "not-allowed" : "pointer",
+                }}
               >
                 Send
               </button>
             </div>
 
             <div className="mt-2 flex gap-2">
-              <button
-                className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+              <SmallButton
+                theme={appTheme}
                 onClick={() =>
                   sendMessage(
                     site
-                      ? `Review my current page and give 3 blunt improvements. Here is my site JSON:\n${JSON.stringify(
+                      ? `Act like an operator. Audit my current storefront and give 3 specific changes that will increase trust + conversions. Here is my site JSON:\n${JSON.stringify(
                           site,
                           null,
                           2
                         )}`
-                      : "Give me 3 blunt recommendations to make this business stronger."
+                      : "Act like an operator. Give me the best next move to turn this into a real business."
                   )
                 }
               >
-                Mentor review
-              </button>
+                Operator Review
+              </SmallButton>
 
-              <button
-                className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+              <SmallButton
+                theme={appTheme}
                 onClick={() =>
-                  sendMessage(
-                    "Stop asking me what I want. Tell me the best next move and why."
-                  )
+                  sendMessage("Stop asking me what I want. Recommend the best next move and why.")
                 }
               >
-                Take the lead
-              </button>
+                Take the Lead
+              </SmallButton>
             </div>
           </div>
         </aside>
 
-        {/* Center: Live preview */}
+        {/* Center: Preview */}
         <section className="col-span-12 md:col-span-6 p-6 overflow-y-auto">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {!site ? (
-              <div className="border rounded-2xl bg-white p-8 shadow-sm">
-                <div className="text-sm text-gray-500 mb-2">Preview</div>
-                <div className="text-2xl font-semibold mb-2">
-                  Your storefront will appear here
-                </div>
-                <p className="text-gray-600">
-                  Chat on the left for a few turns, then click{" "}
-                  <span className="font-medium">Generate</span>.
-                </p>
-              </div>
+              <EmptyPreview theme={appTheme} />
             ) : (
               <Preview site={site} />
             )}
           </div>
         </section>
 
-        {/* Right: Controls */}
-        <aside className="col-span-12 md:col-span-3 border-l bg-white flex flex-col">
-          <div className="p-4 border-b">
-            <div className="font-semibold">Builder Controls</div>
-            <div className="text-xs text-gray-500">
-              Manual edits like Shopify, plus AI guidance.
+        {/* Right: Builder */}
+        <aside
+          className="col-span-12 md:col-span-3 border-l flex flex-col"
+          style={{ background: appTheme.panel, borderColor: appTheme.border }}
+        >
+          <div className="p-4 border-b" style={{ borderColor: appTheme.border }}>
+            <div className="font-semibold">Builder</div>
+            <div className="text-xs" style={{ color: appTheme.mutedText }}>
+              Quick actions + manual controls (Shopify vibe).
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <TabButton label="Content" active={rightTab === "content"} onClick={() => setRightTab("content")} />
-              <TabButton label="Design" active={rightTab === "design"} onClick={() => setRightTab("design")} />
-              <TabButton label="Products" active={rightTab === "products"} onClick={() => setRightTab("products")} />
-              <TabButton label="Sections" active={rightTab === "structure"} onClick={() => setRightTab("structure")} />
-              <TabButton label="Store" active={rightTab === "store"} onClick={() => setRightTab("store")} />
+              <Tab label="Quick" active={rightTab === "quick"} theme={appTheme} onClick={() => setRightTab("quick")} />
+              <Tab label="Content" active={rightTab === "content"} theme={appTheme} onClick={() => setRightTab("content")} />
+              <Tab label="Design" active={rightTab === "design"} theme={appTheme} onClick={() => setRightTab("design")} />
+              <Tab label="Products" active={rightTab === "products"} theme={appTheme} onClick={() => setRightTab("products")} />
+              <Tab label="Sections" active={rightTab === "sections"} theme={appTheme} onClick={() => setRightTab("sections")} />
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {!site ? (
-              <div className="text-sm text-gray-500">
-                Generate a site first. Then controls appear here.
+              <div className="text-sm" style={{ color: appTheme.mutedText }}>
+                Generate a site first. Then customization appears here.
               </div>
             ) : (
               <>
+                {/* hidden file pickers */}
+                <input
+                  ref={logoPickerRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => setLogoFromFile(e.target.files?.[0])}
+                />
+                <input
+                  ref={heroPickerRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])}
+                />
+
+                {rightTab === "quick" && (
+                  <div className="space-y-3">
+                    <Card theme={appTheme} title="Start Here (recommended)">
+                      <div className="text-sm" style={{ color: appTheme.mutedText }}>
+                        Do these 3 things first for a page that looks real.
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <ActionButton theme={appTheme} onClick={() => heroPickerRef.current?.click()}>
+                          Upload Hero Image
+                        </ActionButton>
+                        <ActionButton theme={appTheme} onClick={() => logoPickerRef.current?.click()}>
+                          Upload Logo
+                        </ActionButton>
+                        <ActionButton
+                          theme={appTheme}
+                          onClick={() =>
+                            sendMessage(
+                              `Rewrite my hero headline + subheadline to be sharper, more motivational, and premium. Keep it short. My current hero:\nHeadline: ${site.heroHeadline}\nSubheadline: ${site.heroSubheadline}`
+                            )
+                          }
+                        >
+                          Ask Guide: Improve Hero Copy
+                        </ActionButton>
+                      </div>
+                    </Card>
+
+                    <Card theme={appTheme} title="Theme Presets">
+                      <div className="grid grid-cols-1 gap-2">
+                        {THEME_PRESETS.map((p) => (
+                          <button
+                            key={p.name}
+                            className="text-sm px-3 py-2 rounded-lg border text-left transition hover:opacity-90"
+                            style={{
+                              borderColor: appTheme.border,
+                              background: "rgba(255,255,255,0.04)",
+                              color: appTheme.text,
+                            }}
+                            onClick={() =>
+                              setSite({ ...site, theme: { ...p.theme } })
+                            }
+                          >
+                            {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
                 {rightTab === "content" && (
                   <div className="space-y-3">
-                    <Field label="Brand Name" value={site.brandName} onChange={(v) => setSite({ ...site, brandName: v })} />
-                    <Field label="Tagline" value={site.tagline} onChange={(v) => setSite({ ...site, tagline: v })} />
-                    <Field label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
-                    <TextField label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
-                    <Field label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
+                    <Field theme={appTheme} label="Brand Name" value={site.brandName} onChange={(v) => setSite({ ...site, brandName: v })} />
+                    <Field theme={appTheme} label="Tagline" value={site.tagline} onChange={(v) => setSite({ ...site, tagline: v })} />
+                    <Field theme={appTheme} label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
+                    <TextField theme={appTheme} label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
+                    <Field theme={appTheme} label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
                   </div>
                 )}
 
                 {rightTab === "design" && (
-                  <div className="space-y-4">
-                    <div className="text-sm font-medium">Theme</div>
+                  <div className="space-y-3">
+                    <Card theme={appTheme} title="Accent Color">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={site.theme.accent}
+                          onChange={(e) =>
+                            setSite({ ...site, theme: { ...site.theme, accent: e.target.value } })
+                          }
+                          className="h-10 w-12 p-0 border rounded"
+                          style={{ borderColor: appTheme.border }}
+                        />
+                        <input
+                          value={site.theme.accent}
+                          onChange={(e) =>
+                            setSite({ ...site, theme: { ...site.theme, accent: e.target.value } })
+                          }
+                          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            border: `1px solid ${appTheme.border}`,
+                            color: appTheme.text,
+                          }}
+                        />
+                      </div>
+                    </Card>
 
-                    <ColorField
-                      label="Primary"
-                      value={site.theme.primary}
-                      onChange={(v) =>
-                        setSite({ ...site, theme: { ...site.theme, primary: v } })
-                      }
-                    />
-                    <ColorField
-                      label="Background"
-                      value={site.theme.bg}
-                      onChange={(v) =>
-                        setSite({ ...site, theme: { ...site.theme, bg: v } })
-                      }
-                    />
-                    <ColorField
-                      label="Text"
-                      value={site.theme.text}
-                      onChange={(v) =>
-                        setSite({ ...site, theme: { ...site.theme, text: v } })
-                      }
-                    />
-                    <ColorField
-                      label="Card"
-                      value={site.theme.card}
-                      onChange={(v) =>
-                        setSite({ ...site, theme: { ...site.theme, card: v } })
-                      }
-                    />
-
-                    <div className="pt-2">
-                      <div className="text-sm font-medium mb-2">Images</div>
-
-                      <input
-                        ref={logoPickerRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) =>
-                          setLogoFromFile(e.target.files?.[0])
-                        }
-                      />
-                      <input
-                        ref={heroPickerRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) =>
-                          setHeroImageFromFile(e.target.files?.[0])
-                        }
-                      />
-
-                      <div className="flex gap-2">
-                        <button
-                          className="flex-1 border rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                          onClick={() => logoPickerRef.current?.click()}
-                        >
+                    <Card theme={appTheme} title="Images">
+                      <div className="space-y-2">
+                        <ActionButton theme={appTheme} onClick={() => logoPickerRef.current?.click()}>
                           Upload Logo
-                        </button>
-                        <button
-                          className="flex-1 border rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                          onClick={() => heroPickerRef.current?.click()}
-                        >
-                          Upload Hero
-                        </button>
+                        </ActionButton>
+                        <ActionButton theme={appTheme} onClick={() => heroPickerRef.current?.click()}>
+                          Upload Hero Image
+                        </ActionButton>
+                        <div className="text-xs" style={{ color: appTheme.mutedText }}>
+                          (MVP stores images locally in your browser. Later: upload to storage.)
+                        </div>
                       </div>
-
-                      <div className="mt-2 text-xs text-gray-500">
-                        (MVP stores images locally in your browser as data URLs. Later we’ll upload to storage.)
-                      </div>
-                    </div>
+                    </Card>
                   </div>
                 )}
 
                 {rightTab === "products" && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Product Catalog</div>
+                      <div className="font-semibold">Catalog</div>
                       <button
-                        className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                        className="text-xs px-2 py-1 rounded-lg border hover:opacity-90"
+                        style={{ borderColor: appTheme.border, color: appTheme.text }}
                         onClick={addProduct}
                       >
                         + Add
                       </button>
                     </div>
 
-                    <div className="space-y-3">
-                      {site.products.map((p) => (
-                        <div key={p.id} className="border rounded-xl p-3 space-y-2">
-                          <Field
-                            label="Name"
-                            value={p.name}
-                            onChange={(v) => updateProduct(p.id, { name: v })}
-                          />
-                          <Field
-                            label="Price"
-                            value={p.price}
-                            onChange={(v) => updateProduct(p.id, { price: v })}
-                          />
+                    {site.products.map((p) => (
+                      <Card key={p.id} theme={appTheme} title={p.name || "Product"}>
+                        <Field
+                          theme={appTheme}
+                          label="Name"
+                          value={p.name}
+                          onChange={(v) => updateProduct(p.id, { name: v })}
+                        />
+                        <div className="h-2" />
+                        <Field
+                          theme={appTheme}
+                          label="Price"
+                          value={p.price}
+                          onChange={(v) => updateProduct(p.id, { price: v })}
+                        />
+                        <div className="h-3" />
 
-                          <div>
-                            <div className="text-xs font-medium mb-1">Image</div>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="text-xs"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const dataUrl = await fileToDataUrl(file);
-                                updateProduct(p.id, { imageDataUrl: dataUrl });
-                              }}
-                            />
-                          </div>
-
-                          <button
-                            className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                            onClick={() => removeProduct(p.id)}
-                          >
-                            Remove
-                          </button>
+                        <div className="text-xs font-medium" style={{ color: appTheme.mutedText }}>
+                          Image
                         </div>
-                      ))}
-                    </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="text-xs"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const dataUrl = await fileToDataUrl(file);
+                            updateProduct(p.id, { imageDataUrl: dataUrl });
+                          }}
+                        />
 
-                    <button
-                      className="w-full border rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
+                        <div className="h-3" />
+                        <button
+                          className="text-xs px-2 py-1 rounded-lg border hover:opacity-90"
+                          style={{ borderColor: appTheme.border, color: appTheme.text }}
+                          onClick={() => removeProduct(p.id)}
+                        >
+                          Remove
+                        </button>
+                      </Card>
+                    ))}
+
+                    <ActionButton
+                      theme={appTheme}
                       onClick={() =>
                         sendMessage(
-                          `Recommend the best 3 products for this brand and rewrite my product names/prices to match a premium positioning. Here is my current product list:\n${JSON.stringify(
+                          `Act like a premium ecommerce operator. Rename and price my products so they feel premium and consistent. Keep it realistic. Here are my products:\n${JSON.stringify(
                             site.products,
                             null,
                             2
@@ -569,59 +662,55 @@ export default function Home() {
                         )
                       }
                     >
-                      Ask Mentor: improve products
-                    </button>
+                      Ask Guide: Improve Product Line
+                    </ActionButton>
                   </div>
                 )}
 
-                {rightTab === "structure" && (
+                {rightTab === "sections" && (
                   <div className="space-y-3">
-                    <div className="text-sm font-medium">Sections</div>
-                    <div className="text-xs text-gray-500">
-                      Next we’ll add reorder/add/remove. For now, use mentor chat to request changes.
-                    </div>
+                    <Card theme={appTheme} title="Sections (content strategy)">
+                      <div className="text-sm" style={{ color: appTheme.mutedText }}>
+                        Tell VentureOS what you want and it will rewrite these sections.
+                        (Next: reorder/add/remove controls.)
+                      </div>
 
-                    <button
-                      className="w-full border rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                      onClick={() =>
-                        sendMessage(
-                          `Rewrite my sections to be more motivational and runner-focused. Keep them concise. Here are my sections:\n${JSON.stringify(
-                            site.sections,
-                            null,
-                            2
-                          )}`
-                        )
-                      }
-                    >
-                      Ask Mentor: rewrite sections
-                    </button>
-                  </div>
-                )}
+                      <div className="mt-3 space-y-2">
+                        <ActionButton
+                          theme={appTheme}
+                          onClick={() =>
+                            sendMessage(
+                              `Rewrite my sections to be premium, motivational, and conversion-focused. Avoid generic wording.\nSections:\n${JSON.stringify(
+                                site.sections,
+                                null,
+                                2
+                              )}`
+                            )
+                          }
+                        >
+                          Ask Guide: Rewrite Sections
+                        </ActionButton>
 
-                {rightTab === "store" && (
-                  <div className="space-y-3">
-                    <div className="text-sm font-medium">Store (Coming next)</div>
-                    <div className="text-xs text-gray-500">
-                      Later we’ll add Shopify-like money features:
-                      checkout, payments, orders, and product inventory.
-                    </div>
-
-                    <div className="border rounded-xl p-3 text-sm">
-                      <div className="font-medium mb-1">Planned:</div>
-                      <ul className="list-disc pl-5 text-gray-700">
-                        <li>Stripe checkout links</li>
-                        <li>Order capture + email receipts</li>
-                        <li>Save projects + publish</li>
-                      </ul>
-                    </div>
+                        <ActionButton
+                          theme={appTheme}
+                          onClick={() =>
+                            sendMessage(
+                              `Give me a better page structure for this business: suggest 5 sections in the best order, and explain why each matters in one sentence.`
+                            )
+                          }
+                        >
+                          Ask Guide: Recommend Structure
+                        </ActionButton>
+                      </div>
+                    </Card>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          <div className="p-4 border-t text-xs text-gray-500">
-            Mentor stays on the left. Builder stays on the right. Preview stays center.
+          <div className="p-4 border-t text-xs" style={{ borderColor: appTheme.border, color: appTheme.mutedText }}>
+            Later: payments + checkout + orders (Shopify-like). First: make the site feel real.
           </div>
         </aside>
       </div>
@@ -629,78 +718,86 @@ export default function Home() {
   );
 }
 
+/* ---------- Preview ---------- */
+
 function Preview({ site }: { site: SiteSpec }) {
   const t = site.theme;
 
   return (
     <div
-      className="border rounded-2xl shadow-sm overflow-hidden"
-      style={{ background: t.bg, color: t.text }}
+      className="rounded-2xl overflow-hidden border"
+      style={{ borderColor: t.border, background: t.surface, color: t.text }}
     >
-      <div className="max-w-3xl mx-auto p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {site.logoDataUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={site.logoDataUrl}
-                alt="Logo"
-                className="h-10 w-10 rounded object-cover"
-              />
-            ) : (
-              <div
-                className="h-10 w-10 rounded"
-                style={{ background: t.primary }}
-              />
-            )}
-            <div>
-              <div className="text-xs opacity-70">{site.tagline}</div>
-              <div className="text-xl font-semibold">{site.brandName}</div>
+      {/* Site "frame" header */}
+      <div
+        className="px-5 py-4 border-b flex items-center justify-between"
+        style={{ borderColor: t.border, background: t.panel }}
+      >
+        <div className="flex items-center gap-3">
+          {site.logoDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={site.logoDataUrl}
+              alt="Logo"
+              className="h-9 w-9 rounded object-cover"
+            />
+          ) : (
+            <div className="h-9 w-9 rounded" style={{ background: t.accent }} />
+          )}
+          <div>
+            <div className="text-xs" style={{ color: t.mutedText }}>
+              {site.tagline}
             </div>
+            <div className="text-lg font-semibold">{site.brandName}</div>
           </div>
-
-          <button
-            className="px-4 py-2 rounded-lg text-sm font-medium"
-            style={{ background: t.primary, color: "#fff" }}
-          >
-            {site.primaryCTA}
-          </button>
         </div>
 
+        <button
+          className="px-4 py-2 rounded-lg text-sm font-medium"
+          style={{ background: t.accent, color: "#fff" }}
+        >
+          {site.primaryCTA}
+        </button>
+      </div>
+
+      <div className="p-6 md:p-8" style={{ background: t.bg }}>
         {/* Hero */}
-        <div className="mt-8 grid gap-6 md:grid-cols-2 items-center">
+        <div className="grid gap-6 md:grid-cols-2 items-center">
           <div>
-            <h1 className="text-3xl font-semibold mb-3">{site.heroHeadline}</h1>
-            <p className="opacity-80 whitespace-pre-line">{site.heroSubheadline}</p>
+            <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
+              {site.heroHeadline}
+            </h1>
+            <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>
+              {site.heroSubheadline}
+            </p>
 
             <div className="mt-5 flex gap-2">
               <button
                 className="px-5 py-3 rounded-lg font-medium"
-                style={{ background: t.primary, color: "#fff" }}
+                style={{ background: t.accent, color: "#fff" }}
               >
                 {site.primaryCTA}
               </button>
               <button
                 className="px-5 py-3 rounded-lg font-medium border"
-                style={{ borderColor: "rgba(0,0,0,0.15)" }}
+                style={{ borderColor: t.border, background: "rgba(255,255,255,0.02)", color: t.text }}
               >
-                Learn More
+                Explore
               </button>
             </div>
 
-            <div className="mt-6 text-sm opacity-75">
-              <strong>Audience:</strong> {site.audience}
+            <div className="mt-6 text-sm" style={{ color: t.mutedText }}>
+              <strong style={{ color: t.text }}>Audience:</strong> {site.audience}
               <br />
-              <strong>Offer:</strong> {site.offer}
+              <strong style={{ color: t.text }}>Offer:</strong> {site.offer}
               <br />
-              <strong>First Product:</strong> {site.firstProductOrService}
+              <strong style={{ color: t.text }}>First Product:</strong> {site.firstProductOrService}
             </div>
           </div>
 
           <div
-            className="rounded-2xl overflow-hidden"
-            style={{ background: t.card }}
+            className="rounded-2xl overflow-hidden border"
+            style={{ borderColor: t.border, background: t.surface }}
           >
             {site.heroImageDataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -710,8 +807,8 @@ function Preview({ site }: { site: SiteSpec }) {
                 className="w-full h-64 object-cover"
               />
             ) : (
-              <div className="h-64 flex items-center justify-center opacity-60 text-sm">
-                Upload a hero image (right panel → Design)
+              <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>
+                Upload a hero image (Builder → Quick or Design)
               </div>
             )}
           </div>
@@ -719,51 +816,53 @@ function Preview({ site }: { site: SiteSpec }) {
 
         {/* Products */}
         <div className="mt-10">
-          <h2 className="text-xl font-semibold mb-4">Products</h2>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="flex items-end justify-between">
+            <h2 className="text-xl font-semibold">Catalog</h2>
+            <div className="text-xs" style={{ color: t.mutedText }}>
+              (Checkout later — storefront UX now)
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
             {site.products.map((p) => (
               <div
                 key={p.id}
                 className="rounded-2xl p-4 border"
-                style={{ background: t.card, borderColor: "rgba(0,0,0,0.08)" }}
+                style={{ borderColor: t.border, background: t.surface }}
               >
-                <div className="rounded-xl overflow-hidden mb-3">
+                <div className="rounded-xl overflow-hidden mb-3 border" style={{ borderColor: t.border }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imageDataUrl}
-                      alt={p.name}
-                      className="w-full h-36 object-cover"
-                    />
+                    <img src={p.imageDataUrl} alt={p.name} className="w-full h-36 object-cover" />
                   ) : (
-                    <div className="h-36 flex items-center justify-center text-xs opacity-60">
+                    <div className="h-36 flex items-center justify-center text-xs" style={{ color: t.mutedText }}>
                       Add product image
                     </div>
                   )}
                 </div>
+
                 <div className="font-medium">{p.name}</div>
-                <div className="opacity-70 text-sm">{p.price}</div>
+                <div className="text-sm" style={{ color: t.mutedText }}>
+                  {p.price}
+                </div>
 
                 <button
                   className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium"
-                  style={{ background: t.primary, color: "#fff" }}
+                  style={{ background: t.accent, color: "#fff" }}
                 >
                   Add to cart
                 </button>
               </div>
             ))}
           </div>
-          <div className="text-xs opacity-60 mt-2">
-            (Checkout later — this is storefront UX for now.)
-          </div>
         </div>
 
         {/* Sections */}
         <div className="mt-10 space-y-6">
           {site.sections.map((s, idx) => (
-            <section key={idx}>
+            <section key={idx} className="rounded-2xl border p-5" style={{ borderColor: t.border, background: t.surface }}>
               <h3 className="text-lg font-semibold mb-2">{s.title}</h3>
-              <ul className="list-disc pl-6 opacity-80">
+              <ul className="list-disc pl-6" style={{ color: t.mutedText }}>
                 {s.bullets.map((b, i) => (
                   <li key={i}>{b}</li>
                 ))}
@@ -777,19 +876,17 @@ function Preview({ site }: { site: SiteSpec }) {
           <h3 className="text-lg font-semibold mb-3">FAQ</h3>
           <div className="space-y-3">
             {site.faq.map((f, i) => (
-              <div
-                key={i}
-                className="rounded-2xl p-4 border"
-                style={{ background: t.card, borderColor: "rgba(0,0,0,0.08)" }}
-              >
+              <div key={i} className="rounded-2xl border p-5" style={{ borderColor: t.border, background: t.surface }}>
                 <div className="font-medium">{f.q}</div>
-                <div className="opacity-80">{f.a}</div>
+                <div className="mt-1" style={{ color: t.mutedText }}>
+                  {f.a}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mt-10 text-xs opacity-50">
+        <div className="mt-10 text-xs" style={{ color: t.mutedText }}>
           © {new Date().getFullYear()} {site.brandName}
         </div>
       </div>
@@ -797,41 +894,141 @@ function Preview({ site }: { site: SiteSpec }) {
   );
 }
 
-function TabButton({
+/* ---------- Small UI pieces ---------- */
+
+function EmptyPreview({ theme }: { theme: Theme }) {
+  return (
+    <div
+      className="rounded-2xl border p-8"
+      style={{ borderColor: theme.border, background: theme.panel }}
+    >
+      <div className="text-sm" style={{ color: theme.mutedText }}>
+        Preview
+      </div>
+      <div className="text-2xl font-semibold mt-2">
+        Your storefront will appear here
+      </div>
+      <p className="mt-2" style={{ color: theme.mutedText }}>
+        Chat on the left for a few turns, then click{" "}
+        <span style={{ color: theme.text, fontWeight: 600 }}>Generate</span>.
+      </p>
+    </div>
+  );
+}
+
+function Card({
+  theme,
+  title,
+  children,
+}: {
+  theme: Theme;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl border p-4"
+      style={{ borderColor: theme.border, background: "rgba(255,255,255,0.03)" }}
+    >
+      <div className="font-semibold text-sm">{title}</div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function Tab({
   label,
   active,
+  theme,
   onClick,
 }: {
   label: string;
   active: boolean;
+  theme: Theme;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`text-xs px-3 py-1 rounded-lg border transition ${
-        active ? "bg-black text-white border-black" : "hover:bg-gray-50"
-      }`}
+      className="text-xs px-3 py-1.5 rounded-lg border transition"
+      style={{
+        borderColor: theme.border,
+        background: active ? theme.accent : "rgba(255,255,255,0.04)",
+        color: active ? "#fff" : theme.text,
+      }}
     >
       {label}
     </button>
   );
 }
 
+function ActionButton({
+  theme,
+  children,
+  onClick,
+}: {
+  theme: Theme;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
+      style={{ background: theme.accent, color: "#fff" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SmallButton({
+  theme,
+  children,
+  onClick,
+}: {
+  theme: Theme;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-xs px-2 py-1 rounded-lg border transition hover:opacity-90"
+      style={{
+        borderColor: theme.border,
+        background: "rgba(255,255,255,0.04)",
+        color: theme.text,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Field({
+  theme,
   label,
   value,
   onChange,
 }: {
+  theme: Theme;
   label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium mb-1">{label}</div>
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>
+        {label}
+      </div>
       <input
-        className="w-full border rounded-lg px-3 py-2 text-sm"
+        className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          border: `1px solid ${theme.border}`,
+          color: theme.text,
+        }}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -840,52 +1037,32 @@ function Field({
 }
 
 function TextField({
+  theme,
   label,
   value,
   onChange,
 }: {
+  theme: Theme;
   label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium mb-1">{label}</div>
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>
+        {label}
+      </div>
       <textarea
-        className="w-full border rounded-lg px-3 py-2 text-sm"
+        className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          border: `1px solid ${theme.border}`,
+          color: theme.text,
+        }}
         rows={4}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-    </label>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <label className="block">
-      <div className="text-xs font-medium mb-1">{label}</div>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-12 p-0 border rounded"
-        />
-        <input
-          className="flex-1 border rounded-lg px-3 py-2 text-sm"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </div>
     </label>
   );
 }
