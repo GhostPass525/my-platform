@@ -141,6 +141,16 @@ function fontStack(font: FontChoice) {
   }
 }
 
+function buildPublishUrl(site: SiteSpec) {
+  // URL-safe base64 of JSON
+  const json = JSON.stringify(site);
+  const base64 = btoa(unescape(encodeURIComponent(json)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `${window.location.origin}/p?data=${base64}`;
+}
+
 export default function Home() {
   // --- chat ---
   const [messages, setMessages] = useState<Message[]>([]);
@@ -226,7 +236,7 @@ export default function Home() {
     setGenerating(true);
 
     try {
-      // Force at least 5 seconds of loading (feels intentional)
+      // Force at least 5 seconds of loading (intentional feel)
       const minDelay = sleep(5000);
 
       const resPromise = fetch("/api/generate", {
@@ -301,6 +311,24 @@ export default function Home() {
     }
   };
 
+  const publish = async () => {
+    if (!site) {
+      alert("Generate a site first.");
+      return;
+    }
+
+    const url = buildPublishUrl(site);
+
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // clipboard can fail on some browsers; still open the URL
+    }
+
+    window.open(url, "_blank");
+    alert("Published link copied (and opened)!");
+  };
+
   // ---- products ----
   const addProduct = () => {
     if (!site) return;
@@ -367,7 +395,6 @@ export default function Home() {
   };
 
   return (
-    // KEY: h-screen + flex-col + overflow-hidden so panes control their own scroll
     <main className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
       {/* Top bar */}
       <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: theme.panel, borderColor: theme.border }}>
@@ -381,6 +408,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* ✅ Buttons live here */}
         <div className="flex items-center gap-2">
           <button
             onClick={generateSite}
@@ -395,6 +423,20 @@ export default function Home() {
             {generating ? "Generating…" : "Generate"}
           </button>
 
+          {/* ✅ PUBLISH BUTTON (between Generate and Export) */}
+          <button
+            onClick={publish}
+            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
+            style={{
+              borderColor: theme.border,
+              background: "#fff",
+              color: theme.text,
+              cursor: "pointer",
+            }}
+          >
+            Publish
+          </button>
+
           <button
             className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
             style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
@@ -405,9 +447,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Workspace (fills remaining height) */}
+      {/* Workspace */}
       <div className="grid grid-cols-12 flex-1 min-h-0">
-        {/* Left: chat (scrolls inside itself) */}
+        {/* Left: chat */}
         <aside className="col-span-12 md:col-span-3 border-r flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
           <div className="p-4 border-b" style={{ borderColor: theme.border }}>
             <div className="font-semibold">VentureOS Guide</div>
@@ -416,7 +458,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* IMPORTANT: min-h-0 allows this flex child to actually scroll */}
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-sm" style={{ color: theme.mutedText }}>
@@ -468,14 +509,18 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Center: preview (scrolls inside itself) */}
+        {/* Center: preview */}
         <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-6">
           <div className="max-w-4xl mx-auto">
-            {!site ? <EmptyPreview theme={theme} /> : <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />}
+            {!site ? (
+              <EmptyPreview theme={theme} />
+            ) : (
+              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
+            )}
           </div>
         </section>
 
-        {/* Right: builder (scrolls inside itself) */}
+        {/* Right: builder */}
         <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
           <div className="p-4 border-b" style={{ borderColor: theme.border }}>
             <div className="font-semibold">Builder</div>
@@ -500,7 +545,6 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {/* hidden file pickers */}
                 <input ref={logoPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setLogoFromFile(e.target.files?.[0])} />
                 <input ref={heroPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])} />
 
@@ -616,10 +660,15 @@ export default function Home() {
                     <Field theme={theme} label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
                     <TextField theme={theme} label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
                     <Field theme={theme} label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
+
                     <Card theme={theme} title="Images">
                       <div className="space-y-2">
-                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>Upload Logo</ActionButton>
-                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>Upload Hero Image</ActionButton>
+                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>
+                          Upload Logo
+                        </ActionButton>
+                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>
+                          Upload Hero Image
+                        </ActionButton>
                       </div>
                     </Card>
                   </div>
@@ -640,7 +689,9 @@ export default function Home() {
                         <div className="h-2" />
                         <Field theme={theme} label="Price" value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
                         <div className="h-3" />
-                        <div className="text-xs font-medium" style={{ color: theme.mutedText }}>Image</div>
+                        <div className="text-xs font-medium" style={{ color: theme.mutedText }}>
+                          Image
+                        </div>
                         <input
                           type="file"
                           accept="image/*"
@@ -673,7 +724,7 @@ export default function Home() {
           </div>
 
           <div className="p-4 border-t text-xs" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            Next: publish flow (share link + custom domain + deploy).
+            Next: true publish (short URLs + saved projects + custom domains).
           </div>
         </aside>
       </div>
@@ -716,7 +767,8 @@ function SitePreview({
   onSelectPage: (id: string) => void;
 }) {
   const t = site.theme;
-  const activePage = site.pages.find((p) => p.id === activePageId) ?? site.pages[0];
+  const activePage =
+    site.pages.find((p) => p.id === activePageId) ?? site.pages[0];
   const fontFamily = fontStack(site.font);
 
   return (
@@ -854,9 +906,7 @@ function ProductsPage({ site }: { site: SiteSpec }) {
     <>
       <div className="flex items-end justify-between">
         <h2 className="text-2xl font-semibold">Products</h2>
-        <div className="text-sm" style={{ color: t.mutedText }}>
-          Curated for performance + trust
-        </div>
+        <div className="text-sm" style={{ color: t.mutedText }}>Curated for performance + trust</div>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -882,10 +932,6 @@ function ProductsPage({ site }: { site: SiteSpec }) {
           </div>
         ))}
       </div>
-
-      <div className="mt-3 text-xs" style={{ color: t.mutedText }}>
-        Checkout later (Stripe). This is storefront UX for now.
-      </div>
     </>
   );
 }
@@ -899,9 +945,6 @@ function AboutPage({ site }: { site: SiteSpec }) {
         {site.brandName} exists to deliver a clear promise: {site.offer}. This page is where your story,
         credibility, and brand philosophy live.
       </p>
-      <div className="mt-4 text-sm" style={{ color: t.mutedText }}>
-        Tip: add founder story + proof + what makes you different.
-      </div>
     </div>
   );
 }
@@ -915,11 +958,6 @@ function ContactPage({ site }: { site: SiteSpec }) {
         <p className="mt-2" style={{ color: t.mutedText }}>
           Keep contact simple and professional.
         </p>
-        <div className="mt-4 text-sm" style={{ color: t.mutedText }}>
-          Email: support@{site.brandName.toLowerCase().replace(/\s+/g, "")}.com
-          <br />
-          Instagram: @{site.brandName.toLowerCase().replace(/\s+/g, "")}
-        </div>
       </div>
 
       <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
@@ -979,18 +1017,6 @@ function ActionButton({ theme, children, onClick }: { theme: Theme; children: Re
       onClick={onClick}
       className="w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
       style={{ background: theme.accent, color: "#fff" }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SmallButton({ theme, children, onClick }: { theme: Theme; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="text-xs px-2 py-1 rounded-lg border transition hover:opacity-90"
-      style={{ borderColor: theme.border, background: "#fff", color: theme.text }}
     >
       {children}
     </button>
