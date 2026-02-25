@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Theme = {
   accent: string;
@@ -25,7 +25,7 @@ type FontChoice =
 type Product = {
   id: string;
   name: string;
-  price: string;
+  price: string; // "$49" or "49" etc
   imageDataUrl?: string; // legacy
   imageUrl?: string;     // preferred
 };
@@ -53,14 +53,21 @@ type SiteSpec = {
   theme: Theme;
   font: FontChoice;
 
-  logoDataUrl?: string; // legacy
-  heroImageDataUrl?: string; // legacy
-
-  logoUrl?: string;     // preferred
-  heroImageUrl?: string; // preferred
+  logoDataUrl?: string;
+  heroImageDataUrl?: string;
+  logoUrl?: string;
+  heroImageUrl?: string;
 
   products: Product[];
   pages: Page[];
+};
+
+type CartItem = {
+  productId: string;
+  name: string;
+  price: number; // dollars
+  quantity: number;
+  image?: string;
 };
 
 function fontStack(font: FontChoice) {
@@ -74,8 +81,19 @@ function fontStack(font: FontChoice) {
   }
 }
 
+// Turns "$49", "49", "49.99" into 49.99
+function parsePriceDollars(raw: string): number {
+  const cleaned = (raw || "").replace(/[^0-9.]/g, "");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function PublishedClient({ site }: { site: SiteSpec }) {
   const [activeKey, setActiveKey] = useState<PageKey>("home");
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [cart, setCart] = useState<CartItem[]>([]);
+
   const t = site.theme;
 
   const pages = site.pages?.length
@@ -87,6 +105,89 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
   const logoSrc = site.logoUrl || site.logoDataUrl;
   const heroSrc = site.heroImageUrl || site.heroImageDataUrl;
 
+  const cartCount = useMemo(
+    () => cart.reduce((sum, i) => sum + i.quantity, 0),
+    [cart]
+  );
+
+  const subtotal = useMemo(
+    () => cart.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    [cart]
+  );
+
+  const addToCart = (p: Product) => {
+    const price = parsePriceDollars(p.price);
+    const image = p.imageUrl || p.imageDataUrl;
+
+    setCart((prev) => {
+      const existing = prev.find((x) => x.productId === p.id);
+      if (existing) {
+        return prev.map((x) =>
+          x.productId === p.id ? { ...x, quantity: x.quantity + 1 } : x
+        );
+      }
+      return [
+        ...prev,
+        { productId: p.id, name: p.name, price, quantity: 1, image },
+      ];
+    });
+
+    setCartOpen(true);
+  };
+
+  const setQty = (productId: string, qty: number) => {
+    setCart((prev) =>
+      prev
+        .map((x) =>
+          x.productId === productId ? { ...x, quantity: Math.max(1, qty) } : x
+        )
+        .filter((x) => x.quantity > 0)
+    );
+  };
+
+  const removeItem = (productId: string) => {
+    setCart((prev) => prev.filter((x) => x.productId !== productId));
+  };
+
+  const checkout = async () => {
+    if (checkingOut) return;
+    if (cart.length === 0) {
+      setCartOpen(true);
+      return;
+    }
+
+    setCheckingOut(true);
+    try {
+      // publish id is the dynamic route segment in the URL: /s/:id
+      const publishId = window.location.pathname.split("/").pop() || "";
+
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publishId,
+          cart: cart.map((i) => ({
+            name: i.name,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.url) {
+        alert(data?.error || "Checkout failed. Try again.");
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch {
+      alert("Checkout failed. Try again.");
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
   return (
     <main
       className="min-h-screen p-6"
@@ -96,7 +197,7 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
         fontFamily: fontStack(site.font),
       }}
     >
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto relative">
         <div
           className="rounded-2xl overflow-hidden border"
           style={{ borderColor: t.border, background: t.surface }}
@@ -115,7 +216,10 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                   className="h-9 w-9 rounded object-cover"
                 />
               ) : (
-                <div className="h-9 w-9 rounded" style={{ background: t.accent }} />
+                <div
+                  className="h-9 w-9 rounded"
+                  style={{ background: t.accent }}
+                />
               )}
               <div>
                 <div className="text-xs" style={{ color: t.mutedText }}>
@@ -125,12 +229,22 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
               </div>
             </div>
 
-            <button
-              className="px-4 py-2 rounded-lg text-sm font-medium"
-              style={{ background: t.accent, color: "#fff" }}
-            >
-              {site.primaryCTA}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCartOpen(true)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{ borderColor: t.border, background: "#fff", color: t.text }}
+              >
+                Cart {cartCount > 0 ? `(${cartCount})` : ""}
+              </button>
+
+              <button
+                className="px-4 py-2 rounded-lg text-sm font-medium"
+                style={{ background: t.accent, color: "#fff" }}
+              >
+                {site.primaryCTA}
+              </button>
+            </div>
           </div>
 
           {/* Nav */}
@@ -157,10 +271,10 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
             })}
           </div>
 
-          {/* Page content */}
+          {/* Content */}
           <div className="p-6 md:p-8" style={{ background: t.bg }}>
             {activePage.key === "products" ? (
-              <ProductsPage site={site} />
+              <ProductsPage site={site} onAdd={addToCart} />
             ) : activePage.key === "about" ? (
               <AboutPage site={site} />
             ) : activePage.key === "contact" ? (
@@ -175,11 +289,124 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
           </div>
         </div>
 
+        {/* Cart Drawer */}
+        {cartOpen && (
+          <div
+            className="fixed inset-0 z-50 flex"
+            style={{ background: "rgba(0,0,0,0.35)" }}
+            onClick={() => setCartOpen(false)}
+          >
+            <div
+              className="ml-auto h-full w-full max-w-md bg-white p-5 border-l"
+              style={{ borderColor: t.border }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">Your cart</div>
+                <button
+                  className="px-3 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: t.border }}
+                  onClick={() => setCartOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+                {cart.length === 0 ? (
+                  <div className="text-sm text-slate-600">
+                    Your cart is empty.
+                  </div>
+                ) : (
+                  cart.map((item) => (
+                    <div
+                      key={item.productId}
+                      className="rounded-2xl border p-3 flex gap-3"
+                      style={{ borderColor: t.border }}
+                    >
+                      <div className="h-14 w-14 rounded-xl overflow-hidden border" style={{ borderColor: t.border }}>
+                        {item.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full" style={{ background: "rgba(2,6,23,0.04)" }} />
+                        )}
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-sm text-slate-600">
+                          ${item.price.toFixed(2)}
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            className="px-2 py-1 rounded-lg border"
+                            style={{ borderColor: t.border }}
+                            onClick={() => setQty(item.productId, item.quantity - 1)}
+                          >
+                            −
+                          </button>
+                          <div className="text-sm w-6 text-center">
+                            {item.quantity}
+                          </div>
+                          <button
+                            className="px-2 py-1 rounded-lg border"
+                            style={{ borderColor: t.border }}
+                            onClick={() => setQty(item.productId, item.quantity + 1)}
+                          >
+                            +
+                          </button>
+
+                          <button
+                            className="ml-auto text-sm text-red-600 hover:opacity-80"
+                            onClick={() => removeItem(item.productId)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-5 border-t pt-4" style={{ borderColor: t.border }}>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="text-slate-600">Subtotal</div>
+                  <div className="font-semibold">${subtotal.toFixed(2)}</div>
+                </div>
+
+                <button
+                  onClick={checkout}
+                  disabled={checkingOut || cart.length === 0}
+                  className="mt-4 w-full px-4 py-3 rounded-xl font-medium transition"
+                  style={{
+                    background:
+                      checkingOut || cart.length === 0 ? "rgba(2,6,23,0.10)" : t.accent,
+                    color: checkingOut || cart.length === 0 ? "#334155" : "#fff",
+                    cursor:
+                      checkingOut || cart.length === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {checkingOut ? "Redirecting…" : "Checkout"}
+                </button>
+
+                <div className="mt-2 text-xs text-slate-500">
+                  Payments are processed securely by Stripe.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 text-xs text-slate-500">Published with VentureOS</div>
       </div>
     </main>
   );
 }
+
+/* --- Pages --- */
 
 function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
   const t = site.theme;
@@ -228,7 +455,7 @@ function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
   );
 }
 
-function ProductsPage({ site }: { site: SiteSpec }) {
+function ProductsPage({ site, onAdd }: { site: SiteSpec; onAdd: (p: Product) => void }) {
   const t = site.theme;
 
   return (
@@ -255,7 +482,11 @@ function ProductsPage({ site }: { site: SiteSpec }) {
               </div>
               <div className="font-medium">{p.name}</div>
               <div className="text-sm" style={{ color: t.mutedText }}>{p.price}</div>
-              <button className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
+              <button
+                onClick={() => onAdd(p)}
+                className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
+                style={{ background: t.accent, color: "#fff" }}
+              >
                 Add to cart
               </button>
             </div>
