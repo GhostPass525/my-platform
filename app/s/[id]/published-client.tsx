@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Theme = {
   accent: string;
@@ -27,7 +27,7 @@ type Product = {
   name: string;
   price: string; // "$49" or "49" etc
   imageDataUrl?: string; // legacy
-  imageUrl?: string;     // preferred
+  imageUrl?: string; // preferred
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -94,11 +94,20 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
   const [checkingOut, setCheckingOut] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
 
+  // scrolling targets
+  const productsTopRef = useRef<HTMLDivElement | null>(null);
+  const [pendingScrollToProducts, setPendingScrollToProducts] = useState(false);
+
   const t = site.theme;
 
   const pages = site.pages?.length
     ? site.pages
-    : [{ id: "home", key: "home", name: "Home" }];
+    : [
+        { id: "home", key: "home", name: "Home" },
+        { id: "products", key: "products", name: "Products" },
+        { id: "about", key: "about", name: "About" },
+        { id: "contact", key: "contact", name: "Contact" },
+      ];
 
   const activePage = pages.find((p) => p.key === activeKey) ?? pages[0];
 
@@ -149,6 +158,32 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
     setCart((prev) => prev.filter((x) => x.productId !== productId));
   };
 
+  const goProducts = () => {
+    setActiveKey("products");
+    setPendingScrollToProducts(true);
+  };
+
+  const goAbout = () => {
+    setActiveKey("about");
+  };
+
+  // When we switch to Products, scroll to the product grid anchor
+  useEffect(() => {
+    if (activeKey !== "products") return;
+    if (!pendingScrollToProducts) return;
+
+    // allow render to complete
+    const tId = window.setTimeout(() => {
+      productsTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setPendingScrollToProducts(false);
+    }, 50);
+
+    return () => window.clearTimeout(tId);
+  }, [activeKey, pendingScrollToProducts]);
+
   const checkout = async () => {
     if (checkingOut) return;
     if (cart.length === 0) {
@@ -158,7 +193,6 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
 
     setCheckingOut(true);
     try {
-      // publish id is the dynamic route segment in the URL: /s/:id
       const publishId = window.location.pathname.split("/").pop() || "";
 
       const res = await fetch("/api/checkout", {
@@ -232,14 +266,20 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCartOpen(true)}
-                className="px-4 py-2 rounded-lg text-sm font-medium border"
-                style={{ borderColor: t.border, background: "#fff", color: t.text }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border transition hover:opacity-90"
+                style={{
+                  borderColor: t.border,
+                  background: "#fff",
+                  color: t.text,
+                }}
               >
                 Cart {cartCount > 0 ? `(${cartCount})` : ""}
               </button>
 
+              {/* Primary CTA should act like “Shop now / Explore” */}
               <button
-                className="px-4 py-2 rounded-lg text-sm font-medium"
+                onClick={goProducts}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
                 style={{ background: t.accent, color: "#fff" }}
               >
                 {site.primaryCTA}
@@ -258,7 +298,7 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                 <button
                   key={p.id}
                   onClick={() => setActiveKey(p.key)}
-                  className="px-3 py-1.5 rounded-lg text-sm border transition"
+                  className="px-3 py-1.5 rounded-lg text-sm border transition hover:opacity-90"
                   style={{
                     borderColor: t.border,
                     background: active ? "rgba(37,99,235,0.10)" : "#fff",
@@ -274,13 +314,22 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
           {/* Content */}
           <div className="p-6 md:p-8" style={{ background: t.bg }}>
             {activePage.key === "products" ? (
-              <ProductsPage site={site} onAdd={addToCart} />
+              <ProductsPage
+                site={site}
+                onAdd={addToCart}
+                productsTopRef={productsTopRef}
+              />
             ) : activePage.key === "about" ? (
               <AboutPage site={site} />
             ) : activePage.key === "contact" ? (
               <ContactPage site={site} />
             ) : (
-              <HomePage site={site} heroSrc={heroSrc} />
+              <HomePage
+                site={site}
+                heroSrc={heroSrc}
+                onPrimaryCTA={goProducts}
+                onLearnMore={goAbout}
+              />
             )}
 
             <div className="mt-10 text-xs" style={{ color: t.mutedText }}>
@@ -304,7 +353,7 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">Your cart</div>
                 <button
-                  className="px-3 py-1.5 rounded-lg border text-sm"
+                  className="px-3 py-1.5 rounded-lg border text-sm transition hover:opacity-90"
                   style={{ borderColor: t.border }}
                   onClick={() => setCartOpen(false)}
                 >
@@ -324,12 +373,22 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                       className="rounded-2xl border p-3 flex gap-3"
                       style={{ borderColor: t.border }}
                     >
-                      <div className="h-14 w-14 rounded-xl overflow-hidden border" style={{ borderColor: t.border }}>
+                      <div
+                        className="h-14 w-14 rounded-xl overflow-hidden border"
+                        style={{ borderColor: t.border }}
+                      >
                         {item.image ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="h-full w-full" style={{ background: "rgba(2,6,23,0.04)" }} />
+                          <div
+                            className="h-full w-full"
+                            style={{ background: "rgba(2,6,23,0.04)" }}
+                          />
                         )}
                       </div>
 
@@ -341,9 +400,11 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
 
                         <div className="mt-2 flex items-center gap-2">
                           <button
-                            className="px-2 py-1 rounded-lg border"
+                            className="px-2 py-1 rounded-lg border transition hover:opacity-90"
                             style={{ borderColor: t.border }}
-                            onClick={() => setQty(item.productId, item.quantity - 1)}
+                            onClick={() =>
+                              setQty(item.productId, item.quantity - 1)
+                            }
                           >
                             −
                           </button>
@@ -351,9 +412,11 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                             {item.quantity}
                           </div>
                           <button
-                            className="px-2 py-1 rounded-lg border"
+                            className="px-2 py-1 rounded-lg border transition hover:opacity-90"
                             style={{ borderColor: t.border }}
-                            onClick={() => setQty(item.productId, item.quantity + 1)}
+                            onClick={() =>
+                              setQty(item.productId, item.quantity + 1)
+                            }
                           >
                             +
                           </button>
@@ -371,7 +434,10 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                 )}
               </div>
 
-              <div className="mt-5 border-t pt-4" style={{ borderColor: t.border }}>
+              <div
+                className="mt-5 border-t pt-4"
+                style={{ borderColor: t.border }}
+              >
                 <div className="flex items-center justify-between text-sm">
                   <div className="text-slate-600">Subtotal</div>
                   <div className="font-semibold">${subtotal.toFixed(2)}</div>
@@ -383,10 +449,15 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
                   className="mt-4 w-full px-4 py-3 rounded-xl font-medium transition"
                   style={{
                     background:
-                      checkingOut || cart.length === 0 ? "rgba(2,6,23,0.10)" : t.accent,
-                    color: checkingOut || cart.length === 0 ? "#334155" : "#fff",
+                      checkingOut || cart.length === 0
+                        ? "rgba(2,6,23,0.10)"
+                        : t.accent,
+                    color:
+                      checkingOut || cart.length === 0 ? "#334155" : "#fff",
                     cursor:
-                      checkingOut || cart.length === 0 ? "not-allowed" : "pointer",
+                      checkingOut || cart.length === 0
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   {checkingOut ? "Redirecting…" : "Checkout"}
@@ -400,7 +471,9 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
           </div>
         )}
 
-        <div className="mt-6 text-xs text-slate-500">Published with VentureOS</div>
+        <div className="mt-6 text-xs text-slate-500">
+          Published with VentureOS
+        </div>
       </div>
     </main>
   );
@@ -408,7 +481,17 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
 
 /* --- Pages --- */
 
-function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
+function HomePage({
+  site,
+  heroSrc,
+  onPrimaryCTA,
+  onLearnMore,
+}: {
+  site: SiteSpec;
+  heroSrc?: string;
+  onPrimaryCTA: () => void;
+  onLearnMore: () => void;
+}) {
   const t = site.theme;
 
   return (
@@ -423,10 +506,18 @@ function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
           </p>
 
           <div className="mt-5 flex gap-2">
-            <button className="px-5 py-3 rounded-lg font-medium" style={{ background: t.accent, color: "#fff" }}>
+            <button
+              onClick={onPrimaryCTA}
+              className="px-5 py-3 rounded-lg font-medium transition hover:opacity-90"
+              style={{ background: t.accent, color: "#fff" }}
+            >
               {site.primaryCTA}
             </button>
-            <button className="px-5 py-3 rounded-lg font-medium border" style={{ borderColor: t.border, background: "#fff" }}>
+            <button
+              onClick={onLearnMore}
+              className="px-5 py-3 rounded-lg font-medium border transition hover:opacity-90"
+              style={{ borderColor: t.border, background: "#fff" }}
+            >
               Learn more
             </button>
           </div>
@@ -436,16 +527,29 @@ function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
             <br />
             <strong style={{ color: t.text }}>Offer:</strong> {site.offer}
             <br />
-            <strong style={{ color: t.text }}>First Product:</strong> {site.firstProductOrService}
+            <strong style={{ color: t.text }}>
+              First Product:
+            </strong>{" "}
+            {site.firstProductOrService}
           </div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden border" style={{ borderColor: t.border, background: "#fff" }}>
+        <div
+          className="rounded-2xl overflow-hidden border"
+          style={{ borderColor: t.border, background: "#fff" }}
+        >
           {heroSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroSrc} alt="Hero" className="w-full h-64 object-cover" />
+            <img
+              src={heroSrc}
+              alt="Hero"
+              className="w-full h-64 object-cover"
+            />
           ) : (
-            <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>
+            <div
+              className="h-64 flex items-center justify-center text-sm"
+              style={{ color: t.mutedText }}
+            >
               No hero image set
             </div>
           )}
@@ -455,33 +559,62 @@ function HomePage({ site, heroSrc }: { site: SiteSpec; heroSrc?: string }) {
   );
 }
 
-function ProductsPage({ site, onAdd }: { site: SiteSpec; onAdd: (p: Product) => void }) {
+function ProductsPage({
+  site,
+  onAdd,
+  productsTopRef,
+}: {
+  site: SiteSpec;
+  onAdd: (p: Product) => void;
+  productsTopRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const t = site.theme;
 
   return (
     <>
+      {/* scroll anchor for “Shop now / Explore” */}
+      <div ref={productsTopRef} />
+
       <div className="flex items-end justify-between">
         <h2 className="text-2xl font-semibold">Products</h2>
-        <div className="text-sm" style={{ color: t.mutedText }}>Catalog</div>
+        <div className="text-sm" style={{ color: t.mutedText }}>
+          Catalog
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         {(site.products || []).map((p) => {
           const img = p.imageUrl || p.imageDataUrl;
           return (
-            <div key={p.id} className="rounded-2xl p-4 border" style={{ borderColor: t.border, background: "#fff" }}>
-              <div className="rounded-xl overflow-hidden mb-3 border" style={{ borderColor: t.border }}>
+            <div
+              key={p.id}
+              className="rounded-2xl p-4 border"
+              style={{ borderColor: t.border, background: "#fff" }}
+            >
+              <div
+                className="rounded-xl overflow-hidden mb-3 border"
+                style={{ borderColor: t.border }}
+              >
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={img} alt={p.name} className="w-full h-36 object-cover" />
+                  <img
+                    src={img}
+                    alt={p.name}
+                    className="w-full h-36 object-cover"
+                  />
                 ) : (
-                  <div className="h-36 flex items-center justify-center text-xs" style={{ color: t.mutedText }}>
+                  <div
+                    className="h-36 flex items-center justify-center text-xs"
+                    style={{ color: t.mutedText }}
+                  >
                     No image
                   </div>
                 )}
               </div>
               <div className="font-medium">{p.name}</div>
-              <div className="text-sm" style={{ color: t.mutedText }}>{p.price}</div>
+              <div className="text-sm" style={{ color: t.mutedText }}>
+                {p.price}
+              </div>
               <button
                 onClick={() => onAdd(p)}
                 className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
@@ -500,7 +633,10 @@ function ProductsPage({ site, onAdd }: { site: SiteSpec; onAdd: (p: Product) => 
 function AboutPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
+    <div
+      className="rounded-2xl border p-6"
+      style={{ borderColor: t.border, background: "#fff" }}
+    >
       <h2 className="text-2xl font-semibold">About</h2>
       <p className="mt-3" style={{ color: t.mutedText }}>
         {site.brandName} exists to deliver a clear promise: {site.offer}.
@@ -512,7 +648,10 @@ function AboutPage({ site }: { site: SiteSpec }) {
 function ContactPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
+    <div
+      className="rounded-2xl border p-6"
+      style={{ borderColor: t.border, background: "#fff" }}
+    >
       <h2 className="text-2xl font-semibold">Contact</h2>
       <p className="mt-2" style={{ color: t.mutedText }}>
         Keep contact simple and professional.
