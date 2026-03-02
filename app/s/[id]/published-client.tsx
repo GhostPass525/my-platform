@@ -496,6 +496,7 @@ function HomePage({
 
   return (
     <>
+      {/* HERO */}
       <div className="grid gap-6 md:grid-cols-2 items-center">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
@@ -527,9 +528,7 @@ function HomePage({
             <br />
             <strong style={{ color: t.text }}>Offer:</strong> {site.offer}
             <br />
-            <strong style={{ color: t.text }}>
-              First Product:
-            </strong>{" "}
+            <strong style={{ color: t.text }}>First Product:</strong>{" "}
             {site.firstProductOrService}
           </div>
         </div>
@@ -555,6 +554,59 @@ function HomePage({
           )}
         </div>
       </div>
+
+      {/* SECTIONS (Builder preview content) */}
+      {Array.isArray(site.sections) && site.sections.length > 0 && (
+        <div className="mt-10 space-y-6">
+          {site.sections.map((sec, idx) => (
+            <div
+              key={`${sec.title}-${idx}`}
+              className="rounded-2xl border p-6"
+              style={{ borderColor: t.border, background: "#fff" }}
+            >
+              <div className="text-xl font-semibold">{sec.title}</div>
+
+              {Array.isArray(sec.bullets) && sec.bullets.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {sec.bullets.map((b, i) => (
+                    <li key={i} className="flex gap-2 text-sm">
+                      <span
+                        className="mt-2 h-1.5 w-1.5 rounded-full"
+                        style={{ background: t.accent }}
+                      />
+                      <span style={{ color: t.mutedText }}>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* FAQ (Builder preview content) */}
+      {Array.isArray(site.faq) && site.faq.length > 0 && (
+        <div className="mt-10">
+          <div className="text-2xl font-semibold">FAQ</div>
+
+          <div className="mt-4 space-y-3">
+            {site.faq.map((item, idx) => (
+              <details
+                key={idx}
+                className="rounded-2xl border p-4 bg-white"
+                style={{ borderColor: t.border }}
+              >
+                <summary className="cursor-pointer font-medium">
+                  {item.q}
+                </summary>
+                <div className="mt-2 text-sm" style={{ color: t.mutedText }}>
+                  {item.a}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
