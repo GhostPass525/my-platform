@@ -34,7 +34,7 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Email
         </label>
         <input
@@ -42,13 +42,13 @@ export default function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500"
+          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 bg-white"
           placeholder="you@example.com"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Password
         </label>
         <input
@@ -56,13 +56,13 @@ export default function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500"
+          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 bg-white"
           placeholder="••••••••"
         />
       </div>
 
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 animate-fadeIn">
           {error}
         </div>
       )}
@@ -70,14 +70,17 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-60"
+        className="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
+        {loading && (
+          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />
+        )}
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
       <p className="text-sm text-center text-slate-500">
         No account?{" "}
-        <a href="/auth/signup" className="text-blue-600 hover:underline">
+        <a href="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
           Sign up
         </a>
       </p>

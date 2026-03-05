@@ -286,7 +286,7 @@ export default function Home() {
 
       const reply =
         data?.result ||
-        "I got your message — but didn’t generate a reply. Try again.";
+        "I got your message -- but didn't generate a reply. Try again.";
 
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch {
@@ -305,7 +305,7 @@ export default function Home() {
     if (messages.length === 0) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Tell me what you’re building first." },
+        { role: "assistant", content: "Tell me what you're building first." },
       ]);
       return;
     }
@@ -329,7 +329,7 @@ export default function Home() {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data?.error || "Generation failed — try again." },
+          { role: "assistant", content: data?.error || "Generation failed -- try again." },
         ]);
         return;
       }
@@ -360,7 +360,7 @@ export default function Home() {
         font: "Inter",
         pages,
         products: [
-          { id: uid(), name: "Runner’s Core Shorts", price: "$48" },
+          { id: uid(), name: "Runner's Core Shorts", price: "$48" },
           { id: uid(), name: "BreathLite Performance Tee", price: "$36" },
           { id: uid(), name: "NoirStride Training Cap", price: "$28" },
         ],
@@ -491,44 +491,49 @@ export default function Home() {
   return (
     <main className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
       {/* Top bar */}
-      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: theme.panel, borderColor: theme.border }}>
+      <div className="h-16 border-b flex items-center justify-between px-4 shadow-sm" style={{ background: theme.panel, borderColor: theme.border }}>
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded" style={{ background: theme.accent }} />
+          <div
+            className="h-8 w-8 rounded-xl flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}cc)` }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
           <div className="leading-tight">
-            <div className="font-semibold">VentureOS</div>
+            <div className="font-semibold text-sm">VentureOS</div>
             <div className="text-xs" style={{ color: theme.mutedText }}>
-              {projectName || "Build • Launch • Operate"}
+              {projectName || "Build \u2022 Launch \u2022 Operate"}
             </div>
           </div>
           <a
             href="/dashboard"
-            className="hidden md:inline-block px-3 py-1.5 rounded-lg text-xs border hover:opacity-80 transition"
+            className="hidden md:inline-block px-2.5 py-1 rounded-lg text-xs border hover:opacity-80 transition"
             style={{ borderColor: theme.border, color: theme.mutedText }}
           >
             Dashboard
           </a>
         </div>
 
-        {/* ✅ Buttons live here */}
         <div className="flex items-center gap-2">
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition"
+            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
             style={{
               background: !canGenerate || generating ? "rgba(2,6,23,0.08)" : theme.accent,
               color: !canGenerate || generating ? theme.mutedText : "#fff",
               cursor: !canGenerate || generating ? "not-allowed" : "pointer",
             }}
           >
-            {generating ? "Generating…" : "Generate"}
+            {generating ? "Generating..." : "Generate"}
           </button>
 
-          {/* Save to Supabase project */}
           <button
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
+            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-90 transition-all duration-150"
             style={{
               borderColor: theme.border,
               background: saving ? "rgba(2,6,23,0.05)" : theme.accent,
@@ -536,13 +541,12 @@ export default function Home() {
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            {saving ? "Saving…" : projectId ? "Save" : "Save"}
+            {saving ? "Saving..." : "Save"}
           </button>
 
-          {/* ✅ PUBLISH BUTTON (between Generate and Export) */}
           <button
             onClick={publish}
-            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
+            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-90 transition-all duration-150"
             style={{
               borderColor: theme.border,
               background: "#fff",
@@ -554,7 +558,7 @@ export default function Home() {
           </button>
 
           <button
-            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
+            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-90 transition-all duration-150"
             style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
             onClick={exportJson}
           >
@@ -568,27 +572,32 @@ export default function Home() {
         {/* Left: chat */}
         <aside className="col-span-12 md:col-span-3 border-r flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
           <div className="p-4 border-b" style={{ borderColor: theme.border }}>
-            <div className="font-semibold">VentureOS Guide</div>
+            <div className="font-semibold text-sm">VentureOS Guide</div>
             <div className="text-xs" style={{ color: theme.mutedText }}>
               Operator-style guidance + execution.
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
-              <div className="text-sm" style={{ color: theme.mutedText }}>
-                Start with: <span style={{ color: theme.text, fontWeight: 600 }}>“I want to build…”</span>
+              <div className="text-sm mt-2" style={{ color: theme.mutedText }}>
+                Start with: <span style={{ color: theme.text, fontWeight: 600 }}>&quot;I want to build...&quot;</span>
               </div>
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className="text-sm">
+              <div
+                key={i}
+                className="flex text-sm animate-fadeIn"
+                style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}
+              >
                 <div
-                  className="inline-block max-w-[95%] rounded-xl px-3 py-2 whitespace-pre-line"
+                  className="max-w-[92%] px-3 py-2.5 whitespace-pre-line shadow-sm"
                   style={{
                     background: m.role === "user" ? "rgba(37,99,235,0.10)" : "rgba(2,6,23,0.04)",
-                    border: `1px solid ${theme.border}`,
-                    marginLeft: m.role === "user" ? "auto" : undefined,
+                    border: `1px solid ${m.role === "user" ? "rgba(37,99,235,0.15)" : theme.border}`,
+                    borderRadius: m.role === "user" ? "1rem 1rem 0.25rem 1rem" : "1rem 1rem 1rem 0.25rem",
+                    color: theme.text,
                   }}
                 >
                   {m.content}
@@ -596,7 +605,20 @@ export default function Home() {
               </div>
             ))}
 
-            {loadingChat && <div className="text-xs" style={{ color: theme.mutedText }}>Thinking…</div>}
+            {loadingChat && (
+              <div className="flex gap-1 px-2 py-2">
+                {[0, 1, 2].map((d) => (
+                  <span
+                    key={d}
+                    className="h-2 w-2 rounded-full inline-block"
+                    style={{
+                      background: theme.mutedText,
+                      animation: `dotPulse 1.4s ease-in-out ${d * 0.16}s infinite`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="p-3 border-t" style={{ borderColor: theme.border }}>
@@ -605,14 +627,18 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder="Ask VentureOS…"
-                className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ background: "rgba(2,6,23,0.03)", border: `1px solid ${theme.border}`, color: theme.text }}
+                placeholder="Ask VentureOS..."
+                className="flex-1 px-3 py-2 rounded-xl text-sm outline-none transition-all duration-200"
+                style={{
+                  background: "rgba(2,6,23,0.03)",
+                  border: `1px solid ${theme.border}`,
+                  color: theme.text,
+                }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
-                className="px-3 py-2 rounded-lg text-sm font-medium transition"
+                className="px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
                 style={{
                   background: loadingChat ? "rgba(2,6,23,0.08)" : theme.accent,
                   color: loadingChat ? theme.mutedText : "#fff",
@@ -626,12 +652,14 @@ export default function Home() {
         </aside>
 
         {/* Center: preview */}
-        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-6">
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-6 bg-slate-50/40">
           <div className="max-w-4xl mx-auto">
             {!site ? (
               <EmptyPreview theme={theme} />
             ) : (
-              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
+              <div className="rounded-2xl shadow-lg overflow-hidden border" style={{ borderColor: theme.border }}>
+                <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
+              </div>
             )}
           </div>
         </section>
@@ -639,12 +667,12 @@ export default function Home() {
         {/* Right: builder */}
         <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
           <div className="p-4 border-b" style={{ borderColor: theme.border }}>
-            <div className="font-semibold">Builder</div>
+            <div className="font-semibold text-sm">Builder</div>
             <div className="text-xs" style={{ color: theme.mutedText }}>
-              Pages • Design • Fonts • Products
+              Pages \u2022 Design \u2022 Fonts \u2022 Products
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               <Tab label="Quick" active={rightTab === "quick"} theme={theme} onClick={() => setRightTab("quick")} />
               <Tab label="Pages" active={rightTab === "pages"} theme={theme} onClick={() => setRightTab("pages")} />
               <Tab label="Design" active={rightTab === "design"} theme={theme} onClick={() => setRightTab("design")} />
@@ -710,7 +738,7 @@ export default function Home() {
                       {site.pages.map((p) => (
                         <div key={p.id} className="flex gap-2 items-center">
                           <input
-                            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border"
+                            className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border"
                             style={{ borderColor: theme.border }}
                             value={p.name}
                             onChange={(e) => renamePage(p.id, e.target.value)}
@@ -721,7 +749,7 @@ export default function Home() {
                             onClick={() => removePage(p.id)}
                             title="Remove"
                           >
-                            ✕
+                            &times;
                           </button>
                         </div>
                       ))}
@@ -739,7 +767,7 @@ export default function Home() {
                   <div className="space-y-3">
                     <Card theme={theme} title="Fonts">
                       <select
-                        className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
+                        className="w-full px-3 py-2 rounded-xl text-sm outline-none border"
                         style={{ borderColor: theme.border }}
                         value={site.font}
                         onChange={(e) => setSite({ ...site, font: e.target.value as FontChoice })}
@@ -751,7 +779,7 @@ export default function Home() {
                         ))}
                       </select>
                       <div className="mt-2 text-xs" style={{ color: theme.mutedText }}>
-                        (We’ll load real web fonts later. This is MVP.)
+                        (We&apos;ll load real web fonts later. This is MVP.)
                       </div>
                     </Card>
 
@@ -793,7 +821,7 @@ export default function Home() {
                 {rightTab === "products" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="font-semibold">Catalog</div>
+                      <div className="font-semibold text-sm">Catalog</div>
                       <button className="text-xs px-2 py-1 rounded-lg border hover:opacity-90" style={{ borderColor: theme.border }} onClick={addProduct}>
                         + Add
                       </button>
@@ -839,30 +867,33 @@ export default function Home() {
             )}
           </div>
 
-          <div className="p-4 border-t text-xs" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            Next: true publish (short URLs + saved projects + custom domains).
+          <div className="p-3 border-t text-xs text-center" style={{ borderColor: theme.border, color: theme.mutedText }}>
+            VentureOS Builder
           </div>
         </aside>
       </div>
 
       {/* Generate Loading Overlay */}
       {generating && (
-        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.75)" }}>
-          <div className="rounded-2xl border bg-white p-6 w-[320px] shadow-sm" style={{ borderColor: theme.border }}>
-            <div className="flex items-center gap-3">
+        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.70)" }}>
+          <div className="rounded-2xl border bg-white p-6 w-[320px] shadow-xl animate-slideUp" style={{ borderColor: theme.border }}>
+            <div className="flex items-center gap-4">
               <Spinner color={theme.accent} />
               <div>
-                <div className="font-semibold">Generating your site…</div>
-                <div className="text-sm" style={{ color: theme.mutedText }}>
-                  Building pages, layout, and storefront structure
+                <div className="font-semibold">Generating your site...</div>
+                <div className="text-sm mt-0.5" style={{ color: theme.mutedText }}>
+                  Building pages, layout, and storefront
                 </div>
               </div>
             </div>
-            <div className="mt-4 h-2 rounded-full" style={{ background: "rgba(2,6,23,0.08)" }}>
-              <div className="h-2 rounded-full animate-pulse" style={{ width: "70%", background: theme.accent }} />
+            <div className="mt-5 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.08)" }}>
+              <div
+                className="h-full rounded-full animate-pulse"
+                style={{ width: "70%", background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent2 || theme.accent})` }}
+              />
             </div>
             <div className="mt-2 text-xs" style={{ color: theme.mutedText }}>
-              This takes a few seconds…
+              This takes a few seconds...
             </div>
           </div>
         </div>
@@ -888,14 +919,14 @@ function SitePreview({
   const fontFamily = fontStack(site.font);
 
   return (
-    <div className="rounded-2xl overflow-hidden border" style={{ borderColor: t.border, background: t.surface, color: t.text, fontFamily }}>
+    <div style={{ background: t.surface, color: t.text, fontFamily }}>
       <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: t.border, background: "#fff" }}>
         <div className="flex items-center gap-3">
           {site.logoDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={site.logoDataUrl} alt="Logo" className="h-9 w-9 rounded object-cover" />
+            <img src={site.logoDataUrl} alt="Logo" className="h-9 w-9 rounded-xl object-cover" />
           ) : (
-            <div className="h-9 w-9 rounded" style={{ background: t.accent }} />
+            <div className="h-9 w-9 rounded-xl" style={{ background: t.accent }} />
           )}
           <div>
             <div className="text-xs" style={{ color: t.mutedText }}>{site.tagline}</div>
@@ -903,23 +934,23 @@ function SitePreview({
           </div>
         </div>
 
-        <button className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
+        <button className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
           {site.primaryCTA}
         </button>
       </div>
 
-      <div className="px-5 py-3 border-b flex gap-2 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
+      <div className="px-5 py-2.5 border-b flex gap-1 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
         {site.pages.map((p) => {
           const active = p.id === activePage.id;
           return (
             <button
               key={p.id}
               onClick={() => onSelectPage(p.id)}
-              className="px-3 py-1.5 rounded-lg text-sm border transition"
+              className="px-3 py-1.5 rounded-lg text-sm transition-all duration-150"
               style={{
-                borderColor: t.border,
-                background: active ? "rgba(37,99,235,0.10)" : "#fff",
-                color: t.text,
+                background: active ? `${t.accent}18` : "transparent",
+                color: active ? t.accent : t.mutedText,
+                fontWeight: active ? 600 : 400,
               }}
             >
               {p.name}
@@ -940,7 +971,7 @@ function SitePreview({
         )}
 
         <div className="mt-10 text-xs" style={{ color: t.mutedText }}>
-          © {new Date().getFullYear()} {site.brandName}
+          &copy; {new Date().getFullYear()} {site.brandName}
         </div>
       </div>
     </div>
@@ -958,10 +989,10 @@ function HomePage({ site }: { site: SiteSpec }) {
           <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
 
           <div className="mt-5 flex gap-2">
-            <button className="px-5 py-3 rounded-lg font-medium" style={{ background: t.accent, color: "#fff" }}>
+            <button className="px-5 py-3 rounded-xl font-medium transition hover:opacity-90" style={{ background: t.accent, color: "#fff" }}>
               {site.primaryCTA}
             </button>
-            <button className="px-5 py-3 rounded-lg font-medium border" style={{ borderColor: t.border, background: "#fff" }}>
+            <button className="px-5 py-3 rounded-xl font-medium border transition hover:opacity-90" style={{ borderColor: t.border, background: "#fff" }}>
               Learn more
             </button>
           </div>
@@ -975,27 +1006,37 @@ function HomePage({ site }: { site: SiteSpec }) {
           </div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden border" style={{ borderColor: t.border, background: "#fff" }}>
+        <div className="rounded-2xl overflow-hidden border shadow-lg" style={{ borderColor: t.border, background: "#fff" }}>
           {site.heroImageDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-64 object-cover" />
           ) : (
             <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>
-              Upload a hero image (Builder → Content or Quick)
+              Upload a hero image (Builder &rarr; Content or Quick)
             </div>
           )}
         </div>
       </div>
 
-      <div className="mt-10 space-y-6">
+      <div className="mt-10 space-y-4">
         {site.sections.map((s, idx) => (
-          <section key={idx} className="rounded-2xl border p-5" style={{ borderColor: t.border, background: "#fff" }}>
-            <h3 className="text-lg font-semibold mb-2">{s.title}</h3>
-            <ul className="list-disc pl-6" style={{ color: t.mutedText }}>
-              {s.bullets.map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
+          <section
+            key={idx}
+            className="rounded-2xl border p-5 flex gap-4 hover:shadow-md transition-shadow duration-200"
+            style={{ borderColor: t.border, background: "#fff" }}
+          >
+            <div className="w-1 h-8 rounded-full flex-shrink-0 mt-0.5" style={{ background: t.accent }} />
+            <div>
+              <h3 className="text-lg font-semibold mb-2">{s.title}</h3>
+              <ul className="space-y-1.5" style={{ color: t.mutedText }}>
+                {s.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-2 text-sm items-start">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: t.accent }} />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         ))}
       </div>
@@ -1004,10 +1045,25 @@ function HomePage({ site }: { site: SiteSpec }) {
         <h3 className="text-lg font-semibold mb-3">FAQ</h3>
         <div className="space-y-3">
           {site.faq.map((f, i) => (
-            <div key={i} className="rounded-2xl border p-5" style={{ borderColor: t.border, background: "#fff" }}>
-              <div className="font-medium">{f.q}</div>
-              <div className="mt-1" style={{ color: t.mutedText }}>{f.a}</div>
-            </div>
+            <details
+              key={i}
+              className="group rounded-2xl border p-4 bg-white transition-all duration-200"
+              style={{ borderColor: t.border }}
+            >
+              <summary
+                className="cursor-pointer font-medium flex items-center justify-between list-none text-sm"
+                style={{ color: t.text }}
+              >
+                {f.q}
+                <span
+                  className="ml-4 flex-shrink-0 transition-transform duration-200 group-open:rotate-180"
+                  style={{ color: t.mutedText }}
+                >
+                  &darr;
+                </span>
+              </summary>
+              <div className="mt-2 text-sm" style={{ color: t.mutedText }}>{f.a}</div>
+            </details>
           ))}
         </div>
       </div>
@@ -1020,31 +1076,35 @@ function ProductsPage({ site }: { site: SiteSpec }) {
 
   return (
     <>
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between mb-4">
         <h2 className="text-2xl font-semibold">Products</h2>
         <div className="text-sm" style={{ color: t.mutedText }}>Curated for performance + trust</div>
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         {site.products.map((p) => (
-          <div key={p.id} className="rounded-2xl p-4 border" style={{ borderColor: t.border, background: "#fff" }}>
-            <div className="rounded-xl overflow-hidden mb-3 border" style={{ borderColor: t.border }}>
+          <div
+            key={p.id}
+            className="group rounded-2xl border overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+            style={{ borderColor: t.border, background: "#fff" }}
+          >
+            <div className="overflow-hidden">
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageDataUrl} alt={p.name} className="w-full h-36 object-cover" />
+                <img src={p.imageDataUrl} alt={p.name} className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300" />
               ) : (
-                <div className="h-36 flex items-center justify-center text-xs" style={{ color: t.mutedText }}>
-                  Add image in Builder → Products
+                <div className="h-36 flex items-center justify-center text-xs" style={{ background: `${t.accent}08`, color: t.mutedText }}>
+                  Add image in Builder &rarr; Products
                 </div>
               )}
             </div>
-
-            <div className="font-medium">{p.name}</div>
-            <div className="text-sm" style={{ color: t.mutedText }}>{p.price}</div>
-
-            <button className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
-              Add to cart
-            </button>
+            <div className="p-4">
+              <div className="font-medium text-sm">{p.name}</div>
+              <div className="text-sm font-medium mt-0.5" style={{ color: t.accent }}>{p.price}</div>
+              <button className="mt-3 w-full px-3 py-2 rounded-xl text-sm font-medium transition hover:opacity-90 active:scale-[0.98]" style={{ background: t.accent, color: "#fff" }}>
+                Add to cart
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -1078,9 +1138,9 @@ function ContactPage({ site }: { site: SiteSpec }) {
 
       <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
         <div className="text-sm font-medium">Message</div>
-        <input className="mt-2 w-full px-3 py-2 rounded-lg border" style={{ borderColor: t.border }} placeholder="Your email" />
-        <textarea className="mt-2 w-full px-3 py-2 rounded-lg border" style={{ borderColor: t.border }} rows={5} placeholder="What can we help with?" />
-        <button className="mt-3 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
+        <input className="mt-2 w-full px-3 py-2 rounded-xl border" style={{ borderColor: t.border }} placeholder="Your email" />
+        <textarea className="mt-2 w-full px-3 py-2 rounded-xl border" style={{ borderColor: t.border }} rows={5} placeholder="What can we help with?" />
+        <button className="mt-3 px-4 py-2 rounded-xl text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
           Send
         </button>
       </div>
@@ -1092,10 +1152,18 @@ function ContactPage({ site }: { site: SiteSpec }) {
 
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
-    <div className="rounded-2xl border p-8" style={{ borderColor: theme.border, background: "#fff" }}>
-      <div className="text-sm" style={{ color: theme.mutedText }}>Preview</div>
-      <div className="text-2xl font-semibold mt-2">Your site will appear here</div>
-      <p className="mt-2" style={{ color: theme.mutedText }}>
+    <div className="rounded-2xl border p-10 text-center" style={{ borderColor: theme.border, background: "#fff" }}>
+      <div
+        className="inline-flex items-center justify-center h-14 w-14 rounded-2xl mb-4"
+        style={{ background: `${theme.accent}12` }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <path d="M3 9h18M9 21V9" />
+        </svg>
+      </div>
+      <div className="text-xl font-semibold mt-1">Your site will appear here</div>
+      <p className="mt-2 text-sm max-w-xs mx-auto" style={{ color: theme.mutedText }}>
         Chat on the left for a few turns, then click <strong>Generate</strong>.
       </p>
     </div>
@@ -1104,7 +1172,7 @@ function EmptyPreview({ theme }: { theme: Theme }) {
 
 function Card({ theme, title, children }: { theme: Theme; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: theme.border, background: "#fff" }}>
+    <div className="rounded-2xl border p-4 shadow-sm" style={{ borderColor: theme.border, background: "#fff" }}>
       <div className="font-semibold text-sm">{title}</div>
       <div className="mt-3">{children}</div>
     </div>
@@ -1115,11 +1183,12 @@ function Tab({ label, active, theme, onClick }: { label: string; active: boolean
   return (
     <button
       onClick={onClick}
-      className="text-xs px-3 py-1.5 rounded-lg border transition"
+      className="text-xs px-3 py-1.5 rounded-lg border transition-all duration-150"
       style={{
-        borderColor: theme.border,
+        borderColor: active ? "transparent" : theme.border,
         background: active ? "rgba(37,99,235,0.10)" : "#fff",
-        color: theme.text,
+        color: active ? theme.accent : theme.text,
+        fontWeight: active ? 600 : 400,
       }}
     >
       {label}
@@ -1131,8 +1200,8 @@ function ActionButton({ theme, children, onClick }: { theme: Theme; children: Re
   return (
     <button
       onClick={onClick}
-      className="w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
-      style={{ background: theme.accent, color: "#fff" }}
+      className="w-full px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+      style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}dd)`, color: "#fff" }}
     >
       {children}
     </button>
@@ -1143,7 +1212,12 @@ function Field({ theme, label, value, onChange }: { theme: Theme; label: string;
   return (
     <label className="block">
       <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
-      <input className="w-full px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200"
+        style={{ borderColor: theme.border, background: "#fff" }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </label>
   );
 }
@@ -1152,7 +1226,13 @@ function TextField({ theme, label, value, onChange }: { theme: Theme; label: str
   return (
     <label className="block">
       <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
-      <textarea className="w-full px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
+      <textarea
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200"
+        style={{ borderColor: theme.border, background: "#fff" }}
+        rows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </label>
   );
 }
@@ -1162,8 +1242,13 @@ function ColorField({ theme, label, value, onChange }: { theme: Theme; label: st
     <label className="block">
       <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
       <div className="flex items-center gap-2">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 p-0 border rounded" style={{ borderColor: theme.border }} />
-        <input className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border" style={{ borderColor: theme.border }} value={value} onChange={(e) => onChange(e.target.value)} />
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-11 p-0.5 border rounded-lg cursor-pointer" style={{ borderColor: theme.border }} />
+        <input
+          className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200"
+          style={{ borderColor: theme.border, background: "#fff" }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
       </div>
     </label>
   );

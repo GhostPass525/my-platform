@@ -21,6 +21,15 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
+function ProjectInitial({ name }: { name: string }) {
+  const letter = name.trim()[0]?.toUpperCase() ?? "?";
+  return (
+    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-semibold text-sm shadow-sm shadow-blue-200 flex-shrink-0">
+      {letter}
+    </div>
+  );
+}
+
 export default function DashboardClient({
   initialProjects,
 }: {
@@ -62,29 +71,32 @@ export default function DashboardClient({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Your Projects</h1>
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Your Projects</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Your workspace</p>
+        </div>
 
         {creating ? (
-          <form onSubmit={createProject} className="flex items-center gap-2">
+          <form onSubmit={createProject} className="flex items-center gap-2 animate-slideUp">
             <input
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Project name"
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500 w-48"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all duration-200 w-48 bg-white"
             />
             <button
               type="submit"
               disabled={loading || !newName.trim()}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-60"
+              className="px-3 py-2 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? "Creating…" : "Create"}
             </button>
             <button
               type="button"
               onClick={() => { setCreating(false); setNewName(""); }}
-              className="px-3 py-1.5 rounded-lg text-sm border border-slate-200"
+              className="px-3 py-2 rounded-xl text-sm border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors duration-150"
             >
               Cancel
             </button>
@@ -92,22 +104,28 @@ export default function DashboardClient({
         ) : (
           <button
             onClick={() => setCreating(true)}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:opacity-90 transition"
+            className="px-4 py-2 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 shadow-sm shadow-blue-200 flex items-center gap-1.5"
           >
-            + New Project
+            <span className="text-lg leading-none">+</span> New Project
           </button>
         )}
       </div>
 
       {projects.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="text-slate-400 text-lg mb-2">No projects yet</div>
-          <p className="text-sm text-slate-400 mb-6">
-            Start building your first store with VentureOS AI.
+        <div className="text-center py-24 animate-fadeIn">
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 mb-5">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path d="M12 8v8M8 12h8" />
+            </svg>
+          </div>
+          <div className="text-lg font-semibold text-slate-700 mb-2">No projects yet</div>
+          <p className="text-sm text-slate-400 mb-6 max-w-xs mx-auto">
+            Start building your first AI-powered store with VentureOS.
           </p>
           <a
             href="/"
-            className="inline-block px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:opacity-90 transition"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 shadow-sm shadow-blue-200"
           >
             Start building →
           </a>
@@ -117,29 +135,34 @@ export default function DashboardClient({
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col"
+              className="group relative bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
             >
-              <div className="flex-1">
-                <div className="font-semibold text-slate-900 truncate">
-                  {project.name}
-                </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Saved {timeAgo(project.updated_at)}
+              <button
+                onClick={() => deleteProject(project.id)}
+                className="absolute top-3 right-3 h-7 w-7 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 opacity-0 group-hover:opacity-100 flex items-center justify-center text-base leading-none"
+                title="Delete project"
+              >
+                ×
+              </button>
+
+              <div className="flex items-center gap-3 flex-1">
+                <ProjectInitial name={project.name} />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">
+                    {project.name}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    Saved {timeAgo(project.updated_at)}
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4">
                 <button
                   onClick={() => router.push(`/?project=${project.id}`)}
-                  className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:opacity-90 transition"
+                  className="w-full px-3 py-2 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
                 >
                   Open
-                </button>
-                <button
-                  onClick={() => deleteProject(project.id)}
-                  className="px-3 py-2 rounded-lg text-sm border border-slate-200 text-red-500 hover:bg-red-50 transition"
-                >
-                  Delete
                 </button>
               </div>
             </div>

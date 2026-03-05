@@ -172,7 +172,6 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
     if (activeKey !== "products") return;
     if (!pendingScrollToProducts) return;
 
-    // allow render to complete
     const tId = window.setTimeout(() => {
       productsTopRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -223,259 +222,283 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
   };
 
   return (
-    <main
-      className="min-h-screen p-6"
+    <div
+      className="min-h-screen"
       style={{
         background: t.bg,
         color: t.text,
         fontFamily: fontStack(site.font),
       }}
     >
-      <div className="max-w-4xl mx-auto relative">
-        <div
-          className="rounded-2xl overflow-hidden border"
-          style={{ borderColor: t.border, background: t.surface }}
-        >
-          {/* Header */}
-          <div
-            className="px-5 py-4 border-b flex items-center justify-between"
-            style={{ borderColor: t.border, background: "#fff" }}
-          >
-            <div className="flex items-center gap-3">
-              {logoSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={logoSrc}
-                  alt="Logo"
-                  className="h-9 w-9 rounded object-cover"
-                />
-              ) : (
-                <div
-                  className="h-9 w-9 rounded"
-                  style={{ background: t.accent }}
-                />
-              )}
-              <div>
-                <div className="text-xs" style={{ color: t.mutedText }}>
-                  {site.tagline}
-                </div>
-                <div className="text-lg font-semibold">{site.brandName}</div>
+      {/* Sticky Header */}
+      <header
+        className="sticky top-0 z-30 w-full border-b backdrop-blur-md"
+        style={{ background: `${t.bg}e6`, borderColor: t.border }}
+      >
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          {/* Logo + Brand */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {logoSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoSrc}
+                alt="Logo"
+                className="h-9 w-9 rounded-xl object-cover"
+              />
+            ) : (
+              <div
+                className="h-9 w-9 rounded-xl flex-shrink-0"
+                style={{ background: t.accent }}
+              />
+            )}
+            <div>
+              <div className="font-bold text-base leading-tight">{site.brandName}</div>
+              <div className="text-xs leading-tight" style={{ color: t.mutedText }}>
+                {site.tagline}
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCartOpen(true)}
-                className="px-4 py-2 rounded-lg text-sm font-medium border transition hover:opacity-90"
-                style={{
-                  borderColor: t.border,
-                  background: "#fff",
-                  color: t.text,
-                }}
-              >
-                Cart {cartCount > 0 ? `(${cartCount})` : ""}
-              </button>
-
-              {/* Primary CTA should act like “Shop now / Explore” */}
-              <button
-                onClick={goProducts}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
-                style={{ background: t.accent, color: "#fff" }}
-              >
-                {site.primaryCTA}
-              </button>
             </div>
           </div>
 
-          {/* Nav */}
-          <div
-            className="px-5 py-3 border-b flex gap-2 flex-wrap"
-            style={{ borderColor: t.border, background: t.bg }}
-          >
+          {/* Nav tabs — pill style */}
+          <nav className="hidden md:flex items-center gap-1">
             {pages.map((p) => {
               const active = p.key === activePage.key;
               return (
                 <button
                   key={p.id}
                   onClick={() => setActiveKey(p.key)}
-                  className="px-3 py-1.5 rounded-lg text-sm border transition hover:opacity-90"
+                  className="px-3 py-1.5 rounded-lg text-sm transition-all duration-150"
                   style={{
-                    borderColor: t.border,
-                    background: active ? "rgba(37,99,235,0.10)" : "#fff",
-                    color: t.text,
+                    background: active ? `${t.accent}18` : "transparent",
+                    color: active ? t.accent : t.mutedText,
+                    fontWeight: active ? 600 : 400,
                   }}
                 >
                   {p.name}
                 </button>
               );
             })}
-          </div>
+          </nav>
 
-          {/* Content */}
-          <div className="p-6 md:p-8" style={{ background: t.bg }}>
-            {activePage.key === "products" ? (
-              <ProductsPage
-                site={site}
-                onAdd={addToCart}
-                productsTopRef={productsTopRef}
-              />
-            ) : activePage.key === "about" ? (
-              <AboutPage site={site} />
-            ) : activePage.key === "contact" ? (
-              <ContactPage site={site} />
-            ) : (
-              <HomePage
-                site={site}
-                heroSrc={heroSrc}
-                onPrimaryCTA={goProducts}
-                onLearnMore={goAbout}
-              />
-            )}
+          {/* Actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setCartOpen(true)}
+              className="px-3 py-2 rounded-xl text-sm font-medium border transition-all duration-150 hover:shadow-sm"
+              style={{
+                borderColor: t.border,
+                background: "transparent",
+                color: t.text,
+              }}
+            >
+              Cart{cartCount > 0 ? ` (${cartCount})` : ""}
+            </button>
 
-            <div className="mt-10 text-xs" style={{ color: t.mutedText }}>
-              © {new Date().getFullYear()} {site.brandName}
-            </div>
+            <button
+              onClick={goProducts}
+              className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+              style={{ background: t.accent, color: "#fff" }}
+            >
+              {site.primaryCTA}
+            </button>
           </div>
         </div>
 
-        {/* Cart Drawer */}
-        {cartOpen && (
-          <div
-            className="fixed inset-0 z-50 flex"
-            style={{ background: "rgba(0,0,0,0.35)" }}
-            onClick={() => setCartOpen(false)}
-          >
-            <div
-              className="ml-auto h-full w-full max-w-md bg-white p-5 border-l"
-              style={{ borderColor: t.border }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold">Your cart</div>
-                <button
-                  className="px-3 py-1.5 rounded-lg border text-sm transition hover:opacity-90"
-                  style={{ borderColor: t.border }}
-                  onClick={() => setCartOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
+        {/* Mobile nav */}
+        <div
+          className="md:hidden px-4 pb-2 flex gap-1 overflow-x-auto"
+          style={{ borderTop: `1px solid ${t.border}` }}
+        >
+          {pages.map((p) => {
+            const active = p.key === activePage.key;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setActiveKey(p.key)}
+                className="px-3 py-1.5 rounded-lg text-sm flex-shrink-0 transition-all duration-150"
+                style={{
+                  background: active ? `${t.accent}18` : "transparent",
+                  color: active ? t.accent : t.mutedText,
+                  fontWeight: active ? 600 : 400,
+                }}
+              >
+                {p.name}
+              </button>
+            );
+          })}
+        </div>
+      </header>
 
-              <div className="mt-4 space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-                {cart.length === 0 ? (
-                  <div className="text-sm text-slate-600">
-                    Your cart is empty.
-                  </div>
-                ) : (
-                  cart.map((item) => (
+      {/* Page content */}
+      <main className="animate-fadeIn">
+        {activePage.key === "products" ? (
+          <ProductsPage
+            site={site}
+            onAdd={addToCart}
+            productsTopRef={productsTopRef}
+          />
+        ) : activePage.key === "about" ? (
+          <AboutPage site={site} />
+        ) : activePage.key === "contact" ? (
+          <ContactPage site={site} />
+        ) : (
+          <HomePage
+            site={site}
+            heroSrc={heroSrc}
+            onPrimaryCTA={goProducts}
+            onLearnMore={goAbout}
+          />
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-24 border-t py-10" style={{ borderColor: t.border }}>
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div
+              className="h-6 w-6 rounded-lg flex-shrink-0"
+              style={{ background: t.accent }}
+            />
+            <span className="font-semibold text-sm">{site.brandName}</span>
+            {site.tagline && (
+              <span className="text-sm" style={{ color: t.mutedText }}>
+                — {site.tagline}
+              </span>
+            )}
+          </div>
+          <div className="text-xs" style={{ color: t.mutedText }}>
+            © {new Date().getFullYear()} {site.brandName} · Powered by VentureOS
+          </div>
+        </div>
+      </footer>
+
+      {/* Cart Drawer */}
+      {cartOpen && (
+        <div
+          className="fixed inset-0 z-50 flex"
+          style={{ background: "rgba(0,0,0,0.40)" }}
+          onClick={() => setCartOpen(false)}
+        >
+          <div
+            className="ml-auto h-full w-full max-w-md bg-white border-l flex flex-col animate-slideUp"
+            style={{ borderColor: t.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: t.border }}>
+              <div className="text-lg font-semibold">Your cart</div>
+              <button
+                className="h-8 w-8 rounded-lg border text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center text-base"
+                style={{ borderColor: t.border }}
+                onClick={() => setCartOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {cart.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-3xl mb-3">🛒</div>
+                  <div className="text-sm text-slate-500">Your cart is empty.</div>
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <div
+                    key={item.productId}
+                    className="rounded-2xl border p-3 flex gap-3"
+                    style={{ borderColor: t.border }}
+                  >
                     <div
-                      key={item.productId}
-                      className="rounded-2xl border p-3 flex gap-3"
+                      className="h-16 w-16 rounded-xl overflow-hidden border flex-shrink-0"
                       style={{ borderColor: t.border }}
                     >
-                      <div
-                        className="h-14 w-14 rounded-xl overflow-hidden border"
-                        style={{ borderColor: t.border }}
-                      >
-                        {item.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            className="h-full w-full"
-                            style={{ background: "rgba(2,6,23,0.04)" }}
-                          />
-                        )}
+                      {item.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="h-full w-full"
+                          style={{ background: "rgba(2,6,23,0.04)" }}
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{item.name}</div>
+                      <div className="text-sm text-slate-500 mt-0.5">
+                        ${item.price.toFixed(2)}
                       </div>
 
-                      <div className="flex-1">
-                        <div className="font-medium">{item.name}</div>
-                        <div className="text-sm text-slate-600">
-                          ${item.price.toFixed(2)}
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          className="h-7 w-7 rounded-lg border flex items-center justify-center text-sm transition hover:bg-slate-50"
+                          style={{ borderColor: t.border }}
+                          onClick={() => setQty(item.productId, item.quantity - 1)}
+                        >
+                          −
+                        </button>
+                        <div className="text-sm w-5 text-center font-medium">
+                          {item.quantity}
                         </div>
+                        <button
+                          className="h-7 w-7 rounded-lg border flex items-center justify-center text-sm transition hover:bg-slate-50"
+                          style={{ borderColor: t.border }}
+                          onClick={() => setQty(item.productId, item.quantity + 1)}
+                        >
+                          +
+                        </button>
 
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            className="px-2 py-1 rounded-lg border transition hover:opacity-90"
-                            style={{ borderColor: t.border }}
-                            onClick={() =>
-                              setQty(item.productId, item.quantity - 1)
-                            }
-                          >
-                            −
-                          </button>
-                          <div className="text-sm w-6 text-center">
-                            {item.quantity}
-                          </div>
-                          <button
-                            className="px-2 py-1 rounded-lg border transition hover:opacity-90"
-                            style={{ borderColor: t.border }}
-                            onClick={() =>
-                              setQty(item.productId, item.quantity + 1)
-                            }
-                          >
-                            +
-                          </button>
-
-                          <button
-                            className="ml-auto text-sm text-red-600 hover:opacity-80"
-                            onClick={() => removeItem(item.productId)}
-                          >
-                            Remove
-                          </button>
-                        </div>
+                        <button
+                          className="ml-auto text-xs text-red-500 hover:text-red-700 transition-colors"
+                          onClick={() => removeItem(item.productId)}
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
-                  ))
-                )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t" style={{ borderColor: t.border }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm text-slate-600">Subtotal</div>
+                <div className="font-semibold">${subtotal.toFixed(2)}</div>
               </div>
 
-              <div
-                className="mt-5 border-t pt-4"
-                style={{ borderColor: t.border }}
+              <button
+                onClick={checkout}
+                disabled={checkingOut || cart.length === 0}
+                className="w-full px-4 py-3 rounded-xl font-medium transition-all duration-150 active:scale-[0.98]"
+                style={{
+                  background:
+                    checkingOut || cart.length === 0
+                      ? "rgba(2,6,23,0.10)"
+                      : t.accent,
+                  color:
+                    checkingOut || cart.length === 0 ? "#334155" : "#fff",
+                  cursor:
+                    checkingOut || cart.length === 0
+                      ? "not-allowed"
+                      : "pointer",
+                }}
               >
-                <div className="flex items-center justify-between text-sm">
-                  <div className="text-slate-600">Subtotal</div>
-                  <div className="font-semibold">${subtotal.toFixed(2)}</div>
-                </div>
+                {checkingOut ? "Redirecting…" : "Checkout"}
+              </button>
 
-                <button
-                  onClick={checkout}
-                  disabled={checkingOut || cart.length === 0}
-                  className="mt-4 w-full px-4 py-3 rounded-xl font-medium transition"
-                  style={{
-                    background:
-                      checkingOut || cart.length === 0
-                        ? "rgba(2,6,23,0.10)"
-                        : t.accent,
-                    color:
-                      checkingOut || cart.length === 0 ? "#334155" : "#fff",
-                    cursor:
-                      checkingOut || cart.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  {checkingOut ? "Redirecting…" : "Checkout"}
-                </button>
-
-                <div className="mt-2 text-xs text-slate-500">
-                  Payments are processed securely by Stripe.
-                </div>
+              <div className="mt-2 text-xs text-slate-400 text-center">
+                Payments processed securely by Stripe
               </div>
             </div>
           </div>
-        )}
-
-        <div className="mt-6 text-xs text-slate-500">
-          Published with VentureOS
         </div>
-      </div>
-    </main>
+      )}
+    </div>
   );
 }
 
@@ -497,109 +520,121 @@ function HomePage({
   return (
     <>
       {/* HERO */}
-      <div className="grid gap-6 md:grid-cols-2 items-center">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-            {site.heroHeadline}
-          </h1>
-          <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>
-            {site.heroSubheadline}
-          </p>
-
-          <div className="mt-5 flex gap-2">
-            <button
-              onClick={onPrimaryCTA}
-              className="px-5 py-3 rounded-lg font-medium transition hover:opacity-90"
-              style={{ background: t.accent, color: "#fff" }}
+      <section className="py-20 md:py-28">
+        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <h1
+              className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight"
+              style={{ color: t.text }}
             >
-              {site.primaryCTA}
-            </button>
-            <button
-              onClick={onLearnMore}
-              className="px-5 py-3 rounded-lg font-medium border transition hover:opacity-90"
-              style={{ borderColor: t.border, background: "#fff" }}
-            >
-              Learn more
-            </button>
-          </div>
-
-          <div className="mt-6 text-sm" style={{ color: t.mutedText }}>
-            <strong style={{ color: t.text }}>Audience:</strong> {site.audience}
-            <br />
-            <strong style={{ color: t.text }}>Offer:</strong> {site.offer}
-            <br />
-            <strong style={{ color: t.text }}>First Product:</strong>{" "}
-            {site.firstProductOrService}
-          </div>
-        </div>
-
-        <div
-          className="rounded-2xl overflow-hidden border"
-          style={{ borderColor: t.border, background: "#fff" }}
-        >
-          {heroSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={heroSrc}
-              alt="Hero"
-              className="w-full h-64 object-cover"
-            />
-          ) : (
-            <div
-              className="h-64 flex items-center justify-center text-sm"
+              {site.heroHeadline}
+            </h1>
+            <p
+              className="mt-5 text-lg leading-relaxed whitespace-pre-line"
               style={{ color: t.mutedText }}
             >
-              No hero image set
-            </div>
-          )}
-        </div>
-      </div>
+              {site.heroSubheadline}
+            </p>
 
-      {/* SECTIONS (Builder preview content) */}
+            <div className="mt-7 flex gap-3 flex-wrap">
+              <button
+                onClick={onPrimaryCTA}
+                className="px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98] shadow-md"
+                style={{ background: t.accent, color: "#fff", boxShadow: `0 4px 14px ${t.accent}40` }}
+              >
+                {site.primaryCTA}
+              </button>
+              <button
+                onClick={onLearnMore}
+                className="px-6 py-3 rounded-xl font-semibold text-sm border transition-all duration-150 hover:shadow-sm"
+                style={{ borderColor: t.border, background: "#fff", color: t.text }}
+              >
+                Learn more
+              </button>
+            </div>
+
+            <div className="mt-8 grid grid-cols-1 gap-2 text-sm" style={{ color: t.mutedText }}>
+              <div><strong style={{ color: t.text }}>Audience:</strong> {site.audience}</div>
+              <div><strong style={{ color: t.text }}>Offer:</strong> {site.offer}</div>
+              <div><strong style={{ color: t.text }}>Featured:</strong> {site.firstProductOrService}</div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl overflow-hidden shadow-2xl border" style={{ borderColor: t.border }}>
+            {heroSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={heroSrc}
+                alt="Hero"
+                className="w-full h-72 md:h-96 object-cover"
+              />
+            ) : (
+              <div
+                className="h-72 md:h-96 flex items-center justify-center text-sm"
+                style={{ background: `${t.accent}10`, color: t.mutedText }}
+              >
+                No hero image set
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTIONS */}
       {Array.isArray(site.sections) && site.sections.length > 0 && (
-        <div className="mt-10 space-y-6">
+        <div className="max-w-6xl mx-auto px-6 space-y-4 pb-12">
           {site.sections.map((sec, idx) => (
             <div
               key={`${sec.title}-${idx}`}
-              className="rounded-2xl border p-6"
+              className="rounded-2xl border p-6 hover:shadow-md transition-shadow duration-200 flex gap-4"
               style={{ borderColor: t.border, background: "#fff" }}
             >
-              <div className="text-xl font-semibold">{sec.title}</div>
-
-              {Array.isArray(sec.bullets) && sec.bullets.length > 0 && (
-                <ul className="mt-3 space-y-2">
-                  {sec.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2 text-sm">
-                      <span
-                        className="mt-2 h-1.5 w-1.5 rounded-full"
-                        style={{ background: t.accent }}
-                      />
-                      <span style={{ color: t.mutedText }}>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div
+                className="w-1 h-8 rounded-full flex-shrink-0 mt-1"
+                style={{ background: t.accent }}
+              />
+              <div className="flex-1">
+                <div className="text-xl font-semibold" style={{ color: t.text }}>{sec.title}</div>
+                {Array.isArray(sec.bullets) && sec.bullets.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {sec.bullets.map((b, i) => (
+                      <li key={i} className="flex gap-2 text-sm items-start">
+                        <span
+                          className="mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0"
+                          style={{ background: t.accent }}
+                        />
+                        <span style={{ color: t.mutedText }}>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* FAQ (Builder preview content) */}
+      {/* FAQ */}
       {Array.isArray(site.faq) && site.faq.length > 0 && (
-        <div className="mt-10">
-          <div className="text-2xl font-semibold">FAQ</div>
-
-          <div className="mt-4 space-y-3">
+        <div className="max-w-6xl mx-auto px-6 pb-16">
+          <h2 className="text-2xl font-bold mb-5" style={{ color: t.text }}>FAQ</h2>
+          <div className="space-y-3">
             {site.faq.map((item, idx) => (
               <details
                 key={idx}
-                className="rounded-2xl border p-4 bg-white"
-                style={{ borderColor: t.border }}
+                className="group rounded-2xl border p-4 transition-all duration-200"
+                style={{ borderColor: t.border, background: "#fff" }}
               >
-                <summary className="cursor-pointer font-medium">
+                <summary
+                  className="cursor-pointer font-medium flex items-center justify-between list-none text-sm"
+                  style={{ color: t.text }}
+                >
                   {item.q}
+                  <span className="text-base ml-4 flex-shrink-0 transition-transform duration-200 group-open:rotate-180" style={{ color: t.mutedText }}>
+                    ↓
+                  </span>
                 </summary>
-                <div className="mt-2 text-sm" style={{ color: t.mutedText }}>
+                <div className="mt-3 text-sm leading-relaxed" style={{ color: t.mutedText }}>
                   {item.a}
                 </div>
               </details>
@@ -623,76 +658,73 @@ function ProductsPage({
   const t = site.theme;
 
   return (
-    <>
-      {/* scroll anchor for “Shop now / Explore” */}
+    <div className="max-w-6xl mx-auto px-6 py-16">
+      {/* scroll anchor */}
       <div ref={productsTopRef} />
 
-      <div className="flex items-end justify-between">
-        <h2 className="text-2xl font-semibold">Products</h2>
-        <div className="text-sm" style={{ color: t.mutedText }}>
-          Catalog
-        </div>
+      <div className="flex items-end justify-between mb-8">
+        <h2 className="text-3xl font-bold" style={{ color: t.text }}>Products</h2>
+        <div className="text-sm" style={{ color: t.mutedText }}>Catalog</div>
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-3">
         {(site.products || []).map((p) => {
           const img = p.imageUrl || p.imageDataUrl;
           return (
             <div
               key={p.id}
-              className="rounded-2xl p-4 border"
+              className="group rounded-2xl border overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
               style={{ borderColor: t.border, background: "#fff" }}
             >
-              <div
-                className="rounded-xl overflow-hidden mb-3 border"
-                style={{ borderColor: t.border }}
-              >
+              <div className="overflow-hidden">
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={img}
                     alt={p.name}
-                    className="w-full h-36 object-cover"
+                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <div
-                    className="h-36 flex items-center justify-center text-xs"
-                    style={{ color: t.mutedText }}
+                    className="h-48 flex items-center justify-center text-xs"
+                    style={{ background: `${t.accent}08`, color: t.mutedText }}
                   >
                     No image
                   </div>
                 )}
               </div>
-              <div className="font-medium">{p.name}</div>
-              <div className="text-sm" style={{ color: t.mutedText }}>
-                {p.price}
+              <div className="p-4">
+                <div className="font-semibold text-sm" style={{ color: t.text }}>{p.name}</div>
+                <div className="text-sm mt-0.5 font-medium" style={{ color: t.accent }}>{p.price}</div>
+                <button
+                  onClick={() => onAdd(p)}
+                  className="mt-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: t.accent, color: "#fff" }}
+                >
+                  Add to cart
+                </button>
               </div>
-              <button
-                onClick={() => onAdd(p)}
-                className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition hover:opacity-90"
-                style={{ background: t.accent, color: "#fff" }}
-              >
-                Add to cart
-              </button>
             </div>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
 
 function AboutPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div
-      className="rounded-2xl border p-6"
-      style={{ borderColor: t.border, background: "#fff" }}
-    >
-      <h2 className="text-2xl font-semibold">About</h2>
-      <p className="mt-3" style={{ color: t.mutedText }}>
-        {site.brandName} exists to deliver a clear promise: {site.offer}.
-      </p>
+    <div className="max-w-6xl mx-auto px-6 py-16">
+      <div
+        className="rounded-2xl border p-8"
+        style={{ borderColor: t.border, background: "#fff" }}
+      >
+        <h2 className="text-3xl font-bold mb-4" style={{ color: t.text }}>About</h2>
+        <p className="text-lg leading-relaxed" style={{ color: t.mutedText }}>
+          {site.brandName} exists to deliver a clear promise: {site.offer}.
+        </p>
+      </div>
     </div>
   );
 }
@@ -700,14 +732,16 @@ function AboutPage({ site }: { site: SiteSpec }) {
 function ContactPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div
-      className="rounded-2xl border p-6"
-      style={{ borderColor: t.border, background: "#fff" }}
-    >
-      <h2 className="text-2xl font-semibold">Contact</h2>
-      <p className="mt-2" style={{ color: t.mutedText }}>
-        Keep contact simple and professional.
-      </p>
+    <div className="max-w-6xl mx-auto px-6 py-16">
+      <div
+        className="rounded-2xl border p-8"
+        style={{ borderColor: t.border, background: "#fff" }}
+      >
+        <h2 className="text-3xl font-bold mb-4" style={{ color: t.text }}>Contact</h2>
+        <p className="leading-relaxed" style={{ color: t.mutedText }}>
+          Keep contact simple and professional.
+        </p>
+      </div>
     </div>
   );
 }
