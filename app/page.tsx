@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -168,6 +170,13 @@ export default function Home() {
 
   const [activePageId, setActivePageId] = useState<string>("");
 
+  // --- project ---
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const logoPickerRef = useRef<HTMLInputElement | null>(null);
   const heroPickerRef = useRef<HTMLInputElement | null>(null);
 
@@ -178,6 +187,74 @@ export default function Home() {
   const canGenerate = assistantCount >= 3 && !generating;
 
   const theme = site?.theme ?? LIGHT_THEME;
+
+  // Load project from ?project=<id> on mount
+  useEffect(() => {
+    const pid = searchParams.get("project");
+    if (!pid) return;
+    fetch(`/api/projects/${pid}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.site) {
+          setSite(data.site as SiteSpec);
+          setProjectId(pid);
+          setProjectName(data.name ?? "");
+          setActivePageId(data.site.pages?.[0]?.id ?? "");
+          setRightTab("quick");
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = async () => {
+    if (!site) {
+      alert("Generate a site first.");
+      return;
+    }
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      const next = projectId
+        ? encodeURIComponent(`/?project=${projectId}`)
+        : encodeURIComponent("/");
+      router.push(`/auth/login?next=${next}`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (projectId) {
+        await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ site }),
+        });
+      } else {
+        const name = window.prompt(
+          "Project name?",
+          site.brandName || "My Project"
+        );
+        if (!name) return;
+        const res = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, site }),
+        });
+        const data = await res.json();
+        if (data?.id) {
+          setProjectId(data.id);
+          setProjectName(name);
+          router.replace(`/?project=${data.id}`, { scroll: false });
+        }
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
@@ -420,9 +497,16 @@ export default function Home() {
           <div className="leading-tight">
             <div className="font-semibold">VentureOS</div>
             <div className="text-xs" style={{ color: theme.mutedText }}>
-              Build • Launch • Operate
+              {projectName || "Build • Launch • Operate"}
             </div>
           </div>
+          <a
+            href="/dashboard"
+            className="hidden md:inline-block px-3 py-1.5 rounded-lg text-xs border hover:opacity-80 transition"
+            style={{ borderColor: theme.border, color: theme.mutedText }}
+          >
+            Dashboard
+          </a>
         </div>
 
         {/* ✅ Buttons live here */}
@@ -438,6 +522,21 @@ export default function Home() {
             }}
           >
             {generating ? "Generating…" : "Generate"}
+          </button>
+
+          {/* Save to Supabase project */}
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90"
+            style={{
+              borderColor: theme.border,
+              background: saving ? "rgba(2,6,23,0.05)" : theme.accent,
+              color: saving ? theme.mutedText : "#fff",
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving ? "Saving…" : projectId ? "Save" : "Save"}
           </button>
 
           {/* ✅ PUBLISH BUTTON (between Generate and Export) */}
