@@ -1,9 +1,9 @@
-export default function Cancel({
+export default async function Cancel({
   searchParams,
 }: {
-  searchParams: { pid?: string };
+  searchParams: Promise<{ pid?: string }>;
 }) {
-  const pid = searchParams?.pid || "";
+  const { pid = "" } = await searchParams;
   return (
     <main className="min-h-screen bg-white p-10">
       <div className="max-w-xl mx-auto border rounded-2xl p-6">

@@ -8,8 +8,9 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN!,
 });
 
-export default async function Published({ params }: { params: { id: string } }) {
-  const site = await redis.get(`site:${params.id}`);
+export default async function Published({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const site = await redis.get(`site:${id}`);
 
   if (!site) {
     return (
