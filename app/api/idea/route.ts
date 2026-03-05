@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+export const dynamic = "force-dynamic";
 
 type CartItem = {
   name: string;
@@ -10,6 +10,7 @@ type CartItem = {
 };
 
 export async function POST(req: Request) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
   try {
     const { cart, publishId } = (await req.json()) as {
       cart: CartItem[];

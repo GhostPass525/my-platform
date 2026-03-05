@@ -317,16 +317,33 @@ export default function Home() {
       return;
     }
 
-    const url = buildPublishUrl(site);
-
     try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // clipboard can fail on some browsers; still open the URL
-    }
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site }),
+      });
 
-    window.open(url, "_blank");
-    alert("Published link copied (and opened)!");
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.id) {
+        alert(data?.error || "Publish failed. Try again.");
+        return;
+      }
+
+      const url = `${window.location.origin}/s/${data.id}`;
+
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // clipboard can fail on some browsers; still open the URL
+      }
+
+      window.open(url, "_blank");
+      alert("Published! Link copied and opened.");
+    } catch {
+      alert("Publish failed. Try again.");
+    }
   };
 
   // ---- products ----

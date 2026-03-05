@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const dynamic = "force-dynamic";
 
 // ---------- helper to safely parse JSON ----------
 function tryParseJSON(text: string) {
@@ -19,7 +17,7 @@ function tryParseJSON(text: string) {
 }
 
 // ---------- generate once ----------
-async function generateOnce(messages: any[]) {
+async function generateOnce(openai: OpenAI, messages: any[]) {
   const systemPrompt = `
 You are Inflection Point.
 
@@ -72,6 +70,7 @@ Rules:
 
 // ---------- route handler ----------
 export async function POST(req: Request) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
@@ -86,10 +85,10 @@ export async function POST(req: Request) {
     let site;
 
     try {
-      site = await generateOnce(messages);
+      site = await generateOnce(openai, messages);
     } catch {
       // automatic retry once
-      site = await generateOnce(messages);
+      site = await generateOnce(openai, messages);
     }
 
     if (!site) {
