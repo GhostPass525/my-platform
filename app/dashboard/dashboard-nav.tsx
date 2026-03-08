@@ -1,16 +1,33 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 export default function DashboardNav() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/auth/login");
     router.refresh();
+  };
+
+  const navLink = (href: string, label: string) => {
+    const active = pathname === href;
+    return (
+      <a
+        href={href}
+        className={`px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 ${
+          active
+            ? "bg-slate-900 text-white font-medium"
+            : "text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+        }`}
+      >
+        {label}
+      </a>
+    );
   };
 
   return (
@@ -28,12 +45,9 @@ export default function DashboardNav() {
       </div>
 
       <div className="flex items-center gap-2">
-        <a
-          href="/"
-          className="px-3 py-1.5 rounded-lg text-sm text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150"
-        >
-          Builder
-        </a>
+        {navLink("/dashboard", "Projects")}
+        {navLink("/dashboard/orders", "Orders")}
+        {navLink("/", "Builder")}
         <button
           onClick={signOut}
           className="px-3 py-1.5 rounded-lg text-sm text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150"

@@ -25,7 +25,7 @@ export default async function LoginPage() {
         </div>
 
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/80 p-6 shadow-xl shadow-slate-200/60">
-          <Suspense>
+          <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-slate-100" />}>
             <LoginForm />
           </Suspense>
         </div>

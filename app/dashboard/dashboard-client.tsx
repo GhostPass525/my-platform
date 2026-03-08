@@ -65,7 +65,11 @@ export default function DashboardClient({
   const deleteProject = async (id: string) => {
     if (!window.confirm("Delete this project? This cannot be undone.")) return;
 
-    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      alert("Failed to delete project. Please try again.");
+      return;
+    }
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 

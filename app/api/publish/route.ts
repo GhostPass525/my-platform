@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
+import { createClient } from "@/utils/supabase/server";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
   token: process.env.KV_REST_API_TOKEN!,
 });
 
+const TTL = 60 * 60 * 24 * 30; // 30 days
+
 function id() {
-  return Math.random().toString(36).slice(2, 10);
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 }
 
 export async function POST(req: Request) {
@@ -20,8 +23,15 @@ export async function POST(req: Request) {
 
     const publishId = id();
 
-    // Store JSON for 30 days (MVP)
-    await redis.set(`site:${publishId}`, site, { ex: 60 * 60 * 24 * 30 });
+    // Store site JSON for 30 days
+    await redis.set(`site:${publishId}`, site, { ex: TTL });
+
+    // Record which user owns this published site so webhooks can attribute orders
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id) {
+      await redis.set(`site-owner:${publishId}`, user.id, { ex: TTL });
+    }
 
     return NextResponse.json({ id: publishId });
   } catch (e: any) {
