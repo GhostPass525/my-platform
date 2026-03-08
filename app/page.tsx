@@ -1028,8 +1028,8 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
       } else {
         alert(data?.error || "Failed to start checkout. Try again.");
       }
-    } catch {
-      alert("Something went wrong. Try again.");
+    } catch (err: any) {
+      alert(`Something went wrong: ${err?.message || err}. Check Vercel function logs for details.`);
     } finally {
       setLoading(false);
     }
