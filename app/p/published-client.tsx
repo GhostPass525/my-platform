@@ -49,25 +49,19 @@ type SiteSpec = {
   firstProductOrService: string;
   sections: { title: string; bullets: string[] }[];
   faq: { q: string; a: string }[];
-
   theme: Theme;
   font: FontChoice;
-
   logoDataUrl?: string;
   heroImageDataUrl?: string;
-
   products: Product[];
   pages: Page[];
 };
 
 function fontStack(font: FontChoice) {
   switch (font) {
-    case "Georgia":
-      return `Georgia, "Times New Roman", Times, serif`;
-    case "Times New Roman":
-      return `"Times New Roman", Times, serif`;
-    default:
-      return `${font}, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji"`;
+    case "Georgia":       return `Georgia, "Times New Roman", Times, serif`;
+    case "Times New Roman": return `"Times New Roman", Times, serif`;
+    default:              return `${font}, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
   }
 }
 
@@ -82,21 +76,17 @@ function decodeSite(data: string): SiteSpec | null {
 }
 
 export default function PublishedClient() {
-  const params = useSearchParams();
-  const data = params.get("data") || "";
-
-  const site = useMemo(() => decodeSite(data), [data]);
-
+  const params  = useSearchParams();
+  const data    = params.get("data") || "";
+  const site    = useMemo(() => decodeSite(data), [data]);
   const [activeKey, setActiveKey] = useState<PageKey>("home");
 
   if (!site) {
     return (
-      <main className="min-h-screen bg-white text-[#0b1220] p-8">
-        <div className="max-w-xl mx-auto border rounded-2xl p-6">
-          <div className="font-semibold text-lg">Publish link invalid</div>
-          <div className="text-sm text-slate-600 mt-2">
-            This link is missing data or was copied incorrectly.
-          </div>
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="max-w-sm w-full bg-white rounded-xl border border-slate-200 p-6 text-center">
+          <div className="text-sm font-medium text-slate-700 mb-1">Invalid preview link</div>
+          <p className="text-sm text-slate-400">This link is missing data or was copied incorrectly.</p>
         </div>
       </main>
     );
@@ -106,73 +96,47 @@ export default function PublishedClient() {
   const pages = site.pages?.length
     ? site.pages
     : [{ id: "home", key: "home", name: "Home" }];
-
-  const activePage =
-    pages.find((p) => p.key === activeKey) ?? pages[0];
+  const activePage = pages.find((p) => p.key === activeKey) ?? pages[0];
 
   return (
     <main
-      className="min-h-screen p-6"
-      style={{
-        background: t.bg,
-        color: t.text,
-        fontFamily: fontStack(site.font),
-      }}
+      className="min-h-screen py-8 px-4"
+      style={{ background: "#f8fafc", fontFamily: fontStack(site.font) }}
     >
       <div className="max-w-4xl mx-auto">
         <div
           className="rounded-2xl overflow-hidden border"
-          style={{ borderColor: t.border, background: t.surface }}
+          style={{ borderColor: t.border, boxShadow: "0 4px 24px rgba(15,23,42,0.08)" }}
         >
-          {/* header */}
-          <div
-            className="px-5 py-4 border-b flex items-center justify-between"
-            style={{ borderColor: t.border, background: "#fff" }}
-          >
-            <div className="flex items-center gap-3">
+          {/* Header */}
+          <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: t.border, background: t.panel || "#fff" }}>
+            <div className="flex items-center gap-2.5">
               {site.logoDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={site.logoDataUrl}
-                  alt="Logo"
-                  className="h-9 w-9 rounded object-cover"
-                />
+                <img src={site.logoDataUrl} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
               ) : (
-                <div className="h-9 w-9 rounded" style={{ background: t.accent }} />
+                <div className="h-8 w-8 rounded-lg flex-shrink-0" style={{ background: t.accent }} />
               )}
               <div>
-                <div className="text-xs" style={{ color: t.mutedText }}>
-                  {site.tagline}
-                </div>
-                <div className="text-lg font-semibold">{site.brandName}</div>
+                <div className="font-semibold text-sm leading-tight" style={{ color: t.text }}>{site.brandName}</div>
+                {site.tagline && <div className="text-xs leading-tight" style={{ color: t.mutedText }}>{site.tagline}</div>}
               </div>
             </div>
-
-            <button
-              className="px-4 py-2 rounded-lg text-sm font-medium"
-              style={{ background: t.accent, color: "#fff" }}
-            >
+            <button className="px-3 py-1.5 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
               {site.primaryCTA}
             </button>
           </div>
 
-          {/* nav (clickable) */}
-          <div
-            className="px-5 py-3 border-b flex gap-2 flex-wrap"
-            style={{ borderColor: t.border, background: t.bg }}
-          >
+          {/* Nav */}
+          <div className="px-4 py-2 border-b flex gap-0.5 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
             {pages.map((p) => {
               const active = p.key === activePage.key;
               return (
                 <button
                   key={p.id}
                   onClick={() => setActiveKey(p.key)}
-                  className="px-3 py-1.5 rounded-lg text-sm border transition"
-                  style={{
-                    borderColor: t.border,
-                    background: active ? "rgba(37,99,235,0.10)" : "#fff",
-                    color: t.text,
-                  }}
+                  className="px-3 py-1.5 rounded-md text-sm transition-all duration-150"
+                  style={{ background: active ? `${t.accent}14` : "transparent", color: active ? t.accent : t.mutedText, fontWeight: active ? 600 : 400 }}
                 >
                   {p.name}
                 </button>
@@ -180,7 +144,8 @@ export default function PublishedClient() {
             })}
           </div>
 
-          <div className="p-6 md:p-8" style={{ background: t.bg }}>
+          {/* Content */}
+          <div className="p-6" style={{ background: t.bg, color: t.text }}>
             {activePage.key === "products" ? (
               <ProductsPage site={site} />
             ) : activePage.key === "about" ? (
@@ -190,81 +155,53 @@ export default function PublishedClient() {
             ) : (
               <HomePage site={site} />
             )}
-
-            <div className="mt-10 text-xs" style={{ color: t.mutedText }}>
+            <div className="mt-10 pt-4 border-t text-xs" style={{ borderColor: t.border, color: t.mutedText }}>
               © {new Date().getFullYear()} {site.brandName}
             </div>
           </div>
         </div>
 
-        <div className="mt-6 text-xs text-slate-500">
-          Published with VentureOS
-        </div>
+        <p className="mt-4 text-xs text-slate-400 text-center">
+          Published with <a href="/" className="hover:underline">VentureOS</a>
+        </p>
       </div>
     </main>
   );
 }
 
-/* ---- Pages ---- */
-
 function HomePage({ site }: { site: SiteSpec }) {
   const t = site.theme;
-
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2 items-center">
+      <div className="grid gap-8 md:grid-cols-2 items-center">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-            {site.heroHeadline}
-          </h1>
-          <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>
-            {site.heroSubheadline}
-          </p>
-
-          <div className="mt-5 flex gap-2">
-            <button className="px-5 py-3 rounded-lg font-medium" style={{ background: t.accent, color: "#fff" }}>
-              {site.primaryCTA}
-            </button>
-            <button className="px-5 py-3 rounded-lg font-medium border" style={{ borderColor: t.border, background: "#fff" }}>
-              Learn more
-            </button>
-          </div>
-
-          <div className="mt-6 text-sm" style={{ color: t.mutedText }}>
-            <strong style={{ color: t.text }}>Audience:</strong> {site.audience}
-            <br />
-            <strong style={{ color: t.text }}>Offer:</strong> {site.offer}
-            <br />
-            <strong style={{ color: t.text }}>First Product:</strong> {site.firstProductOrService}
+          <h1 className="text-3xl font-bold leading-tight tracking-tight">{site.heroHeadline}</h1>
+          <p className="mt-3 leading-relaxed" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
+          <div className="mt-5 flex gap-2.5">
+            <button className="px-5 py-2.5 rounded-lg text-sm font-semibold transition hover:opacity-90" style={{ background: t.accent, color: "#fff" }}>{site.primaryCTA}</button>
+            <button className="px-5 py-2.5 rounded-lg text-sm font-medium border transition hover:opacity-80" style={{ borderColor: t.border, background: "transparent" }}>Learn more</button>
           </div>
         </div>
-
-        <div className="rounded-2xl overflow-hidden border" style={{ borderColor: t.border, background: "#fff" }}>
+        <div className="rounded-xl overflow-hidden border" style={{ borderColor: t.border }}>
           {site.heroImageDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-64 object-cover" />
           ) : (
-            <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>
-              No hero image set
-            </div>
+            <div className="h-64 flex items-center justify-center text-sm" style={{ background: `${t.accent}08`, color: t.mutedText }}>No hero image set</div>
           )}
         </div>
       </div>
 
       {Array.isArray(site.sections) && site.sections.length > 0 && (
-        <div className="mt-10 space-y-6">
+        <div className="mt-10 space-y-3">
           {site.sections.map((sec, idx) => (
-            <div
-              key={`${sec.title}-${idx}`}
-              className="rounded-2xl border p-6"
-              style={{ borderColor: t.border, background: "#fff" }}
-            >
-              <div className="text-xl font-semibold">{sec.title}</div>
+            <div key={`${sec.title}-${idx}`} className="rounded-xl border p-5" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+              <h3 className="text-base font-semibold mb-2">{sec.title}</h3>
               {Array.isArray(sec.bullets) && sec.bullets.length > 0 && (
-                <ul className="mt-3 space-y-2">
+                <ul className="space-y-1.5">
                   {sec.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2 text-sm">
-                      <span className="mt-2 h-1.5 w-1.5 rounded-full" style={{ background: t.accent }} />
+                    <li key={i} className="flex gap-2 text-sm items-start">
+                      <span className="mt-2 h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: t.accent }} />
                       <span style={{ color: t.mutedText }}>{b}</span>
                     </li>
                   ))}
@@ -277,16 +214,12 @@ function HomePage({ site }: { site: SiteSpec }) {
 
       {Array.isArray(site.faq) && site.faq.length > 0 && (
         <div className="mt-10">
-          <div className="text-2xl font-semibold">FAQ</div>
-          <div className="mt-4 space-y-3">
+          <h3 className="text-xl font-bold mb-4">FAQ</h3>
+          <div className="space-y-2">
             {site.faq.map((item, idx) => (
-              <details
-                key={idx}
-                className="rounded-2xl border p-4 bg-white"
-                style={{ borderColor: t.border }}
-              >
-                <summary className="cursor-pointer font-medium">{item.q}</summary>
-                <div className="mt-2 text-sm" style={{ color: t.mutedText }}>{item.a}</div>
+              <details key={idx} className="rounded-xl border p-4" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+                <summary className="cursor-pointer font-medium text-sm">{item.q}</summary>
+                <div className="mt-2 text-sm leading-relaxed" style={{ color: t.mutedText }}>{item.a}</div>
               </details>
             ))}
           </div>
@@ -300,31 +233,23 @@ function ProductsPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
     <>
-      <div className="flex items-end justify-between">
-        <h2 className="text-2xl font-semibold">Products</h2>
-        <div className="text-sm" style={{ color: t.mutedText }}>
-          Curated for performance + trust
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <h2 className="text-2xl font-bold tracking-tight mb-6">Products</h2>
+      <div className="grid gap-4 md:grid-cols-3">
         {(site.products || []).map((p) => (
-          <div key={p.id} className="rounded-2xl p-4 border" style={{ borderColor: t.border, background: "#fff" }}>
-            <div className="rounded-xl overflow-hidden mb-3 border" style={{ borderColor: t.border }}>
+          <div key={p.id} className="rounded-xl border overflow-hidden" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+            <div className="overflow-hidden">
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageDataUrl} alt={p.name} className="w-full h-36 object-cover" />
+                <img src={p.imageDataUrl} alt={p.name} className="w-full h-40 object-cover" />
               ) : (
-                <div className="h-36 flex items-center justify-center text-xs" style={{ color: t.mutedText }}>
-                  No image
-                </div>
+                <div className="h-40 flex items-center justify-center text-xs" style={{ background: `${t.accent}08`, color: t.mutedText }}>No image</div>
               )}
             </div>
-            <div className="font-medium">{p.name}</div>
-            <div className="text-sm" style={{ color: t.mutedText }}>{p.price}</div>
-            <button className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
-              Add to cart
-            </button>
+            <div className="p-4">
+              <div className="font-medium text-sm">{p.name}</div>
+              <div className="text-sm font-semibold mt-0.5" style={{ color: t.accent }}>{p.price}</div>
+              <button className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: t.accent, color: "#fff" }}>Add to cart</button>
+            </div>
           </div>
         ))}
       </div>
@@ -335,9 +260,9 @@ function ProductsPage({ site }: { site: SiteSpec }) {
 function AboutPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
-      <h2 className="text-2xl font-semibold">About</h2>
-      <p className="mt-3" style={{ color: t.mutedText }}>
+    <div className="rounded-xl border p-6" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+      <h2 className="text-2xl font-bold tracking-tight mb-3">About</h2>
+      <p className="leading-relaxed" style={{ color: t.mutedText }}>
         {site.brandName} exists to deliver a clear promise: {site.offer}.
       </p>
     </div>
@@ -347,12 +272,12 @@ function AboutPage({ site }: { site: SiteSpec }) {
 function ContactPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
-      <h2 className="text-2xl font-semibold">Contact</h2>
-      <p className="mt-2" style={{ color: t.mutedText }}>
+    <div className="rounded-xl border p-6" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+      <h2 className="text-2xl font-bold tracking-tight mb-3">Contact</h2>
+      <p className="leading-relaxed" style={{ color: t.mutedText }}>
         Keep contact simple and professional.
       </p>
-      <div className="mt-4 text-sm" style={{ color: t.mutedText }}>
+      <div className="mt-3 text-sm" style={{ color: t.mutedText }}>
         Email: support@{site.brandName.toLowerCase().replace(/\s+/g, "")}.com
       </div>
     </div>

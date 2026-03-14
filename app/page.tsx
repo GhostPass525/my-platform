@@ -201,6 +201,8 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [aiEditMode, setAiEditMode] = useState(false);
 
   // Drag-and-drop state for sections
   const [dragSec, setDragSec] = useState<number | null>(null);
@@ -298,17 +300,50 @@ export default function Home() {
     setLoadingChat(true);
 
     try {
-      const res = await fetch("/api/idea", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updatedMessages }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Server issue. Try again." }]);
-        return;
+      if (aiEditMode && site) {
+        // AI Edit Mode: call /api/ai-edit and apply siteUpdate if present
+        const res = await fetch("/api/ai-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: updatedMessages, site }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Server issue. Try again." }]);
+          return;
+        }
+        const reply = data?.result || "No reply. Try again.";
+        setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+        // Apply site updates if present
+        if (data?.siteUpdate && typeof data.siteUpdate === "object" && Object.keys(data.siteUpdate).length > 0) {
+          setSite((prev) => {
+            if (!prev) return prev;
+            const update = data.siteUpdate as Record<string, unknown>;
+            const merged: SiteSpec = { ...prev };
+            for (const [key, value] of Object.entries(update)) {
+              if (key === "theme" && typeof value === "object" && value !== null) {
+                merged.theme = { ...prev.theme, ...(value as Partial<Theme>) };
+              } else {
+                (merged as Record<string, unknown>)[key] = value;
+              }
+            }
+            return merged;
+          });
+        }
+      } else {
+        // Normal mode: call /api/idea
+        const res = await fetch("/api/idea", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: updatedMessages }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Server issue. Try again." }]);
+          return;
+        }
+        setMessages((prev) => [...prev, { role: "assistant", content: data?.result || "No reply. Try again." }]);
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: data?.result || "No reply. Try again." }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Try again." }]);
     } finally {
@@ -386,7 +421,7 @@ export default function Home() {
 
     // Must be logged in
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
     if (!user) {
       router.push("/auth/login");
       return;
@@ -396,7 +431,7 @@ export default function Home() {
     try {
       // Check subscription
       const subRes = await fetch("/api/subscription");
-      const subData = await subRes.json();
+      const subData = await subRes.json().catch(() => ({ active: false }));
 
       if (!subData.active) {
         setShowPaywall(true);
@@ -417,9 +452,7 @@ export default function Home() {
       }
 
       const url = `${window.location.origin}/s/${data.id}`;
-      try { await navigator.clipboard.writeText(url); } catch { /* ok */ }
-      window.open(url, "_blank");
-      alert("Published! Link copied and opened.");
+      setPublishedUrl(url);
     } catch {
       alert("Publish failed. Try again.");
     } finally {
@@ -526,58 +559,86 @@ export default function Home() {
   return (
     <main className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
       {/* Top bar */}
-      <div className="h-16 border-b flex items-center justify-between px-4 shadow-sm" style={{ background: theme.panel, borderColor: theme.border }}>
+      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: theme.panel, borderColor: theme.border }}>
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}cc)` }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.accent }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
           <div className="leading-tight">
-            <div className="font-semibold text-sm">VentureOS</div>
-            <div className="text-xs" style={{ color: theme.mutedText }}>{projectName || "Build • Launch • Operate"}</div>
+            <div className="font-semibold text-sm" style={{ color: theme.text }}>VentureOS</div>
+            {projectName && <div className="text-xs truncate max-w-[140px]" style={{ color: theme.mutedText }}>{projectName}</div>}
           </div>
-          <a href="/dashboard" className="hidden md:inline-block px-2.5 py-1 rounded-lg text-xs border hover:opacity-80 transition" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            Dashboard
+          <a href="/dashboard" className="hidden md:inline-block px-2.5 py-1 rounded-lg text-xs border hover:opacity-80 transition-all duration-150" style={{ borderColor: theme.border, color: theme.mutedText }}>
+            ← Dashboard
           </a>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
-            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150"
             style={{
-              background: !canGenerate || generating ? "rgba(2,6,23,0.08)" : theme.accent,
+              background: !canGenerate || generating ? "rgba(2,6,23,0.06)" : theme.accent,
               color: !canGenerate || generating ? theme.mutedText : "#fff",
               cursor: !canGenerate || generating ? "not-allowed" : "pointer",
             }}
           >
-            {generating ? "Generating..." : "Generate"}
+            {generating ? "Generating…" : "Generate"}
           </button>
 
           <button
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-90 transition-all duration-150"
-            style={{ borderColor: theme.border, background: saving ? "rgba(2,6,23,0.05)" : theme.surface, color: theme.text }}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90 transition-all duration-150"
+            style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving…" : "Save"}
           </button>
 
           <button
             onClick={publish}
             disabled={publishing}
-            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150"
             style={{ background: theme.accent, color: "#fff", opacity: publishing ? 0.7 : 1 }}
           >
-            {publishing ? "Checking..." : "Publish"}
+            {publishing ? "Checking…" : "Publish"}
+          </button>
+
+          {publishedUrl && (
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150 flex items-center gap-1"
+              style={{ borderColor: theme.border, background: "transparent", color: theme.accent }}
+            >
+              View ↗
+            </a>
+          )}
+
+          <button
+            onClick={() => setAiEditMode((v) => !v)}
+            title={aiEditMode ? "AI Edit Mode ON — chat edits your site directly" : "Turn on AI Edit Mode"}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150 flex items-center gap-1.5"
+            style={{
+              borderColor: aiEditMode ? theme.accent : theme.border,
+              background: aiEditMode ? `${theme.accent}12` : "transparent",
+              color: aiEditMode ? theme.accent : theme.mutedText,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+            </svg>
+            {aiEditMode ? "AI Edit: ON" : "AI Edit"}
           </button>
 
           <button
             onClick={exportJson}
-            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-90 transition-all duration-150"
-            style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90 transition-all duration-150"
+            style={{ borderColor: theme.border, background: "transparent", color: theme.mutedText }}
           >
             Export
           </button>
@@ -588,25 +649,45 @@ export default function Home() {
       <div className="grid grid-cols-12 flex-1 min-h-0">
         {/* Left: chat */}
         <aside className="col-span-12 md:col-span-3 border-r flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
-          <div className="p-4 border-b" style={{ borderColor: theme.border }}>
-            <div className="font-semibold text-sm">VentureOS Guide</div>
-            <div className="text-xs" style={{ color: theme.mutedText }}>Operator-style guidance + execution.</div>
+          <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: aiEditMode ? theme.accent : theme.mutedText }}>
+                {aiEditMode ? "AI Edit Mode" : "Guide"}
+              </div>
+              {site && (
+                <button
+                  onClick={() => setAiEditMode((v) => !v)}
+                  className="px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors duration-150"
+                  style={{
+                    borderColor: aiEditMode ? theme.accent : theme.border,
+                    background: aiEditMode ? `${theme.accent}12` : "transparent",
+                    color: aiEditMode ? theme.accent : theme.mutedText,
+                  }}
+                >
+                  {aiEditMode ? "ON" : "OFF"}
+                </button>
+              )}
+            </div>
+            <div className="text-xs mt-0.5 leading-relaxed" style={{ color: theme.mutedText }}>
+              {aiEditMode ? "Chat to edit your site live." : "Describe your business idea."}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
-              <div className="text-sm mt-2" style={{ color: theme.mutedText }}>
-                Start with: <span style={{ color: theme.text, fontWeight: 600 }}>&quot;I want to build...&quot;</span>
+              <div className="text-xs mt-1 leading-relaxed" style={{ color: theme.mutedText }}>
+                Start with:{" "}
+                <span className="italic" style={{ color: theme.text }}>&ldquo;I want to build a store that sells...&rdquo;</span>
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className="flex text-sm animate-fadeIn" style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+              <div key={i} className="flex text-xs animate-fadeIn" style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
                 <div
-                  className="max-w-[92%] px-3 py-2.5 whitespace-pre-line shadow-sm"
+                  className="max-w-[92%] px-3 py-2 whitespace-pre-line leading-relaxed"
                   style={{
-                    background: m.role === "user" ? "rgba(37,99,235,0.10)" : "rgba(2,6,23,0.04)",
-                    border: `1px solid ${m.role === "user" ? "rgba(37,99,235,0.15)" : theme.border}`,
-                    borderRadius: m.role === "user" ? "1rem 1rem 0.25rem 1rem" : "1rem 1rem 1rem 0.25rem",
+                    background: m.role === "user" ? `${theme.accent}12` : "rgba(2,6,23,0.04)",
+                    border: `1px solid ${m.role === "user" ? `${theme.accent}20` : theme.border}`,
+                    borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
                     color: theme.text,
                   }}
                 >
@@ -623,21 +704,25 @@ export default function Home() {
             )}
           </div>
 
-          <div className="p-3 border-t" style={{ borderColor: theme.border }}>
-            <div className="flex gap-2">
+          <div className="px-3 py-3 border-t" style={{ borderColor: theme.border }}>
+            <div className="flex gap-1.5">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder="Ask VentureOS..."
-                className="flex-1 px-3 py-2 rounded-xl text-sm outline-none transition-all duration-200"
-                style={{ background: "rgba(2,6,23,0.03)", border: `1px solid ${theme.border}`, color: theme.text }}
+                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Describe your business…"}
+                className="flex-1 px-3 py-2 rounded-lg text-xs outline-none transition-all duration-150"
+                style={{
+                  background: aiEditMode ? `${theme.accent}06` : "rgba(2,6,23,0.03)",
+                  border: `1px solid ${aiEditMode ? theme.accent + "35" : theme.border}`,
+                  color: theme.text,
+                }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
-                className="px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
-                style={{ background: loadingChat ? "rgba(2,6,23,0.08)" : theme.accent, color: loadingChat ? theme.mutedText : "#fff" }}
+                className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150"
+                style={{ background: loadingChat ? "rgba(2,6,23,0.06)" : theme.accent, color: loadingChat ? theme.mutedText : "#fff" }}
               >
                 Send
               </button>
@@ -646,7 +731,7 @@ export default function Home() {
         </aside>
 
         {/* Center: preview */}
-        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-6 bg-slate-50/40">
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-5" style={{ background: "rgba(0,0,0,0.03)" }}>
           <div className="max-w-4xl mx-auto">
             {!site ? (
               <EmptyPreview theme={theme} />
@@ -660,10 +745,9 @@ export default function Home() {
 
         {/* Right: builder */}
         <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
-          <div className="p-4 border-b" style={{ borderColor: theme.border }}>
-            <div className="font-semibold text-sm">Builder</div>
-            <div className="text-xs" style={{ color: theme.mutedText }}>Pages • Design • Content • Sections</div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
+            <div className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: theme.mutedText }}>Builder</div>
+            <div className="flex flex-wrap gap-1">
               {(["quick", "sections", "design", "content", "products", "pages"] as const).map((tab) => (
                 <Tab key={tab} label={tab.charAt(0).toUpperCase() + tab.slice(1)} active={rightTab === tab} theme={theme} onClick={() => setRightTab(tab)} />
               ))}
@@ -983,7 +1067,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="p-3 border-t text-xs text-center" style={{ borderColor: theme.border, color: theme.mutedText }}>
+          <div className="px-4 py-2.5 border-t text-[10px] text-center" style={{ borderColor: theme.border, color: theme.mutedText }}>
             VentureOS Builder
           </div>
         </aside>
@@ -991,19 +1075,18 @@ export default function Home() {
 
       {/* Generate loading overlay */}
       {generating && (
-        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.70)" }}>
-          <div className="rounded-2xl border bg-white p-6 w-[320px] shadow-xl animate-slideUp" style={{ borderColor: theme.border }}>
-            <div className="flex items-center gap-4">
+        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]" style={{ background: "rgba(255,255,255,0.65)" }}>
+          <div className="rounded-2xl border bg-white p-6 w-72 shadow-xl animate-slideUp" style={{ borderColor: theme.border }}>
+            <div className="flex items-center gap-3.5">
               <Spinner color={theme.accent} />
               <div>
-                <div className="font-semibold">Generating your site...</div>
-                <div className="text-sm mt-0.5" style={{ color: theme.mutedText }}>Building pages, layout, and storefront</div>
+                <div className="font-semibold text-sm" style={{ color: theme.text }}>Generating your site…</div>
+                <div className="text-xs mt-0.5" style={{ color: theme.mutedText }}>This takes a few seconds</div>
               </div>
             </div>
-            <div className="mt-5 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.08)" }}>
-              <div className="h-full rounded-full animate-pulse" style={{ width: "70%", background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent2 || theme.accent})` }} />
+            <div className="mt-4 h-1 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.06)" }}>
+              <div className="h-full rounded-full animate-pulse" style={{ width: "65%", background: theme.accent }} />
             </div>
-            <div className="mt-2 text-xs" style={{ color: theme.mutedText }}>This takes a few seconds...</div>
           </div>
         </div>
       )}
@@ -1022,14 +1105,14 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
     setLoading(true);
     try {
       const res = await fetch("/api/subscription/checkout", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        alert(data?.error || "Failed to start checkout. Try again.");
+        alert(data?.error || `Checkout failed (HTTP ${res.status}). Check that STRIPE_SECRET_KEY and VENTUREOS_PRICE_ID are set in your environment.`);
       }
     } catch (err: any) {
-      alert(`Something went wrong: ${err?.message || err}. Check Vercel function logs for details.`);
+      alert(`Checkout failed: ${err?.message || err}. Check your Vercel environment variables and function logs.`);
     } finally {
       setLoading(false);
     }
@@ -1038,39 +1121,36 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.55)" }}
+      style={{ background: "rgba(0,0,0,0.45)" }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-slideUp"
+        className="bg-white rounded-2xl w-full max-w-sm p-7 animate-slideUp shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Icon */}
-        <div className="flex items-center justify-center h-14 w-14 rounded-2xl mb-5 mx-auto" style={{ background: `${theme.accent}12` }}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center justify-center h-11 w-11 rounded-xl mb-5 mx-auto" style={{ background: `${theme.accent}10` }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
 
-        <h2 className="text-2xl font-bold text-center text-slate-900">Publish your store</h2>
-        <p className="mt-2 text-center text-slate-500 text-sm">
-          Subscribe to VentureOS to go live and start selling.
+        <h2 className="text-lg font-semibold text-center text-slate-900 tracking-tight">Publish your store</h2>
+        <p className="mt-1.5 text-center text-slate-500 text-sm">
+          Subscribe to go live and start selling.
         </p>
 
         {/* Price */}
-        <div className="mt-6 rounded-2xl border border-slate-200 p-5 text-center bg-slate-50">
-          <div className="text-4xl font-bold text-slate-900">$14.99</div>
-          <div className="text-sm text-slate-500 mt-1">per month · cancel anytime</div>
-          <div
-            className="mt-3 inline-block px-3 py-1 rounded-full text-xs font-semibold"
-            style={{ background: `${theme.accent}14`, color: theme.accent }}
-          >
-            7-day free trial included
+        <div className="mt-5 rounded-xl border border-slate-200 p-4 text-center bg-slate-50">
+          <div className="text-3xl font-bold text-slate-900 tracking-tight">$14.99</div>
+          <div className="text-xs text-slate-500 mt-0.5">per month · cancel anytime</div>
+          <div className="mt-2.5 inline-block px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ background: `${theme.accent}12`, color: theme.accent }}>
+            7-day free trial
           </div>
         </div>
 
         {/* Features */}
-        <ul className="mt-5 space-y-2.5">
+        <ul className="mt-4 space-y-2">
           {[
             "Live storefront with custom URL",
             "Stripe payments for your customers",
@@ -1078,12 +1158,10 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
             "AI site builder access",
             "Order dashboard & analytics",
           ].map((feat) => (
-            <li key={feat} className="flex items-center gap-2.5 text-sm text-slate-700">
-              <span className="h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${theme.accent}14` }}>
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 6l3 3 5-5" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
+            <li key={feat} className="flex items-center gap-2.5 text-sm text-slate-600">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
               {feat}
             </li>
           ))}
@@ -1093,15 +1171,15 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
         <button
           onClick={startSubscription}
           disabled={loading}
-          className="mt-6 w-full py-3.5 rounded-xl font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+          className="mt-5 w-full py-3 rounded-lg font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
           style={{ background: theme.accent, color: "#fff", opacity: loading ? 0.7 : 1 }}
         >
-          {loading ? "Loading..." : "Start free trial — then $14.99/mo"}
+          {loading ? "Loading…" : "Start free trial — then $14.99/mo"}
         </button>
 
         <button
           onClick={onClose}
-          className="mt-3 w-full py-2.5 rounded-xl text-sm text-slate-500 hover:text-slate-700 transition-colors duration-150"
+          className="mt-2 w-full py-2 rounded-lg text-sm text-slate-400 hover:text-slate-600 transition-colors duration-150"
         >
           Maybe later
         </button>
@@ -1119,33 +1197,33 @@ function SitePreview({ site, activePageId, onSelectPage }: { site: SiteSpec; act
 
   return (
     <div style={{ background: t.surface, color: t.text, fontFamily }}>
-      <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: t.border, background: "#fff" }}>
-        <div className="flex items-center gap-3">
+      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: t.border, background: t.panel || "#fff" }}>
+        <div className="flex items-center gap-2.5">
           {site.logoDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={site.logoDataUrl} alt="Logo" className="h-9 w-9 rounded-xl object-cover" />
+            <img src={site.logoDataUrl} alt="Logo" className="h-7 w-7 rounded-lg object-cover" />
           ) : (
-            <div className="h-9 w-9 rounded-xl" style={{ background: t.accent }} />
+            <div className="h-7 w-7 rounded-lg flex-shrink-0" style={{ background: t.accent }} />
           )}
           <div>
-            <div className="text-xs" style={{ color: t.mutedText }}>{site.tagline}</div>
-            <div className="text-lg font-semibold">{site.brandName}</div>
+            <div className="font-semibold text-sm leading-tight">{site.brandName}</div>
+            {site.tagline && <div className="text-xs leading-tight" style={{ color: t.mutedText }}>{site.tagline}</div>}
           </div>
         </div>
-        <button className="px-4 py-2 rounded-xl text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>
+        <button className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: t.accent, color: "#fff" }}>
           {site.primaryCTA}
         </button>
       </div>
 
-      <div className="px-5 py-2.5 border-b flex gap-1 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
+      <div className="px-4 py-2 border-b flex gap-0.5 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
         {site.pages.map((p) => {
           const active = p.id === activePage.id;
           return (
             <button
               key={p.id}
               onClick={() => onSelectPage(p.id)}
-              className="px-3 py-1.5 rounded-lg text-sm transition-all duration-150"
-              style={{ background: active ? `${t.accent}18` : "transparent", color: active ? t.accent : t.mutedText, fontWeight: active ? 600 : 400 }}
+              className="px-2.5 py-1.5 rounded-md text-xs transition-all duration-150"
+              style={{ background: active ? `${t.accent}14` : "transparent", color: active ? t.accent : t.mutedText, fontWeight: active ? 600 : 400 }}
             >
               {p.name}
             </button>
@@ -1153,7 +1231,7 @@ function SitePreview({ site, activePageId, onSelectPage }: { site: SiteSpec; act
         })}
       </div>
 
-      <div className="p-6 md:p-8" style={{ background: t.bg }}>
+      <div className="p-5 md:p-7" style={{ background: t.bg }}>
         {activePage.key === "products" ? <ProductsPage site={site} />
           : activePage.key === "about" ? <AboutPage site={site} />
           : activePage.key === "contact" ? <ContactPage site={site} />
@@ -1168,64 +1246,58 @@ function HomePage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2 items-center">
+      <div className="grid gap-8 md:grid-cols-2 items-center">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">{site.heroHeadline}</h1>
-          <p className="mt-3 whitespace-pre-line" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
+          <h1 className="text-2xl md:text-3xl font-bold leading-tight tracking-tight">{site.heroHeadline}</h1>
+          <p className="mt-3 text-sm leading-relaxed" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
           <div className="mt-5 flex gap-2">
-            <button className="px-5 py-3 rounded-xl font-medium transition hover:opacity-90" style={{ background: t.accent, color: "#fff" }}>{site.primaryCTA}</button>
-            <button className="px-5 py-3 rounded-xl font-medium border transition hover:opacity-90" style={{ borderColor: t.border, background: "#fff" }}>Learn more</button>
-          </div>
-          <div className="mt-6 text-sm space-y-1" style={{ color: t.mutedText }}>
-            <div><strong style={{ color: t.text }}>Audience:</strong> {site.audience}</div>
-            <div><strong style={{ color: t.text }}>Offer:</strong> {site.offer}</div>
-            <div><strong style={{ color: t.text }}>First Product:</strong> {site.firstProductOrService}</div>
+            <button className="px-4 py-2.5 rounded-lg text-sm font-semibold transition hover:opacity-90 active:scale-[0.98]" style={{ background: t.accent, color: "#fff" }}>{site.primaryCTA}</button>
+            <button className="px-4 py-2.5 rounded-lg text-sm font-medium border transition hover:opacity-80" style={{ borderColor: t.border, background: "transparent", color: t.text }}>Learn more</button>
           </div>
         </div>
-        <div className="rounded-2xl overflow-hidden border shadow-lg" style={{ borderColor: t.border, background: "#fff" }}>
+        <div className="rounded-xl overflow-hidden border" style={{ borderColor: t.border }}>
           {site.heroImageDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-64 object-cover" />
+            <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-52 object-cover" />
           ) : (
-            <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.mutedText }}>Upload a hero image in Builder → Content</div>
+            <div className="h-52 flex items-center justify-center text-xs text-center px-4" style={{ background: `${t.accent}08`, color: t.mutedText }}>
+              <span>Upload a hero image in<br />Builder → Content</span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Sections */}
       {site.sections.length > 0 && (
-        <div className="mt-10 space-y-4">
+        <div className="mt-8 space-y-3">
           {site.sections.map((s, idx) => (
-            <section key={idx} className="rounded-2xl border p-5 flex gap-4 hover:shadow-md transition-shadow duration-200" style={{ borderColor: t.border, background: "#fff" }}>
-              <div className="w-1 h-8 rounded-full flex-shrink-0 mt-0.5" style={{ background: t.accent }} />
-              <div>
-                <h3 className="text-lg font-semibold mb-2">{s.title}</h3>
-                <ul className="space-y-1.5" style={{ color: t.mutedText }}>
-                  {s.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2 text-sm items-start">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: t.accent }} />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <section key={idx} className="rounded-xl border p-4" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+              <h3 className="text-sm font-semibold mb-2">{s.title}</h3>
+              <ul className="space-y-1.5" style={{ color: t.mutedText }}>
+                {s.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-2 text-xs items-start">
+                    <span className="mt-1.5 h-1 w-1 rounded-full flex-shrink-0" style={{ background: t.accent }} />
+                    {b}
+                  </li>
+                ))}
+              </ul>
             </section>
           ))}
         </div>
       )}
 
-      {/* FAQ */}
       {site.faq.length > 0 && (
-        <div className="mt-10">
-          <h3 className="text-lg font-semibold mb-3">FAQ</h3>
-          <div className="space-y-3">
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold mb-2.5">FAQ</h3>
+          <div className="space-y-2">
             {site.faq.map((f, i) => (
-              <details key={i} className="group rounded-2xl border p-4 bg-white transition-all duration-200" style={{ borderColor: t.border }}>
-                <summary className="cursor-pointer font-medium flex items-center justify-between list-none text-sm" style={{ color: t.text }}>
+              <details key={i} className="group rounded-xl border p-3" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+                <summary className="cursor-pointer font-medium flex items-center justify-between list-none text-xs" style={{ color: t.text }}>
                   {f.q}
-                  <span className="ml-4 flex-shrink-0 transition-transform duration-200 group-open:rotate-180" style={{ color: t.mutedText }}>↓</span>
+                  <span className="ml-3 flex-shrink-0 transition-transform duration-200 group-open:rotate-180" style={{ color: t.mutedText }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                  </span>
                 </summary>
-                <div className="mt-2 text-sm" style={{ color: t.mutedText }}>{f.a}</div>
+                <div className="mt-2 text-xs leading-relaxed" style={{ color: t.mutedText }}>{f.a}</div>
               </details>
             ))}
           </div>
@@ -1239,25 +1311,25 @@ function ProductsPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
     <>
-      <div className="flex items-end justify-between mb-4">
-        <h2 className="text-2xl font-semibold">Products</h2>
-        <div className="text-sm" style={{ color: t.mutedText }}>Curated for performance + trust</div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold tracking-tight">Products</h2>
+        <span className="text-xs" style={{ color: t.mutedText }}>{site.products.length} items</span>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {site.products.map((p) => (
-          <div key={p.id} className="group rounded-2xl border overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200" style={{ borderColor: t.border, background: "#fff" }}>
+          <div key={p.id} className="group rounded-xl border overflow-hidden hover:shadow-md transition-all duration-200" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
             <div className="overflow-hidden">
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageDataUrl} alt={p.name} className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300" />
+                <img src={p.imageDataUrl} alt={p.name} className="w-full h-28 object-cover group-hover:scale-105 transition-transform duration-300" />
               ) : (
-                <div className="h-36 flex items-center justify-center text-xs" style={{ background: `${t.accent}08`, color: t.mutedText }}>Add image in Builder → Products</div>
+                <div className="h-28 flex items-center justify-center text-[10px] text-center" style={{ background: `${t.accent}08`, color: t.mutedText }}>Add image</div>
               )}
             </div>
-            <div className="p-4">
-              <div className="font-medium text-sm">{p.name}</div>
-              <div className="text-sm font-medium mt-0.5" style={{ color: t.accent }}>{p.price}</div>
-              <button className="mt-3 w-full px-3 py-2 rounded-xl text-sm font-medium transition hover:opacity-90 active:scale-[0.98]" style={{ background: t.accent, color: "#fff" }}>Add to cart</button>
+            <div className="p-3">
+              <div className="font-medium text-xs">{p.name}</div>
+              <div className="text-xs font-semibold mt-0.5" style={{ color: t.accent }}>{p.price}</div>
+              <button className="mt-2.5 w-full px-2 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-90" style={{ background: t.accent, color: "#fff" }}>Add to cart</button>
             </div>
           </div>
         ))}
@@ -1269,10 +1341,10 @@ function ProductsPage({ site }: { site: SiteSpec }) {
 function AboutPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
-      <h2 className="text-2xl font-semibold">About</h2>
-      <p className="mt-3" style={{ color: t.mutedText }}>
-        {site.brandName} exists to deliver a clear promise: {site.offer}. This page is where your story, credibility, and brand philosophy live.
+    <div className="rounded-xl border p-5" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+      <h2 className="text-lg font-bold tracking-tight mb-2">About</h2>
+      <p className="text-sm leading-relaxed" style={{ color: t.mutedText }}>
+        {site.brandName} exists to deliver a clear promise: {site.offer}.
       </p>
     </div>
   );
@@ -1281,16 +1353,12 @@ function AboutPage({ site }: { site: SiteSpec }) {
 function ContactPage({ site }: { site: SiteSpec }) {
   const t = site.theme;
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
-        <h2 className="text-2xl font-semibold">Contact</h2>
-        <p className="mt-2" style={{ color: t.mutedText }}>Keep contact simple and professional.</p>
-      </div>
-      <div className="rounded-2xl border p-6" style={{ borderColor: t.border, background: "#fff" }}>
-        <div className="text-sm font-medium">Message</div>
-        <input className="mt-2 w-full px-3 py-2 rounded-xl border text-sm" style={{ borderColor: t.border }} placeholder="Your email" />
-        <textarea className="mt-2 w-full px-3 py-2 rounded-xl border text-sm" style={{ borderColor: t.border }} rows={5} placeholder="What can we help with?" />
-        <button className="mt-3 px-4 py-2 rounded-xl text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>Send</button>
+    <div className="rounded-xl border p-5" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
+      <h2 className="text-lg font-bold tracking-tight mb-3">Contact</h2>
+      <div className="space-y-2">
+        <input className="w-full px-3 py-2 rounded-lg border text-sm" style={{ borderColor: t.border, background: "transparent", color: t.text }} placeholder="Your email" readOnly />
+        <textarea className="w-full px-3 py-2 rounded-lg border text-sm resize-none" style={{ borderColor: t.border, background: "transparent", color: t.text }} rows={3} placeholder="Your message" readOnly />
+        <button className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>Send</button>
       </div>
     </div>
   );
@@ -1300,15 +1368,15 @@ function ContactPage({ site }: { site: SiteSpec }) {
 
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
-    <div className="rounded-2xl border p-10 text-center" style={{ borderColor: theme.border, background: "#fff" }}>
-      <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl mb-4" style={{ background: `${theme.accent}12` }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <div className="rounded-2xl border p-12 text-center" style={{ borderColor: theme.border, background: "#fff" }}>
+      <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl mb-5" style={{ background: `${theme.accent}10` }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 9h18M9 21V9" />
         </svg>
       </div>
-      <div className="text-xl font-semibold mt-1">Your site will appear here</div>
-      <p className="mt-2 text-sm max-w-xs mx-auto" style={{ color: theme.mutedText }}>
-        Chat on the left for a few turns, then click <strong>Generate</strong>.
+      <div className="text-lg font-semibold tracking-tight" style={{ color: theme.text }}>Your site preview</div>
+      <p className="mt-2 text-sm leading-relaxed max-w-xs mx-auto" style={{ color: theme.mutedText }}>
+        Describe your business in the chat, then click <strong style={{ color: theme.text }}>Generate</strong>.
       </p>
     </div>
   );
@@ -1316,8 +1384,8 @@ function EmptyPreview({ theme }: { theme: Theme }) {
 
 function Card({ theme, title, children }: { theme: Theme; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border p-4 shadow-sm" style={{ borderColor: theme.border, background: "#fff" }}>
-      <div className="font-semibold text-sm mb-3">{title}</div>
+    <div className="rounded-xl border p-4" style={{ borderColor: theme.border, background: "#fff" }}>
+      <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: theme.mutedText }}>{title}</div>
       {children}
     </div>
   );
@@ -1327,12 +1395,11 @@ function Tab({ label, active, theme, onClick }: { label: string; active: boolean
   return (
     <button
       onClick={onClick}
-      className="text-xs px-3 py-1.5 rounded-lg border transition-all duration-150"
+      className="text-xs px-2.5 py-1.5 rounded-lg transition-all duration-150"
       style={{
-        borderColor: active ? "transparent" : theme.border,
-        background: active ? `${theme.accent}14` : "#fff",
-        color: active ? theme.accent : theme.text,
-        fontWeight: active ? 600 : 400,
+        background: active ? theme.accent : "transparent",
+        color: active ? "#fff" : theme.mutedText,
+        fontWeight: active ? 500 : 400,
       }}
     >
       {label}
@@ -1344,8 +1411,8 @@ function ActionButton({ theme, children, onClick }: { theme: Theme; children: Re
   return (
     <button
       onClick={onClick}
-      className="w-full px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
-      style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}dd)`, color: "#fff" }}
+      className="w-full px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+      style={{ background: theme.accent, color: "#fff" }}
     >
       {children}
     </button>
@@ -1357,8 +1424,8 @@ function Field({ theme, label, value, onChange }: { theme: Theme; label: string;
     <label className="block">
       <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
       <input
-        className="w-full px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200"
-        style={{ borderColor: theme.border, background: "#fff" }}
+        className="w-full px-3 py-2 rounded-lg text-sm outline-none border transition-all duration-150"
+        style={{ borderColor: theme.border, background: "#fff", color: theme.text }}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -1371,9 +1438,9 @@ function TextField({ theme, label, value, onChange }: { theme: Theme; label: str
     <label className="block">
       <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>{label}</div>
       <textarea
-        className="w-full px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200"
-        style={{ borderColor: theme.border, background: "#fff" }}
-        rows={4}
+        className="w-full px-3 py-2 rounded-lg text-sm outline-none border transition-all duration-150 resize-none"
+        style={{ borderColor: theme.border, background: "#fff", color: theme.text }}
+        rows={3}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -1382,7 +1449,6 @@ function TextField({ theme, label, value, onChange }: { theme: Theme; label: str
 }
 
 function ColorField({ theme, label, value, onChange }: { theme: Theme; label: string; value: string; onChange: (v: string) => void }) {
-  // Only show color picker for hex/rgb values (not rgba strings)
   const isPickable = /^#[0-9a-fA-F]{3,6}$/.test(value.trim());
 
   return (
@@ -1394,15 +1460,15 @@ function ColorField({ theme, label, value, onChange }: { theme: Theme; label: st
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="h-9 w-10 p-0.5 border rounded-lg cursor-pointer flex-shrink-0"
+            className="h-8 w-9 p-0.5 border rounded-lg cursor-pointer flex-shrink-0"
             style={{ borderColor: theme.border }}
           />
         ) : (
-          <div className="h-9 w-10 rounded-lg border flex-shrink-0" style={{ background: value, borderColor: theme.border }} />
+          <div className="h-8 w-9 rounded-lg border flex-shrink-0" style={{ background: value, borderColor: theme.border }} />
         )}
         <input
-          className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border transition-all duration-200 font-mono"
-          style={{ borderColor: theme.border, background: "#fff" }}
+          className="flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all duration-150 font-mono"
+          style={{ borderColor: theme.border, background: "#fff", color: theme.text }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -1413,6 +1479,6 @@ function ColorField({ theme, label, value, onChange }: { theme: Theme; label: st
 
 function Spinner({ color }: { color: string }) {
   return (
-    <div className="h-6 w-6 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(2,6,23,0.15)", borderTopColor: color }} />
+    <div className="h-5 w-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(2,6,23,0.10)", borderTopColor: color }} />
   );
 }

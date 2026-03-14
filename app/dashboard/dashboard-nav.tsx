@@ -3,8 +3,18 @@
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
+const NAV_LINKS = [
+  { href: "/dashboard",            label: "Projects" },
+  { href: "/dashboard/orders",     label: "Orders" },
+  { href: "/dashboard/connect",    label: "Connect" },
+  { href: "/dashboard/insights",   label: "Insights" },
+  { href: "/dashboard/marketing",  label: "Marketing" },
+  { href: "/dashboard/brand",      label: "Brand Kit" },
+  { href: "/",                     label: "Builder" },
+];
+
 export default function DashboardNav() {
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
 
   const signOut = async () => {
@@ -14,43 +24,44 @@ export default function DashboardNav() {
     router.refresh();
   };
 
-  const navLink = (href: string, label: string) => {
-    const active = pathname === href;
-    return (
-      <a
-        href={href}
-        className={`px-3 py-1.5 rounded-lg text-sm transition-colors duration-150 ${
-          active
-            ? "bg-slate-900 text-white font-medium"
-            : "text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-        }`}
-      >
-        {label}
-      </a>
-    );
-  };
-
   return (
-    <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-sm shadow-blue-200">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-        </div>
-        <div className="leading-tight">
-          <div className="font-semibold text-slate-900">VentureOS</div>
-          <div className="text-xs text-slate-500">Dashboard</div>
-        </div>
-      </div>
+    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
 
-      <div className="flex items-center gap-2">
-        {navLink("/dashboard", "Projects")}
-        {navLink("/dashboard/orders", "Orders")}
-        {navLink("/", "Builder")}
+        {/* Brand */}
+        <a href="/dashboard" className="flex items-center gap-2.5 flex-shrink-0 group">
+          <div className="h-7 w-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-200/60 transition-transform duration-150 group-hover:scale-105">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+          <span className="font-semibold text-sm text-slate-900 tracking-tight">VentureOS</span>
+        </a>
+
+        {/* Nav links */}
+        <nav className="hidden md:flex items-center gap-0.5 flex-1">
+          {NAV_LINKS.map(({ href, label }) => {
+            const active = pathname === href;
+            return (
+              <a
+                key={href}
+                href={href}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 ${
+                  active
+                    ? "bg-slate-900 text-white font-medium"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                }`}
+              >
+                {label}
+              </a>
+            );
+          })}
+        </nav>
+
+        {/* Sign out */}
         <button
           onClick={signOut}
-          className="px-3 py-1.5 rounded-lg text-sm text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150"
+          className="flex-shrink-0 text-sm text-slate-500 hover:text-slate-900 transition-colors duration-150"
         >
           Sign out
         </button>

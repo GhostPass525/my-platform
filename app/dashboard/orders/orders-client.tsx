@@ -72,11 +72,9 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
-      <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
-        {label}
-      </div>
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1.5">{label}</div>
+      <div className="text-2xl font-semibold text-slate-900 tracking-tight">{value}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
     </div>
   );
@@ -86,7 +84,7 @@ function OrderRow({ order }: { order: Order }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <button
         onClick={() => setOpen((x) => !x)}
         className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-slate-50/60 transition-colors duration-150"
@@ -193,10 +191,8 @@ export default function OrdersClient({
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Orders</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Sales across all your published stores
-        </p>
+        <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Orders</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Sales across all your published stores</p>
       </div>
 
       {/* Analytics cards */}
@@ -219,7 +215,7 @@ export default function OrdersClient({
       </div>
 
       {/* Payout explanation */}
-      <div className="mb-8 rounded-2xl border border-blue-100 bg-blue-50/60 px-5 py-4 flex gap-3">
+      <div className="mb-8 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3.5 flex gap-3">
         <svg
           className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5"
           fill="none"
@@ -245,7 +241,7 @@ export default function OrdersClient({
       {/* Orders list */}
       {orders.length === 0 ? (
         <div className="text-center py-24 animate-fadeIn">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 mb-5">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-slate-100 mb-4 mx-auto">
             <svg
               width="28"
               height="28"
@@ -261,12 +257,9 @@ export default function OrdersClient({
               <path d="M16 10a4 4 0 01-8 0" />
             </svg>
           </div>
-          <div className="text-lg font-semibold text-slate-700 mb-2">
-            No orders yet
-          </div>
+          <p className="text-base font-medium text-slate-700 mb-1">No orders yet</p>
           <p className="text-sm text-slate-400 max-w-xs mx-auto">
-            Orders will appear here once customers complete checkout on your
-            published stores.
+            Orders appear here once customers checkout on your published stores.
           </p>
         </div>
       ) : (
