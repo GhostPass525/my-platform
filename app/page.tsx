@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import LaunchMoment from "@/app/components/LaunchMoment";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -202,6 +203,8 @@ export default function Home() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [showLaunchMoment, setShowLaunchMoment] = useState(false);
+  const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
   const [aiEditMode, setAiEditMode] = useState(false);
 
   // Drag-and-drop state for sections
@@ -228,6 +231,7 @@ export default function Home() {
           setSite(data.site as SiteSpec);
           setProjectId(pid);
           setProjectName(data.name ?? "");
+          setProjectCreatedAt(data.createdAt ?? null);
           setActivePageId(data.site.pages?.[0]?.id ?? "");
           setRightTab("quick");
         }
@@ -452,7 +456,12 @@ export default function Home() {
       }
 
       const url = `${window.location.origin}/s/${data.id}`;
+      const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${projectId ?? data.id}`);
       setPublishedUrl(url);
+      if (isFirstPublish) {
+        localStorage.setItem(`launched_${projectId ?? data.id}`, "1");
+        setShowLaunchMoment(true);
+      }
     } catch {
       alert("Publish failed. Try again.");
     } finally {
@@ -1093,6 +1102,16 @@ export default function Home() {
 
       {/* Phase 3: Paywall modal */}
       {showPaywall && <PaywallModal theme={theme} onClose={() => setShowPaywall(false)} />}
+
+      {/* Launch Moment — first publish celebration */}
+      {showLaunchMoment && site && publishedUrl && (
+        <LaunchMoment
+          storeUrl={publishedUrl}
+          site={site}
+          projectCreatedAt={projectCreatedAt}
+          onContinue={() => setShowLaunchMoment(false)}
+        />
+      )}
     </main>
   );
 }

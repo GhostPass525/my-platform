@@ -19,7 +19,7 @@ export async function GET(
 
   const { data: project, error } = await supabase
     .from("projects")
-    .select("id, name, sites(site_json)")
+    .select("id, name, created_at, sites(site_json)")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -35,6 +35,7 @@ export async function GET(
   return NextResponse.json({
     id: project.id,
     name: project.name,
+    createdAt: project.created_at,
     site: siteRow?.site_json ?? null,
   });
 }
