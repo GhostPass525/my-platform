@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import FirstSaleWidget from "@/app/components/FirstSaleWidget";
+import MentorChat from "@/app/components/MentorChat";
+import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
 
 type Project = {
   id: string;
   name: string;
   created_at: string;
   updated_at: string;
+};
+
+type Order = {
+  id: string;
+  total: number;
+  customer_email: string;
+  created_at: string;
+  order_items?: { product_name: string }[];
 };
 
 function timeAgo(iso: string): string {
@@ -32,14 +44,79 @@ function ProjectInitial({ name }: { name: string }) {
 
 export default function DashboardClient({
   initialProjects,
+  userId,
+  initialOrdersCount,
+  initialRevenue,
+  brandName,
 }: {
   initialProjects: Project[];
+  userId: string;
+  initialOrdersCount: number;
+  initialRevenue: number;
+  brandName: string;
 }) {
-  const router   = useRouter();
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName]   = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [newName, setNewName] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // First sale state
+  const [ordersCount, setOrdersCount] = useState(initialOrdersCount);
+  const hadFirstSaleRef = useRef(initialOrdersCount > 0);
+  const [firstSaleOrder, setFirstSaleOrder] = useState<Order | null>(null);
+  const [mentorMessage, setMentorMessage] = useState<string | null>(null);
+  const [hasPublished, setHasPublished] = useState(false);
+
+  // Detect "has published" via localStorage (set by LaunchMoment on first publish)
+  useEffect(() => {
+    try {
+      const launched = Object.keys(localStorage).some((k) => k.startsWith("launched_"));
+      setHasPublished(launched);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Show widget when: published but no orders yet
+  const showFirstSaleWidget = hasPublished && ordersCount === 0 && projects.length > 0;
+
+  // Supabase realtime — listen for new orders
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("dashboard-orders")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "orders",
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          const newOrder = payload.new as Order;
+          // Fetch order items for celebration details
+          const { data: items } = await supabase
+            .from("order_items")
+            .select("product_name")
+            .eq("order_id", newOrder.id);
+          const enriched: Order = { ...newOrder, order_items: items ?? [] };
+
+          if (!hadFirstSaleRef.current) {
+            // First sale!
+            hadFirstSaleRef.current = true;
+            setFirstSaleOrder(enriched);
+          }
+          setOrdersCount((c) => c + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,10 +125,10 @@ export default function DashboardClient({
 
     setLoading(true);
     try {
-      const res  = await fetch("/api/projects", {
-        method:  "POST",
+      const res = await fetch("/api/projects", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name }),
+        body: JSON.stringify({ name }),
       });
       const data = await res.json();
       if (data?.id) router.push(`/?project=${data.id}`);
@@ -67,8 +144,24 @@ export default function DashboardClient({
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const handleFirstSaleMentor = () => {
+    setFirstSaleOrder(null);
+    setMentorMessage(
+      `You just made your first sale — that's a real milestone. Let's talk about how to turn this into your next 10 sales for ${brandName || "your store"}. What channel did that first customer come from?`
+    );
+  };
+
   return (
     <div>
+      {/* First Sale Funnel Widget */}
+      {showFirstSaleWidget && (
+        <FirstSaleWidget
+          brandName={brandName}
+          totalRevenue={initialRevenue}
+          onStepClick={(msg) => setMentorMessage(msg)}
+        />
+      )}
+
       {/* Page header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -139,7 +232,6 @@ export default function DashboardClient({
               key={project.id}
               className="group relative bg-white rounded-xl border border-slate-200 p-4 flex flex-col hover:border-slate-300 hover:shadow-md transition-all duration-150"
             >
-              {/* Delete button */}
               <button
                 onClick={() => deleteProject(project.id)}
                 className="absolute top-3 right-3 h-6 w-6 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 opacity-0 group-hover:opacity-100 flex items-center justify-center text-sm"
@@ -150,7 +242,6 @@ export default function DashboardClient({
                 </svg>
               </button>
 
-              {/* Card content */}
               <div className="flex items-center gap-3 mb-4">
                 <ProjectInitial name={project.name} />
                 <div className="min-w-0">
@@ -168,6 +259,26 @@ export default function DashboardClient({
             </div>
           ))}
         </div>
+      )}
+
+      {/* First Sale Celebration */}
+      {firstSaleOrder && (
+        <FirstSaleCelebration
+          order={firstSaleOrder}
+          brandName={brandName}
+          onTalkToMentor={handleFirstSaleMentor}
+          onClose={() => setFirstSaleOrder(null)}
+        />
+      )}
+
+      {/* Mentor Chat modal */}
+      {mentorMessage && (
+        <MentorChat
+          openingMessage={mentorMessage}
+          brandName={brandName}
+          stage="Launch"
+          onClose={() => setMentorMessage(null)}
+        />
       )}
     </div>
   );
