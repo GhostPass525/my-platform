@@ -4,6 +4,13 @@ import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type MentorContext = {
+  brandName?: string;
+  niche?: string;
+  stage?: string;
+  recentActions?: string[];
+};
+
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -15,6 +22,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
+    const ctx: MentorContext = body?.mentorContext ?? {};
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -23,14 +31,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const systemPrompt = `
-You are Inflection Point — a calm, experienced business partner.
+    // Build the context prefix from what we know about this business
+    const contextLines: string[] = [];
+    if (ctx.brandName) contextLines.push(`Business name: ${ctx.brandName}`);
+    if (ctx.niche) contextLines.push(`Niche/category: ${ctx.niche}`);
+    if (ctx.stage) contextLines.push(`Current stage: ${ctx.stage}`);
+    if (ctx.recentActions?.length) {
+      contextLines.push(`Recent builder actions: ${ctx.recentActions.join(", ")}`);
+    }
 
+    const contextBlock = contextLines.length > 0
+      ? `\n\nCurrent business context:\n${contextLines.map((l) => `- ${l}`).join("\n")}\n`
+      : "";
+
+    const systemPrompt = `You are Inflection Point — a calm, experienced business partner.${contextBlock}
 This is an ongoing conversation.
 You MUST remember prior decisions and NEVER ask something the user already answered.
+Use the business context above to give specific, personalized advice — never generic templates.
 
 Rules:
-- Be specific to the conversation (no generic templates)
+- Be specific to this business and their stage
 - Keep replies short and powerful
 - Ask at most ONE thoughtful question
 - Avoid numbered step lists unless the user asks for steps
@@ -57,10 +77,10 @@ Rules:
     }
 
     return NextResponse.json({ result: text });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("IDEA ROUTE ERROR:", err);
     return NextResponse.json(
-      { error: `Server error in /api/idea: ${err?.message || err}` },
+      { error: `Server error in /api/idea: ${(err as Error)?.message || err}` },
       { status: 500 }
     );
   }

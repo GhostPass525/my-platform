@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
+import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -206,6 +207,8 @@ export default function Home() {
   const [showLaunchMoment, setShowLaunchMoment] = useState(false);
   const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
   const [aiEditMode, setAiEditMode] = useState(false);
+  const [recentActions, setRecentActions] = useState<string[]>([]);
+  const [ordersCount, setOrdersCount] = useState(0);
 
   // Drag-and-drop state for sections
   const [dragSec, setDragSec] = useState<number | null>(null);
@@ -252,6 +255,20 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fetch order count once on mount for stage computation
+  useEffect(() => {
+    fetch("/api/orders")
+      .then((r) => r.json())
+      .then((d) => { if (d?.stats?.totalOrders) setOrdersCount(d.stats.totalOrders); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track recent builder actions (max 3)
+  const trackAction = (label: string) => {
+    setRecentActions((prev) => [label, ...prev].slice(0, 3));
+  };
+
   // ── Save ──────────────────────────────────────────────────────
   const save = async () => {
     if (!site) { alert("Generate a site first."); return; }
@@ -287,6 +304,7 @@ export default function Home() {
           router.replace(`/?project=${data.id}`, { scroll: false });
         }
       }
+        trackAction("Saved project");
     } finally {
       setSaving(false);
     }
@@ -335,11 +353,19 @@ export default function Home() {
           });
         }
       } else {
-        // Normal mode: call /api/idea
+        // Normal mode: call /api/idea with mentor context
+        const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+        const stageLabels = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
+        const mentorContext = {
+          brandName: site?.brandName || undefined,
+          niche: [site?.audience, site?.firstProductOrService].filter(Boolean).join(", ") || undefined,
+          stage: stageLabels[stageIdx],
+          recentActions: recentActions.length > 0 ? recentActions : undefined,
+        };
         const res = await fetch("/api/idea", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: updatedMessages }),
+          body: JSON.stringify({ messages: updatedMessages, mentorContext }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -407,6 +433,7 @@ export default function Home() {
       setSite(hydrated);
       setActivePageId(pages[0].id);
       setRightTab("quick");
+      trackAction("Generated site blueprint");
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Generated.\n\nNext: upload a hero image + fill in your Products." },
@@ -456,6 +483,7 @@ export default function Home() {
       }
 
       const url = `${window.location.origin}/s/${data.id}`;
+      trackAction("Published store");
       const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${projectId ?? data.id}`);
       setPublishedUrl(url);
       if (isFirstPublish) {
@@ -473,6 +501,7 @@ export default function Home() {
   const addProduct = () => {
     if (!site) return;
     setSite({ ...site, products: [...site.products, { id: uid(), name: "New Product", price: "$00" }] });
+    trackAction("Added a product");
   };
   const updateProduct = (id: string, patch: Partial<Product>) => {
     if (!site) return;
@@ -534,6 +563,7 @@ export default function Home() {
   const setLogoFromFile = async (file?: File) => {
     if (!file || !site) return;
     setSite({ ...site, logoDataUrl: await fileToDataUrl(file) });
+    trackAction("Uploaded brand logo");
   };
   const setHeroImageFromFile = async (file?: File) => {
     if (!file || !site) return;
@@ -680,6 +710,14 @@ export default function Home() {
             <div className="text-xs mt-0.5 leading-relaxed" style={{ color: theme.mutedText }}>
               {aiEditMode ? "Chat to edit your site live." : "Describe your business idea."}
             </div>
+          </div>
+
+          {/* Business stage tracker */}
+          <div className="border-b" style={{ borderColor: theme.border }}>
+            <StageTracker
+              activeIndex={computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount)}
+              accent={theme.accent}
+            />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
