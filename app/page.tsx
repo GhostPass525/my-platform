@@ -487,7 +487,7 @@ export default function Home() {
       const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${projectId ?? data.id}`);
       setPublishedUrl(url);
       if (isFirstPublish) {
-        localStorage.setItem(`launched_${projectId ?? data.id}`, "1");
+        localStorage.setItem(`launched_${projectId ?? data.id}`, String(Date.now()));
         setShowLaunchMoment(true);
       }
     } catch {
@@ -618,11 +618,15 @@ export default function Home() {
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150"
+            className="px-3.5 rounded-lg font-medium transition-all duration-150 border"
             style={{
-              background: !canGenerate || generating ? "rgba(2,6,23,0.06)" : theme.accent,
-              color: !canGenerate || generating ? theme.mutedText : "#fff",
+              height: 32,
+              fontSize: 13,
+              borderColor: !canGenerate || generating ? theme.border : "#2563EB",
+              background: "transparent",
+              color: !canGenerate || generating ? theme.mutedText : "#2563EB",
               cursor: !canGenerate || generating ? "not-allowed" : "pointer",
+              opacity: !canGenerate && !generating ? 0.55 : 1,
             }}
           >
             {generating ? "Generating…" : "Generate"}
@@ -631,17 +635,19 @@ export default function Home() {
           <button
             onClick={save}
             disabled={saving}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90 transition-all duration-150"
-            style={{ borderColor: theme.border, background: "transparent", color: theme.text }}
+            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-70"
+            style={{ height: 32, fontSize: 13, background: "transparent", border: "none", color: theme.mutedText, cursor: "pointer" }}
           >
             {saving ? "Saving…" : "Save"}
           </button>
 
+          <div style={{ width: 1, height: 20, background: theme.border, margin: "0 2px", flexShrink: 0, alignSelf: "center" }} />
+
           <button
             onClick={publish}
             disabled={publishing}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150"
-            style={{ background: theme.accent, color: "#fff", opacity: publishing ? 0.7 : 1 }}
+            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-90"
+            style={{ height: 32, fontSize: 13, background: "#2563EB", color: "#fff", border: "none", opacity: publishing ? 0.7 : 1, cursor: "pointer" }}
           >
             {publishing ? "Checking…" : "Publish"}
           </button>
@@ -651,8 +657,8 @@ export default function Home() {
               href={publishedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150 flex items-center gap-1"
-              style={{ borderColor: theme.border, background: "transparent", color: theme.accent }}
+              className="px-3 rounded-lg font-medium transition-all duration-150 flex items-center gap-1 hover:opacity-70"
+              style={{ height: 32, fontSize: 13, border: "none", background: "transparent", color: theme.accent }}
             >
               View ↗
             </a>
@@ -661,11 +667,14 @@ export default function Home() {
           <button
             onClick={() => setAiEditMode((v) => !v)}
             title={aiEditMode ? "AI Edit Mode ON — chat edits your site directly" : "Turn on AI Edit Mode"}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150 flex items-center gap-1.5"
+            className="px-3 rounded-lg font-medium transition-all duration-150 flex items-center gap-1.5 hover:opacity-70"
             style={{
-              borderColor: aiEditMode ? theme.accent : theme.border,
+              height: 32,
+              fontSize: 13,
+              border: "none",
               background: aiEditMode ? `${theme.accent}12` : "transparent",
               color: aiEditMode ? theme.accent : theme.mutedText,
+              cursor: "pointer",
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -676,8 +685,8 @@ export default function Home() {
 
           <button
             onClick={exportJson}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90 transition-all duration-150"
-            style={{ borderColor: theme.border, background: "transparent", color: theme.mutedText }}
+            className="px-3 rounded-lg font-medium hover:opacity-70 transition-all duration-150"
+            style={{ height: 32, fontSize: 13, border: "none", background: "transparent", color: theme.mutedText, cursor: "pointer" }}
           >
             Export
           </button>
@@ -687,16 +696,24 @@ export default function Home() {
       {/* Workspace */}
       <div className="grid grid-cols-12 flex-1 min-h-0">
         {/* Left: chat */}
-        <aside className="col-span-12 md:col-span-3 border-r flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: aiEditMode ? theme.accent : theme.mutedText }}>
-                {aiEditMode ? "AI Edit Mode" : "Guide"}
+        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#FAFAF8", borderRight: "1px solid rgba(0,0,0,0.06)" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: theme.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: theme.text, margin: 0, lineHeight: 1.3 }}>Your Mentor</p>
+                <p style={{ fontSize: 12, color: theme.mutedText, margin: 0, lineHeight: 1.3 }}>
+                  {aiEditMode ? "AI Edit: editing your site live" : "Ready to help you build"}
+                </p>
               </div>
               {site && (
                 <button
                   onClick={() => setAiEditMode((v) => !v)}
-                  className="px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors duration-150"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors duration-150 flex-shrink-0"
                   style={{
                     borderColor: aiEditMode ? theme.accent : theme.border,
                     background: aiEditMode ? `${theme.accent}12` : "transparent",
@@ -707,13 +724,10 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <div className="text-xs mt-0.5 leading-relaxed" style={{ color: theme.mutedText }}>
-              {aiEditMode ? "Chat to edit your site live." : "Describe your business idea."}
-            </div>
           </div>
 
           {/* Business stage tracker */}
-          <div className="border-b" style={{ borderColor: theme.border }}>
+          <div className="border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
             <StageTracker
               activeIndex={computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount)}
               accent={theme.accent}
@@ -722,9 +736,43 @@ export default function Home() {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
-              <div className="text-xs mt-1 leading-relaxed" style={{ color: theme.mutedText }}>
-                Start with:{" "}
-                <span className="italic" style={{ color: theme.text }}>&ldquo;I want to build a store that sells...&rdquo;</span>
+              <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: theme.mutedText, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                  Try an example
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[
+                    "I want to sell handmade candles",
+                    "I'm starting a fitness coaching brand",
+                    "I make custom pet portraits",
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => setInput(chip)}
+                      style={{
+                        border: "1px solid #E2E8F0",
+                        borderRadius: 999,
+                        padding: "6px 14px",
+                        fontSize: 13,
+                        color: theme.text,
+                        background: "#fff",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        transition: "background 0.15s, border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#EFF6FF";
+                        e.currentTarget.style.borderColor = "#BFDBFE";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#fff";
+                        e.currentTarget.style.borderColor = "#E2E8F0";
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((m, i) => (
@@ -751,25 +799,36 @@ export default function Home() {
             )}
           </div>
 
-          <div className="px-3 py-3 border-t" style={{ borderColor: theme.border }}>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: theme.mutedText, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Ask your mentor anything
+            </div>
             <div className="flex gap-1.5">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Describe your business…"}
+                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Describe your business idea..."}
                 className="flex-1 px-3 py-2 rounded-lg text-xs outline-none transition-all duration-150"
                 style={{
                   background: aiEditMode ? `${theme.accent}06` : "rgba(2,6,23,0.03)",
                   border: `1px solid ${aiEditMode ? theme.accent + "35" : theme.border}`,
                   color: theme.text,
                 }}
+                onFocus={(e) => {
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.12)";
+                  e.currentTarget.style.borderColor = "#2563EB60";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.boxShadow = "none";
+                  e.currentTarget.style.borderColor = aiEditMode ? theme.accent + "35" : theme.border;
+                }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
                 className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150"
-                style={{ background: loadingChat ? "rgba(2,6,23,0.06)" : theme.accent, color: loadingChat ? theme.mutedText : "#fff" }}
+                style={{ background: loadingChat ? "rgba(2,6,23,0.06)" : "#2563EB", color: loadingChat ? theme.mutedText : "#fff", flexShrink: 0 }}
               >
                 Send
               </button>
@@ -778,22 +837,20 @@ export default function Home() {
         </aside>
 
         {/* Center: preview */}
-        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto p-5" style={{ background: "rgba(0,0,0,0.03)" }}>
-          <div className="max-w-4xl mx-auto">
-            {!site ? (
-              <EmptyPreview theme={theme} />
-            ) : (
-              <div className="rounded-2xl shadow-lg overflow-hidden border" style={{ borderColor: theme.border }}>
-                <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
-              </div>
-            )}
-          </div>
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto" style={{ background: "rgba(0,0,0,0.03)" }}>
+          {!site ? (
+            <EmptyPreview theme={theme} />
+          ) : (
+            <div style={{ background: theme.bg, minHeight: "100%" }}>
+              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
+            </div>
+          )}
         </section>
 
         {/* Right: builder */}
         <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
           <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
-            <div className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: theme.mutedText }}>Builder</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: theme.text, marginBottom: 10 }}>Customize</div>
             <div className="flex flex-wrap gap-1">
               {(["quick", "sections", "design", "content", "products", "pages"] as const).map((tab) => (
                 <Tab key={tab} label={tab.charAt(0).toUpperCase() + tab.slice(1)} active={rightTab === tab} theme={theme} onClick={() => setRightTab(tab)} />
@@ -803,7 +860,7 @@ export default function Home() {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {!site ? (
-              <div className="text-sm" style={{ color: theme.mutedText }}>Generate a site first. Customization appears here.</div>
+              <LockedControlsPreview theme={theme} />
             ) : (
               <>
                 <input ref={logoPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setLogoFromFile(e.target.files?.[0])} />
@@ -1425,16 +1482,89 @@ function ContactPage({ site }: { site: SiteSpec }) {
 
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
-    <div className="rounded-2xl border p-12 text-center" style={{ borderColor: theme.border, background: "#fff" }}>
-      <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl mb-5" style={{ background: `${theme.accent}10` }}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 9h18M9 21V9" />
-        </svg>
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 32px", background: "rgba(0,0,0,0.03)" }}>
+      {/* Ghost wireframe storefront */}
+      <svg width="260" height="172" viewBox="0 0 260 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Header bar */}
+        <rect x="0" y="0" width="260" height="30" rx="4" fill="#E8E8E8" />
+        <rect x="12" y="9" width="44" height="12" rx="3" fill="#D4D4D4" />
+        <rect x="204" y="9" width="44" height="12" rx="3" fill="#D4D4D4" />
+        {/* Hero block */}
+        <rect x="0" y="38" width="260" height="60" rx="4" fill="#F0F0F0" />
+        <rect x="70" y="54" width="120" height="10" rx="3" fill="#E0E0E0" />
+        <rect x="90" y="70" width="80" height="8" rx="3" fill="#EAEAEA" />
+        {/* Product cards */}
+        <rect x="0" y="108" width="80" height="60" rx="4" fill="#F0F0F0" />
+        <rect x="90" y="108" width="80" height="60" rx="4" fill="#F0F0F0" />
+        <rect x="180" y="108" width="80" height="60" rx="4" fill="#F0F0F0" />
+        {/* Card content lines */}
+        <rect x="8" y="152" width="64" height="6" rx="2" fill="#E0E0E0" />
+        <rect x="98" y="152" width="64" height="6" rx="2" fill="#E0E0E0" />
+        <rect x="188" y="152" width="64" height="6" rx="2" fill="#E0E0E0" />
+      </svg>
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 15, fontWeight: 500, color: theme.text }}>Your store will appear here</div>
+        <p style={{ marginTop: 6, fontSize: 13, color: theme.mutedText, lineHeight: 1.55, maxWidth: 260 }}>
+          Describe your business in the chat to get started
+        </p>
       </div>
-      <div className="text-lg font-semibold tracking-tight" style={{ color: theme.text }}>Your site preview</div>
-      <p className="mt-2 text-sm leading-relaxed max-w-xs mx-auto" style={{ color: theme.mutedText }}>
-        Describe your business in the chat, then click <strong style={{ color: theme.text }}>Generate</strong>.
-      </p>
+    </div>
+  );
+}
+
+function LockedControlsPreview({ theme }: { theme: Theme }) {
+  return (
+    <div style={{ opacity: 1 }}>
+      {/* Colors section */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: theme.mutedText }}>Colors</div>
+          <div title="Generate your site to unlock" style={{ display: "flex", alignItems: "center", gap: 4, color: theme.mutedText, opacity: 0.6 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, pointerEvents: "none", opacity: 0.35 }}>
+          {["#E5E7EB", "#E5E7EB", "#E5E7EB", "#E5E7EB"].map((c, i) => (
+            <div key={i} style={{ width: 28, height: 28, borderRadius: "50%", background: c, border: "1px solid #D1D5DB" }} />
+          ))}
+        </div>
+      </div>
+
+      {/* Font section */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: theme.mutedText }}>Font</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: theme.mutedText, opacity: 0.6 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+        </div>
+        <div style={{ height: 32, borderRadius: 8, border: "1px solid #E5E7EB", background: "#F9FAFB", pointerEvents: "none", opacity: 0.35 }} />
+      </div>
+
+      {/* Layout section */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: theme.mutedText }}>Layout</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: theme.mutedText, opacity: 0.6 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, pointerEvents: "none", opacity: 0.35 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ height: 44, borderRadius: 8, border: "1px solid #E5E7EB", background: "#F9FAFB" }} />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 24, textAlign: "center", fontSize: 12, color: theme.mutedText, lineHeight: 1.5 }}>
+        Generate your site to unlock customization
+      </div>
     </div>
   );
 }
