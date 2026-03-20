@@ -9,10 +9,12 @@ type Props = {
   openingMessage: string;
   brandName: string;
   stage?: string;
+  niche?: string;
+  recentActions?: string[];
   onClose: () => void;
 };
 
-export default function MentorChat({ openingMessage, brandName, stage = "Launch", onClose }: Props) {
+export default function MentorChat({ openingMessage, brandName, stage = "Launch", niche, recentActions, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: openingMessage },
   ]);
@@ -43,6 +45,8 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
           mentorContext: {
             brandName: brandName || undefined,
             stage,
+            niche: niche || undefined,
+            recentActions: recentActions?.length ? recentActions : undefined,
           },
         }),
       });
