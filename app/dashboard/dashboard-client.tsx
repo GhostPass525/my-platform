@@ -3,9 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { computeStageIndex } from "@/app/components/StageTracker";
 import FirstSaleWidget from "@/app/components/FirstSaleWidget";
 import MentorChat from "@/app/components/MentorChat";
 import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
+
+const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
+const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
+const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 type Project = {
   id: string;
@@ -33,11 +38,37 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-function ProjectInitial({ name }: { name: string }) {
+function nameToHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash) % 360;
+}
+
+function ProjectCardHeader({ name }: { name: string }) {
+  const hue = nameToHue(name);
   const letter = name.trim()[0]?.toUpperCase() ?? "?";
   return (
-    <div className="h-9 w-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-sm shadow-blue-200/70">
-      {letter}
+    <div
+      style={{
+        height: 120,
+        background: `linear-gradient(135deg, hsl(${hue},38%,86%) 0%, hsl(${(hue + 30) % 360},32%,80%) 100%)`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 48,
+          fontWeight: 700,
+          color: `hsl(${hue},45%,32%)`,
+          lineHeight: 1,
+          userSelect: "none",
+        }}
+      >
+        {letter}
+      </span>
     </div>
   );
 }
@@ -48,40 +79,80 @@ export default function DashboardClient({
   initialOrdersCount,
   initialRevenue,
   brandName,
+  niche,
 }: {
   initialProjects: Project[];
   userId: string;
   initialOrdersCount: number;
   initialRevenue: number;
   brandName: string;
+  niche?: string;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [publishedIds, setPublishedIds] = useState<Set<string>>(new Set());
 
-  // First sale state
   const [ordersCount, setOrdersCount] = useState(initialOrdersCount);
   const hadFirstSaleRef = useRef(initialOrdersCount > 0);
   const [firstSaleOrder, setFirstSaleOrder] = useState<Order | null>(null);
   const [mentorMessage, setMentorMessage] = useState<string | null>(null);
   const [hasPublished, setHasPublished] = useState(false);
 
-  // Detect "has published" via localStorage (set by LaunchMoment on first publish)
   useEffect(() => {
     try {
-      const launched = Object.keys(localStorage).some((k) => k.startsWith("launched_"));
-      setHasPublished(launched);
+      const ids = new Set<string>();
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("launched_")) {
+          const id = key.replace("launched_", "");
+          ids.add(id);
+        }
+      }
+      setPublishedIds(ids);
+
+      const launchedKey = Object.keys(localStorage).find((k) => k.startsWith("launched_"));
+      if (!launchedKey) return;
+      setHasPublished(true);
+
+      const publishedAt = parseInt(localStorage.getItem(launchedKey) ?? "0", 10);
+      if (!publishedAt) return;
+
+      const lastNudgeAt = parseInt(localStorage.getItem(`nudge_at_${userId}`) ?? "0", 10);
+      const now = Date.now();
+      const timeSincePublish = now - publishedAt;
+      const timeSinceNudge = now - lastNudgeAt;
+
+      if (
+        timeSincePublish >= NUDGE_DELAY_MS &&
+        timeSinceNudge >= NUDGE_COOLDOWN_MS &&
+        initialOrdersCount === 0
+      ) {
+        const delay = setTimeout(() => {
+          localStorage.setItem(`nudge_at_${userId}`, String(Date.now()));
+          setMentorMessage(
+            `It's been a few hours since you launched${brandName ? ` ${brandName}` : ""}. No sale yet — that's completely normal. Want to talk through what's working and what to try next?`
+          );
+        }, 2000);
+        return () => clearTimeout(delay);
+      }
     } catch {
       // ignore
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show widget when: published but no orders yet
   const showFirstSaleWidget = hasPublished && ordersCount === 0 && projects.length > 0;
 
-  // Supabase realtime — listen for new orders
+  const stageIndex = computeStageIndex(
+    projects.length > 0,
+    true,
+    hasPublished,
+    ordersCount
+  );
+  const currentStage = STAGE_LABELS[stageIndex];
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -96,7 +167,6 @@ export default function DashboardClient({
         },
         async (payload) => {
           const newOrder = payload.new as Order;
-          // Fetch order items for celebration details
           const { data: items } = await supabase
             .from("order_items")
             .select("product_name")
@@ -104,7 +174,6 @@ export default function DashboardClient({
           const enriched: Order = { ...newOrder, order_items: items ?? [] };
 
           if (!hadFirstSaleRef.current) {
-            // First sale!
             hadFirstSaleRef.current = true;
             setFirstSaleOrder(enriched);
           }
@@ -151,6 +220,8 @@ export default function DashboardClient({
     );
   };
 
+  const liveCount = projects.filter((p) => publishedIds.has(p.id)).length;
+
   return (
     <div>
       {/* First Sale Funnel Widget */}
@@ -158,37 +229,72 @@ export default function DashboardClient({
         <FirstSaleWidget
           brandName={brandName}
           totalRevenue={initialRevenue}
+          userId={userId}
           onStepClick={(msg) => setMentorMessage(msg)}
         />
       )}
 
       {/* Page header */}
-      <div className="flex items-center justify-between mb-8">
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Projects</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Your workspace</p>
+          <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>
+            Projects
+          </h1>
+          <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>
+            {projects.length} {projects.length === 1 ? "business" : "businesses"}
+            {liveCount > 0 ? ` · ${liveCount} live` : ""}
+          </p>
         </div>
 
         {creating ? (
-          <form onSubmit={createProject} className="flex items-center gap-2 animate-slideUp">
+          <form onSubmit={createProject} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Project name"
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all duration-150 w-44 bg-white text-slate-900 placeholder:text-slate-400"
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #D0CFC9",
+                fontSize: 14,
+                outline: "none",
+                width: 176,
+                background: "#fff",
+                color: "#1A1A1A",
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = "#2563EB"; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = "#D0CFC9"; }}
             />
             <button
               type="submit"
               disabled={loading || !newName.trim()}
-              className="px-3.5 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                padding: "8px 14px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                background: "#2563EB",
+                color: "#fff",
+                border: "none",
+                cursor: loading || !newName.trim() ? "not-allowed" : "pointer",
+                opacity: loading || !newName.trim() ? 0.6 : 1,
+              }}
             >
               {loading ? "Creating…" : "Create"}
             </button>
             <button
               type="button"
               onClick={() => { setCreating(false); setNewName(""); }}
-              className="px-3.5 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors duration-150"
+              style={{
+                padding: "8px 14px",
+                borderRadius: 8,
+                fontSize: 13,
+                background: "transparent",
+                border: "1px solid #D0CFC9",
+                color: "#555",
+                cursor: "pointer",
+              }}
             >
               Cancel
             </button>
@@ -196,9 +302,24 @@ export default function DashboardClient({
         ) : (
           <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-150 shadow-sm shadow-blue-200/60"
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              background: "transparent",
+              border: "1.5px solid #2563EB",
+              color: "#2563EB",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#EFF6FF"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
             New project
@@ -207,59 +328,201 @@ export default function DashboardClient({
       </div>
 
       {projects.length === 0 ? (
-        <div className="text-center py-24 animate-fadeIn">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-slate-100 mb-5 mx-auto">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        /* Empty state */
+        <div style={{ textAlign: "center", padding: "80px 0" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 56,
+              width: 56,
+              borderRadius: 16,
+              background: "#EEEDE9",
+              marginBottom: 20,
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="3" />
               <path d="M12 8v8M8 12h8" />
             </svg>
           </div>
-          <p className="text-base font-medium text-slate-700 mb-1">No projects yet</p>
-          <p className="text-sm text-slate-400 mb-6 max-w-xs mx-auto">
+          <p style={{ fontSize: 16, fontWeight: 500, color: "#333", margin: "0 0 6px" }}>No projects yet</p>
+          <p style={{ fontSize: 14, color: "#999", margin: "0 0 24px", maxWidth: 280, marginLeft: "auto", marginRight: "auto" }}>
             Start building your first store with VentureOS.
           </p>
           <button
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-150"
+            style={{
+              padding: "10px 20px",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 500,
+              background: "#2563EB",
+              color: "#fff",
+              border: "none",
+              cursor: "pointer",
+            }}
           >
             Create your first project
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="group relative bg-white rounded-xl border border-slate-200 p-4 flex flex-col hover:border-slate-300 hover:shadow-md transition-all duration-150"
-            >
-              <button
-                onClick={() => deleteProject(project.id)}
-                className="absolute top-3 right-3 h-6 w-6 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 opacity-0 group-hover:opacity-100 flex items-center justify-center text-sm"
-                title="Delete project"
+        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          {projects.map((project) => {
+            const isLive = publishedIds.has(project.id);
+            return (
+              <div
+                key={project.id}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: 12,
+                  border: "1px solid #E8E8E4",
+                  overflow: "hidden",
+                  minHeight: 240,
+                  display: "flex",
+                  flexDirection: "column",
+                  transition: "box-shadow 0.18s, border-color 0.18s",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)";
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "#D0CFC9";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "#E8E8E4";
+                }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+                {/* Visual header */}
+                <ProjectCardHeader name={project.name} />
 
-              <div className="flex items-center gap-3 mb-4">
-                <ProjectInitial name={project.name} />
-                <div className="min-w-0">
-                  <div className="font-medium text-sm text-slate-900 truncate">{project.name}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">Saved {timeAgo(project.updated_at)}</div>
+                {/* Delete button */}
+                <button
+                  onClick={() => deleteProject(project.id)}
+                  title="Delete project"
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    width: 26,
+                    height: 26,
+                    borderRadius: 6,
+                    background: "rgba(255,255,255,0.85)",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: 0,
+                    transition: "opacity 0.15s",
+                    color: "#999",
+                  }}
+                  className="delete-btn"
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+
+                {/* Card body */}
+                <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {project.name}
+                      </div>
+                      {/* Status badge */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#22c55e" : "#CBD5E1" }} />
+                        <span style={{ fontSize: 12, color: isLive ? "#16a34a" : "#94a3b8", fontWeight: 500 }}>
+                          {isLive ? "Live" : "Draft"}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#AAA" }}>
+                      Saved {timeAgo(project.updated_at)}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => router.push(`/?project=${project.id}`)}
+                    style={{
+                      marginTop: "auto",
+                      width: "100%",
+                      padding: "9px 0",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      background: "#2563EB",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "opacity 0.15s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                  >
+                    Open
+                  </button>
                 </div>
               </div>
+            );
+          })}
 
-              <button
-                onClick={() => router.push(`/?project=${project.id}`)}
-                className="w-full px-3 py-2 rounded-lg text-sm font-medium bg-slate-900 hover:bg-slate-800 text-white transition-colors duration-150 mt-auto"
+          {/* New project card */}
+          {!creating && (
+            <button
+              onClick={() => setCreating(true)}
+              style={{
+                minHeight: 240,
+                borderRadius: 12,
+                border: "2px dashed #D0CFC9",
+                background: "transparent",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                cursor: "pointer",
+                transition: "border-color 0.15s, background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#2563EB";
+                e.currentTarget.style.background = "#EFF6FF";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#D0CFC9";
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "#EEEDE9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                Open
-              </button>
-            </div>
-          ))}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </div>
+              <span style={{ fontSize: 14, color: "#999" }}>New project</span>
+            </button>
+          )}
         </div>
       )}
+
+      {/* Delete button hover style */}
+      <style>{`
+        div:hover .delete-btn { opacity: 1 !important; }
+      `}</style>
 
       {/* First Sale Celebration */}
       {firstSaleOrder && (
@@ -276,7 +539,8 @@ export default function DashboardClient({
         <MentorChat
           openingMessage={mentorMessage}
           brandName={brandName}
-          stage="Launch"
+          stage={currentStage}
+          niche={niche}
           onClose={() => setMentorMessage(null)}
         />
       )}

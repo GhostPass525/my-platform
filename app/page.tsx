@@ -596,9 +596,9 @@ export default function Home() {
 
   // ─────────────────────────────────────────────────────────────
   return (
-    <main className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
+    <main className="h-screen flex flex-col overflow-hidden" style={{ background: "#F0EFE9", color: theme.text }}>
       {/* Top bar */}
-      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: theme.panel, borderColor: theme.border }}>
+      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: "#FFFFFF", borderColor: "#EBEBEB" }}>
         <div className="flex items-center gap-3">
           <div className="h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.accent }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
@@ -696,8 +696,8 @@ export default function Home() {
       {/* Workspace */}
       <div className="grid grid-cols-12 flex-1 min-h-0">
         {/* Left: chat */}
-        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#FAFAF8", borderRight: "1px solid rgba(0,0,0,0.06)" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#F7F6F3", borderRight: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: theme.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
@@ -705,8 +705,8 @@ export default function Home() {
                 </svg>
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: theme.text, margin: 0, lineHeight: 1.3 }}>Your Mentor</p>
-                <p style={{ fontSize: 12, color: theme.mutedText, margin: 0, lineHeight: 1.3 }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", margin: 0, lineHeight: 1.3 }}>Your Mentor</p>
+                <p style={{ fontSize: 12, color: "#888", margin: 0, lineHeight: 1.3 }}>
                   {aiEditMode ? "AI Edit: editing your site live" : "Ready to help you build"}
                 </p>
               </div>
@@ -727,14 +727,14 @@ export default function Home() {
           </div>
 
           {/* Business stage tracker */}
-          <div className="border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+          <div className="border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
             <StageTracker
               activeIndex={computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount)}
               accent={theme.accent}
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="min-h-0 flex-1 overflow-y-auto space-y-3" style={{ padding: "20px 18px" }}>
             {messages.length === 0 && (
               <div style={{ marginTop: 4 }}>
                 <div style={{ fontSize: 11, fontWeight: 500, color: theme.mutedText, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
@@ -776,18 +776,29 @@ export default function Home() {
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className="flex text-xs animate-fadeIn" style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                <div
-                  className="max-w-[92%] px-3 py-2 whitespace-pre-line leading-relaxed"
-                  style={{
-                    background: m.role === "user" ? `${theme.accent}12` : "rgba(2,6,23,0.04)",
-                    border: `1px solid ${m.role === "user" ? `${theme.accent}20` : theme.border}`,
-                    borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
-                    color: theme.text,
-                  }}
-                >
-                  {m.content}
-                </div>
+              <div key={i} className="animate-fadeIn" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                {m.role === "assistant" ? (
+                  <div style={{ maxWidth: "100%", fontSize: 16, fontWeight: 500, lineHeight: 1.7, color: "#1A1A1A", whiteSpace: "pre-line" }}>
+                    {m.content}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      maxWidth: "88%",
+                      fontSize: 15,
+                      fontWeight: 400,
+                      lineHeight: 1.7,
+                      color: theme.text,
+                      background: `${theme.accent}10`,
+                      borderLeft: `3px solid ${theme.accent}`,
+                      padding: "8px 12px",
+                      borderRadius: "0 8px 8px 0",
+                      whiteSpace: "pre-line",
+                    }}
+                  >
+                    {m.content}
+                  </div>
+                )}
               </div>
             ))}
             {loadingChat && (
@@ -799,21 +810,27 @@ export default function Home() {
             )}
           </div>
 
-          <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-            <div style={{ fontSize: 11, fontWeight: 500, color: theme.mutedText, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: "#AAA", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Ask your mentor anything
             </div>
-            <div className="flex gap-1.5">
+            <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Describe your business idea..."}
-                className="flex-1 px-3 py-2 rounded-lg text-xs outline-none transition-all duration-150"
+                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Tell me about your business idea..."}
                 style={{
-                  background: aiEditMode ? `${theme.accent}06` : "rgba(2,6,23,0.03)",
-                  border: `1px solid ${aiEditMode ? theme.accent + "35" : theme.border}`,
+                  flex: 1,
+                  height: 48,
+                  padding: "0 14px",
+                  borderRadius: 8,
+                  border: `1px solid ${aiEditMode ? theme.accent + "35" : "#D0CFC9"}`,
+                  fontSize: 15,
+                  outline: "none",
+                  background: aiEditMode ? `${theme.accent}06` : "#FFFFFF",
                   color: theme.text,
+                  transition: "border-color 0.15s, box-shadow 0.15s",
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.12)";
@@ -821,14 +838,25 @@ export default function Home() {
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.boxShadow = "none";
-                  e.currentTarget.style.borderColor = aiEditMode ? theme.accent + "35" : theme.border;
+                  e.currentTarget.style.borderColor = aiEditMode ? theme.accent + "35" : "#D0CFC9";
                 }}
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
-                className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150"
-                style={{ background: loadingChat ? "rgba(2,6,23,0.06)" : "#2563EB", color: loadingChat ? theme.mutedText : "#fff", flexShrink: 0 }}
+                style={{
+                  height: 48,
+                  padding: "0 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: loadingChat ? "#E5E7EB" : "#2563EB",
+                  color: loadingChat ? "#9CA3AF" : "#fff",
+                  flexShrink: 0,
+                  cursor: loadingChat ? "default" : "pointer",
+                  transition: "opacity 0.15s",
+                }}
               >
                 Send
               </button>
@@ -837,18 +865,18 @@ export default function Home() {
         </aside>
 
         {/* Center: preview */}
-        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto" style={{ background: "rgba(0,0,0,0.03)" }}>
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto" style={{ background: "#F0EFE9" }}>
           {!site ? (
             <EmptyPreview theme={theme} />
           ) : (
-            <div style={{ background: theme.bg, minHeight: "100%" }}>
+            <div style={{ background: "#FFFFFF", minHeight: "100%" }}>
               <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
             </div>
           )}
         </section>
 
         {/* Right: builder */}
-        <aside className="col-span-12 md:col-span-3 border-l flex flex-col min-h-0" style={{ background: theme.panel, borderColor: theme.border }}>
+        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#F7F6F3", borderLeft: "1px solid rgba(0,0,0,0.07)" }}>
           <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: theme.text, marginBottom: 10 }}>Customize</div>
             <div className="flex flex-wrap gap-1">
@@ -1482,7 +1510,7 @@ function ContactPage({ site }: { site: SiteSpec }) {
 
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 32px", background: "rgba(0,0,0,0.03)" }}>
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 32px", background: "#F0EFE9" }}>
       {/* Ghost wireframe storefront */}
       <svg width="260" height="172" viewBox="0 0 260 172" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* Header bar */}
