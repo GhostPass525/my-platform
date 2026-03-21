@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
+import FloatingPanel from "@/app/components/FloatingPanel";
+import TemplateModal from "@/app/components/TemplateModal";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -214,6 +216,16 @@ export default function Home() {
   const [dragSec, setDragSec] = useState<number | null>(null);
   const [hoverSec, setHoverSec] = useState<number | null>(null);
 
+  // Inline text editing panels
+  const [openPanels, setOpenPanels] = useState<{ id: string; field: string; label: string; value: string }[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // AI image generation
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [aiImagePrompt, setAiImagePrompt] = useState("");
+  const [aiImageStyle, setAiImageStyle] = useState("photo");
+  const [generatingImage, setGeneratingImage] = useState(false);
+
   const searchParams = useSearchParams();
   const router = useRouter();
   const logoPickerRef = useRef<HTMLInputElement | null>(null);
@@ -267,6 +279,56 @@ export default function Home() {
   // Track recent builder actions (max 3)
   const trackAction = (label: string) => {
     setRecentActions((prev) => [label, ...prev].slice(0, 3));
+  };
+
+  // ── Inline text editing ────────────────────────────────────────
+  const openTextPanel = (field: string, label: string, value: string) => {
+    if (openPanels.some((p) => p.field === field)) return;
+    setOpenPanels((prev) => [...prev, { id: uid(), field, label, value }]);
+  };
+  const closePanel = (panelId: string) => {
+    setOpenPanels((prev) => prev.filter((p) => p.id !== panelId));
+  };
+  const applyTextEdit = (field: string, value: string) => {
+    setSite((prev) => (prev ? { ...prev, [field]: value } : prev));
+    trackAction(`Edited ${field}`);
+  };
+
+  // ── AI image generation ────────────────────────────────────────
+  const generateAiImage = async () => {
+    if (!aiImagePrompt.trim() || generatingImage) return;
+    setGeneratingImage(true);
+    try {
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiImagePrompt, style: aiImageStyle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        setGeneratedImages((prev) => [data.url, ...prev].slice(0, 3));
+      } else {
+        alert(data.error || "Image generation failed. Make sure REPLICATE_API_TOKEN is set.");
+      }
+    } catch {
+      alert("Image generation failed.");
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
+  const applyGeneratedImage = async (url: string) => {
+    if (!site) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onload = () => setSite((prev) => (prev ? { ...prev, heroImageDataUrl: String(reader.result) } : prev));
+      reader.readAsDataURL(blob);
+    } catch {
+      setSite((prev) => (prev ? { ...prev, heroImageDataUrl: url } : prev));
+    }
+    trackAction("Applied AI image");
   };
 
   // ── Save ──────────────────────────────────────────────────────
@@ -633,6 +695,14 @@ export default function Home() {
           </button>
 
           <button
+            onClick={() => setShowTemplateModal(true)}
+            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-80"
+            style={{ height: 32, fontSize: 13, background: "transparent", border: "none", color: theme.mutedText, cursor: "pointer" }}
+          >
+            Templates
+          </button>
+
+          <button
             onClick={save}
             disabled={saving}
             className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-70"
@@ -870,7 +940,7 @@ export default function Home() {
             <EmptyPreview theme={theme} />
           ) : (
             <div style={{ background: "#FFFFFF", minHeight: "100%" }}>
-              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} />
+              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} onTextClick={openTextPanel} />
             </div>
           )}
         </section>
@@ -929,6 +999,102 @@ export default function Home() {
                             </button>
                           );
                         })}
+                      </div>
+                    </Card>
+
+                    <Card theme={theme} title="AI Image">
+                      <div className="space-y-2">
+                        <textarea
+                          value={aiImagePrompt}
+                          onChange={(e) => setAiImagePrompt(e.target.value)}
+                          placeholder="Describe your hero image… e.g. 'artisan candles on a wooden table'"
+                          rows={2}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 7,
+                            border: `1px solid ${theme.border}`,
+                            fontSize: 12,
+                            background: "#fff",
+                            color: theme.text,
+                            resize: "none",
+                            outline: "none",
+                            lineHeight: 1.5,
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <select
+                            value={aiImageStyle}
+                            onChange={(e) => setAiImageStyle(e.target.value)}
+                            style={{
+                              flex: 1,
+                              height: 30,
+                              padding: "0 8px",
+                              borderRadius: 6,
+                              border: `1px solid ${theme.border}`,
+                              fontSize: 11,
+                              background: "#fff",
+                              color: theme.text,
+                              outline: "none",
+                            }}
+                          >
+                            <option value="photo">Photo</option>
+                            <option value="illustration">Illustration</option>
+                            <option value="3d">3D Render</option>
+                            <option value="minimal">Minimal</option>
+                            <option value="lifestyle">Lifestyle</option>
+                          </select>
+                          <button
+                            onClick={generateAiImage}
+                            disabled={generatingImage || !aiImagePrompt.trim()}
+                            style={{
+                              height: 30,
+                              padding: "0 12px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: generatingImage || !aiImagePrompt.trim() ? "#E5E7EB" : theme.accent,
+                              color: generatingImage || !aiImagePrompt.trim() ? "#9CA3AF" : "#fff",
+                              fontSize: 11,
+                              fontWeight: 500,
+                              cursor: generatingImage || !aiImagePrompt.trim() ? "default" : "pointer",
+                              flexShrink: 0,
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            {generatingImage ? "…" : "Generate"}
+                          </button>
+                        </div>
+                        {generatedImages.length > 0 && (
+                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                            {generatedImages.map((url, i) => (
+                              <button
+                                key={i}
+                                onClick={() => applyGeneratedImage(url)}
+                                title="Click to apply as hero image"
+                                style={{
+                                  width: 56,
+                                  height: 56,
+                                  borderRadius: 6,
+                                  overflow: "hidden",
+                                  border: `2px solid ${theme.border}`,
+                                  padding: 0,
+                                  cursor: "pointer",
+                                  background: "#F3F4F6",
+                                  flexShrink: 0,
+                                  transition: "border-color 0.12s",
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = theme.accent; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = theme.border; }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt={`Generated ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              </button>
+                            ))}
+                            <div style={{ fontSize: 10, color: theme.mutedText, alignSelf: "center", lineHeight: 1.4 }}>
+                              Click to apply as hero
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   </div>
@@ -1235,6 +1401,36 @@ export default function Home() {
           onContinue={() => setShowLaunchMoment(false)}
         />
       )}
+
+      {/* Floating text edit panels */}
+      {openPanels.map((panel, idx) => (
+        <FloatingPanel
+          key={panel.id}
+          title={`Edit: ${panel.label}`}
+          onClose={() => closePanel(panel.id)}
+          initialX={80 + idx * 24}
+          initialY={120 + idx * 24}
+          width={320}
+        >
+          <TextEditPanelBody
+            panel={panel}
+            theme={theme}
+            onApply={(val) => { applyTextEdit(panel.field, val); closePanel(panel.id); }}
+          />
+        </FloatingPanel>
+      ))}
+
+      {/* Template picker modal */}
+      {showTemplateModal && (
+        <TemplateModal
+          onApply={(newTheme, newFont) => {
+            setSite((prev) => (prev ? { ...prev, theme: newTheme, font: newFont } : prev));
+            setShowTemplateModal(false);
+            trackAction("Applied template");
+          }}
+          onClose={() => setShowTemplateModal(false)}
+        />
+      )}
     </main>
   );
 }
@@ -1332,7 +1528,51 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
 
 /* ─── Preview ─────────────────────────────────────────────────────── */
 
-function SitePreview({ site, activePageId, onSelectPage }: { site: SiteSpec; activePageId: string; onSelectPage: (id: string) => void }) {
+type OnTextClick = (field: string, label: string, value: string) => void;
+
+function EditableText({
+  field,
+  label,
+  value,
+  onTextClick,
+  style,
+  className,
+  tag: Tag = "span",
+}: {
+  field: string;
+  label: string;
+  value: string;
+  onTextClick?: OnTextClick;
+  style?: React.CSSProperties;
+  className?: string;
+  tag?: React.ElementType;
+}) {
+  const [hovered, setHovered] = useState(false);
+  if (!onTextClick) {
+    return <Tag className={className} style={style}>{value}</Tag>;
+  }
+  return (
+    <Tag
+      className={className}
+      style={{
+        ...style,
+        outline: hovered ? "2px solid #2563EB" : "none",
+        outlineOffset: 3,
+        borderRadius: 3,
+        cursor: "text",
+        transition: "outline 0.1s",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => onTextClick(field, label, value)}
+      title={`Click to edit: ${label}`}
+    >
+      {value}
+    </Tag>
+  );
+}
+
+function SitePreview({ site, activePageId, onSelectPage, onTextClick }: { site: SiteSpec; activePageId: string; onSelectPage: (id: string) => void; onTextClick?: OnTextClick }) {
   const t = site.theme;
   const activePage = site.pages.find((p) => p.id === activePageId) ?? site.pages[0];
   const fontFamily = fontStack(site.font);
@@ -1348,13 +1588,21 @@ function SitePreview({ site, activePageId, onSelectPage }: { site: SiteSpec; act
             <div className="h-7 w-7 rounded-lg flex-shrink-0" style={{ background: t.accent }} />
           )}
           <div>
-            <div className="font-semibold text-sm leading-tight">{site.brandName}</div>
-            {site.tagline && <div className="text-xs leading-tight" style={{ color: t.mutedText }}>{site.tagline}</div>}
+            <EditableText tag="div" field="brandName" label="Brand Name" value={site.brandName} onTextClick={onTextClick} className="font-semibold text-sm leading-tight" />
+            {site.tagline && (
+              <EditableText tag="div" field="tagline" label="Tagline" value={site.tagline} onTextClick={onTextClick} className="text-xs leading-tight" style={{ color: t.mutedText }} />
+            )}
           </div>
         </div>
-        <button className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: t.accent, color: "#fff" }}>
-          {site.primaryCTA}
-        </button>
+        <EditableText
+          tag="button"
+          field="primaryCTA"
+          label="CTA Button"
+          value={site.primaryCTA}
+          onTextClick={onTextClick}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium"
+          style={{ background: t.accent, color: "#fff", border: "none" }}
+        />
       </div>
 
       <div className="px-4 py-2 border-b flex gap-0.5 flex-wrap" style={{ borderColor: t.border, background: t.bg }}>
@@ -1374,24 +1622,24 @@ function SitePreview({ site, activePageId, onSelectPage }: { site: SiteSpec; act
       </div>
 
       <div className="p-5 md:p-7" style={{ background: t.bg }}>
-        {activePage.key === "products" ? <ProductsPage site={site} />
-          : activePage.key === "about" ? <AboutPage site={site} />
+        {activePage.key === "products" ? <ProductsPage site={site} onTextClick={onTextClick} />
+          : activePage.key === "about" ? <AboutPage site={site} onTextClick={onTextClick} />
           : activePage.key === "contact" ? <ContactPage site={site} />
-          : <HomePage site={site} />}
+          : <HomePage site={site} onTextClick={onTextClick} />}
         <div className="mt-10 text-xs" style={{ color: t.mutedText }}>© {new Date().getFullYear()} {site.brandName}</div>
       </div>
     </div>
   );
 }
 
-function HomePage({ site }: { site: SiteSpec }) {
+function HomePage({ site, onTextClick }: { site: SiteSpec; onTextClick?: OnTextClick }) {
   const t = site.theme;
   return (
     <>
       <div className="grid gap-8 md:grid-cols-2 items-center">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold leading-tight tracking-tight">{site.heroHeadline}</h1>
-          <p className="mt-3 text-sm leading-relaxed" style={{ color: t.mutedText }}>{site.heroSubheadline}</p>
+          <EditableText tag="h1" field="heroHeadline" label="Hero Headline" value={site.heroHeadline} onTextClick={onTextClick} className="text-2xl md:text-3xl font-bold leading-tight tracking-tight" />
+          <EditableText tag="p" field="heroSubheadline" label="Hero Subheadline" value={site.heroSubheadline} onTextClick={onTextClick} className="mt-3 text-sm leading-relaxed" style={{ color: t.mutedText }} />
           <div className="mt-5 flex gap-2">
             <button className="px-4 py-2.5 rounded-lg text-sm font-semibold transition hover:opacity-90 active:scale-[0.98]" style={{ background: t.accent, color: "#fff" }}>{site.primaryCTA}</button>
             <button className="px-4 py-2.5 rounded-lg text-sm font-medium border transition hover:opacity-80" style={{ borderColor: t.border, background: "transparent", color: t.text }}>Learn more</button>
@@ -1449,7 +1697,7 @@ function HomePage({ site }: { site: SiteSpec }) {
   );
 }
 
-function ProductsPage({ site }: { site: SiteSpec }) {
+function ProductsPage({ site, onTextClick: _onTextClick }: { site: SiteSpec; onTextClick?: OnTextClick }) {
   const t = site.theme;
   return (
     <>
@@ -1480,13 +1728,13 @@ function ProductsPage({ site }: { site: SiteSpec }) {
   );
 }
 
-function AboutPage({ site }: { site: SiteSpec }) {
+function AboutPage({ site, onTextClick }: { site: SiteSpec; onTextClick?: OnTextClick }) {
   const t = site.theme;
   return (
     <div className="rounded-xl border p-5" style={{ borderColor: t.border, background: t.surface || "#fff" }}>
       <h2 className="text-lg font-bold tracking-tight mb-2">About</h2>
       <p className="text-sm leading-relaxed" style={{ color: t.mutedText }}>
-        {site.brandName} exists to deliver a clear promise: {site.offer}.
+        <EditableText tag="span" field="brandName" label="Brand Name" value={site.brandName} onTextClick={onTextClick} /> exists to deliver a clear promise: <EditableText tag="span" field="offer" label="Your Offer" value={site.offer} onTextClick={onTextClick} />.
       </p>
     </div>
   );
@@ -1695,5 +1943,60 @@ function ColorField({ theme, label, value, onChange }: { theme: Theme; label: st
 function Spinner({ color }: { color: string }) {
   return (
     <div className="h-5 w-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(2,6,23,0.10)", borderTopColor: color }} />
+  );
+}
+
+function TextEditPanelBody({
+  panel,
+  theme,
+  onApply,
+}: {
+  panel: { field: string; label: string; value: string };
+  theme: Theme;
+  onApply: (val: string) => void;
+}) {
+  const [val, setVal] = useState(panel.value);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <textarea
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        rows={3}
+        style={{
+          width: "100%",
+          padding: "8px 10px",
+          borderRadius: 7,
+          border: "1px solid #D0CFC9",
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: "#1A1A1A",
+          background: "#FAFAF8",
+          resize: "vertical",
+          outline: "none",
+          boxSizing: "border-box",
+        }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = theme.accent + "60"; e.currentTarget.style.boxShadow = `0 0 0 3px ${theme.accent}15`; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = "#D0CFC9"; e.currentTarget.style.boxShadow = "none"; }}
+      />
+      <button
+        onClick={() => onApply(val)}
+        style={{
+          height: 32,
+          border: "none",
+          borderRadius: 7,
+          background: theme.accent,
+          color: "#fff",
+          fontSize: 13,
+          fontWeight: 500,
+          cursor: "pointer",
+          transition: "opacity 0.15s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+      >
+        Apply
+      </button>
+    </div>
   );
 }
