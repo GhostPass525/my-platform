@@ -94,8 +94,18 @@ async function handleCheckoutComplete(
 
   let lineItems: Stripe.LineItem[] = [];
   try {
-    const res = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
-    lineItems = res.data;
+    const secretKey = process.env.STRIPE_SECRET_KEY!.trim();
+    const liRes = await fetch(
+      `https://api.stripe.com/v1/checkout/sessions/${session.id}/line_items?limit=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Stripe-Version": "2024-06-20",
+        },
+      }
+    );
+    const liData = await liRes.json();
+    lineItems = liData?.data ?? [];
   } catch (err) {
     console.error("Failed to list line items:", err);
     return false;

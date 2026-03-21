@@ -35,9 +35,12 @@ export default async function DashboardPage() {
 
   const orderList = orders ?? [];
   const totalRevenue = orderList.reduce((s, o) => s + Number(o.total), 0);
+  const siteJson = siteRow?.site_json as Record<string, unknown> | null;
   const brandName =
-    ((siteRow?.site_json as Record<string, unknown> | null)?.brandName as string | undefined) ||
-    (projects?.[0]?.name ?? "");
+    (siteJson?.brandName as string | undefined) || (projects?.[0]?.name ?? "");
+  const niche = [siteJson?.audience, siteJson?.firstProductOrService]
+    .filter(Boolean)
+    .join(", ") || undefined;
 
   return (
     <DashboardClient
@@ -46,6 +49,7 @@ export default async function DashboardPage() {
       initialOrdersCount={orderList.length}
       initialRevenue={totalRevenue}
       brandName={brandName}
+      niche={niche}
     />
   );
 }

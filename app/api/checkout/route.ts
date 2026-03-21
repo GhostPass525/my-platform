@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { Redis } from "@upstash/redis";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,49 @@ type CartItem = {
   quantity: number;
 };
 
+async function stripePost(params: Record<string, string | number | Record<string, unknown>>, connectedAccountId?: string | null) {
+  const secretKey = process.env.STRIPE_SECRET_KEY!.trim();
+
+  // Flatten nested objects into Stripe's form-encoded format
+  function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}[${key}]` : key;
+      if (value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value)) {
+        Object.assign(result, flatten(value as Record<string, unknown>, fullKey));
+      } else if (value !== null && value !== undefined) {
+        result[fullKey] = String(value);
+      }
+    }
+    return result;
+  }
+
+  const flat = flatten(params as Record<string, unknown>);
+  const body = new URLSearchParams(flat);
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${secretKey}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Stripe-Version": "2024-06-20",
+  };
+  if (connectedAccountId) {
+    headers["Stripe-Account"] = connectedAccountId;
+  }
+
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers,
+    body: body.toString(),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Stripe error: ${res.status}`);
+  }
+  return data;
+}
+
 export async function POST(req: Request) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
   try {
     const { cart, publishId } = (await req.json()) as {
       cart: CartItem[];
@@ -37,46 +78,84 @@ export async function POST(req: Request) {
       }
     }
 
-    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cart.map(
-      (item) => ({
-        quantity: Math.floor(item.quantity),
-        price_data: {
-          currency: "usd",
-          unit_amount: Math.round(item.price * 100), // cents
-          product_data: {
-            name: (item.name || "Item").slice(0, 250),
-          },
-        },
-      })
-    );
-
-    // Look up the store owner so we can attribute this order in the webhook
+    // Look up the store owner
     let ownerId = "";
     if (publishId) {
       const stored = await redis.get<string>(`site-owner:${publishId}`);
       ownerId = stored ?? "";
     }
 
+    // Look up the owner's connected Stripe account
+    let connectedAccountId: string | null = null;
+    if (ownerId) {
+      const serviceSupabase = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      const { data: connectData } = await serviceSupabase
+        .from("stripe_connect")
+        .select("connected_account_id, charges_enabled")
+        .eq("user_id", ownerId)
+        .single();
+      if (connectData?.charges_enabled && connectData?.connected_account_id) {
+        connectedAccountId = connectData.connected_account_id;
+      }
+    }
+
     const origin = req.headers.get("origin") || "http://localhost:3000";
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items,
-      customer_email: undefined, // Stripe will collect email at checkout
-      success_url: `${origin}/checkout/success?pid=${encodeURIComponent(
-        publishId || ""
-      )}`,
-      cancel_url: `${origin}/checkout/cancel?pid=${encodeURIComponent(
-        publishId || ""
-      )}`,
-      metadata: {
-        publishId: publishId || "",
-        userId: ownerId,
-      },
+    const totalCents = cart.reduce(
+      (sum, item) => sum + Math.round(item.price * 100) * Math.floor(item.quantity),
+      0
+    );
+    const appFeeCents = connectedAccountId
+      ? Math.max(1, Math.round(totalCents * 0.01))
+      : 0;
+
+    // Build line_items as Stripe form-encoded array
+    const lineItemParams: Record<string, string> = {};
+    cart.forEach((item, i) => {
+      lineItemParams[`line_items[${i}][quantity]`] = String(Math.floor(item.quantity));
+      lineItemParams[`line_items[${i}][price_data][currency]`] = "usd";
+      lineItemParams[`line_items[${i}][price_data][unit_amount]`] = String(Math.round(item.price * 100));
+      lineItemParams[`line_items[${i}][price_data][product_data][name]`] = (item.name || "Item").slice(0, 250);
     });
+
+    const sessionParams: Record<string, string> = {
+      mode: "payment",
+      success_url: `${origin}/checkout/success?pid=${encodeURIComponent(publishId || "")}`,
+      cancel_url: `${origin}/checkout/cancel?pid=${encodeURIComponent(publishId || "")}`,
+      "metadata[publishId]": publishId || "",
+      "metadata[userId]": ownerId,
+      ...lineItemParams,
+    };
+
+    if (connectedAccountId) {
+      sessionParams["payment_intent_data[application_fee_amount]"] = String(appFeeCents);
+      sessionParams["payment_intent_data[transfer_data][destination]"] = connectedAccountId;
+    }
+
+    const secretKey = process.env.STRIPE_SECRET_KEY!.trim();
+    const body = new URLSearchParams(sessionParams);
+
+    const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2024-06-20",
+      },
+      body: body.toString(),
+    });
+
+    const session = await res.json();
+    if (!res.ok) {
+      throw new Error(session?.error?.message || `Stripe error: ${res.status}`);
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (e: any) {
+    console.error("CHECKOUT ERROR:", e);
     return NextResponse.json(
       { error: e?.message || "Checkout failed" },
       { status: 500 }
