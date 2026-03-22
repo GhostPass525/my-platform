@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 import FloatingPanel from "@/app/components/FloatingPanel";
 import TemplateModal from "@/app/components/TemplateModal";
+import CanvasEditor, { CanvasElement, parseStoreToCanvas } from "@/app/components/CanvasEditor";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -198,7 +199,7 @@ export default function Home() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [site, setSite] = useState<SiteSpec | null>(null);
-  const [rightTab, setRightTab] = useState<"quick" | "content" | "design" | "pages" | "products" | "sections">("quick");
+  const [rightTab, setRightTab] = useState<"quick" | "content" | "design" | "pages" | "products" | "sections" | "layers">("quick");
   const [activePageId, setActivePageId] = useState<string>("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>("");
@@ -211,6 +212,49 @@ export default function Home() {
   const [aiEditMode, setAiEditMode] = useState(false);
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const [ordersCount, setOrdersCount] = useState(0);
+
+  // Canvas editor state
+  const [canvasElements, setCanvasElements] = useState<CanvasElement[]>([]);
+  const [undoStack, setUndoStack] = useState<CanvasElement[][]>([]);
+  const [redoStack, setRedoStack] = useState<CanvasElement[][]>([]);
+
+  const pushUndo = useCallback((snapshot: CanvasElement[]) => {
+    setUndoStack((prev) => [...prev.slice(-49), snapshot]);
+    setRedoStack([]);
+  }, []);
+
+  const updateCanvasElements = useCallback((newElements: CanvasElement[]) => {
+    setCanvasElements((prev) => {
+      pushUndo(prev);
+      return newElements;
+    });
+  }, [pushUndo]);
+
+  const undo = useCallback(() => {
+    setUndoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const snapshot = next.pop()!;
+      setCanvasElements((cur) => {
+        setRedoStack((r) => [...r, cur]);
+        return snapshot;
+      });
+      return next;
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const snapshot = next.pop()!;
+      setCanvasElements((cur) => {
+        setUndoStack((u) => [...u, cur]);
+        return snapshot;
+      });
+      return next;
+    });
+  }, []);
 
   // Drag-and-drop state for sections
   const [dragSec, setDragSec] = useState<number | null>(null);
@@ -243,12 +287,19 @@ export default function Home() {
       .then((r) => r.json())
       .then((data) => {
         if (data?.site) {
-          setSite(data.site as SiteSpec);
+          const siteData = data.site as SiteSpec & { canvasElements?: CanvasElement[] };
+          setSite(siteData);
           setProjectId(pid);
           setProjectName(data.name ?? "");
           setProjectCreatedAt(data.createdAt ?? null);
-          setActivePageId(data.site.pages?.[0]?.id ?? "");
+          setActivePageId(siteData.pages?.[0]?.id ?? "");
           setRightTab("quick");
+          // Restore canvas elements or generate from site data
+          if (siteData.canvasElements && siteData.canvasElements.length > 0) {
+            setCanvasElements(siteData.canvasElements);
+          } else {
+            setCanvasElements(parseStoreToCanvas(siteData));
+          }
         }
       })
       .catch(() => {});
@@ -345,11 +396,12 @@ export default function Home() {
 
     setSaving(true);
     try {
+      const siteWithCanvas = { ...site, canvasElements };
       if (projectId) {
         await fetch(`/api/projects/${projectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ site }),
+          body: JSON.stringify({ site: siteWithCanvas }),
         });
       } else {
         const name = window.prompt("Project name?", site.brandName || "My Project");
@@ -357,7 +409,7 @@ export default function Home() {
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, site }),
+          body: JSON.stringify({ name, site: siteWithCanvas }),
         });
         const data = await res.json();
         if (data?.id) {
@@ -495,6 +547,9 @@ export default function Home() {
       setSite(hydrated);
       setActivePageId(pages[0].id);
       setRightTab("quick");
+      setCanvasElements(parseStoreToCanvas(hydrated));
+      setUndoStack([]);
+      setRedoStack([]);
       trackAction("Generated site blueprint");
       setMessages((prev) => [
         ...prev,
@@ -677,6 +732,24 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Undo / Redo */}
+          {canvasElements.length > 0 && (
+            <>
+              <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                title="Undo (Ctrl+Z)"
+                style={{ height: 32, width: 32, borderRadius: 8, border: `1px solid ${theme.border}`, background: "transparent", color: undoStack.length === 0 ? theme.mutedText : theme.text, cursor: undoStack.length === 0 ? "not-allowed" : "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", opacity: undoStack.length === 0 ? 0.4 : 1 }}
+              >↩</button>
+              <button
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                title="Redo (Ctrl+Shift+Z)"
+                style={{ height: 32, width: 32, borderRadius: 8, border: `1px solid ${theme.border}`, background: "transparent", color: redoStack.length === 0 ? theme.mutedText : theme.text, cursor: redoStack.length === 0 ? "not-allowed" : "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", opacity: redoStack.length === 0 ? 0.4 : 1 }}
+              >↪</button>
+              <div style={{ width: 1, height: 20, background: theme.border, margin: "0 2px", flexShrink: 0, alignSelf: "center" }} />
+            </>
+          )}
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
@@ -934,13 +1007,19 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Center: preview */}
-        <section className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto" style={{ background: "#F0EFE9" }}>
-          {!site ? (
+        {/* Center: canvas editor */}
+        <section className="col-span-12 md:col-span-6 min-h-0 overflow-hidden flex flex-col" style={{ background: "#E8E7E3" }}>
+          {!site || canvasElements.length === 0 ? (
             <EmptyPreview theme={theme} />
           ) : (
-            <div style={{ background: "#FFFFFF", minHeight: "100%" }}>
-              <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} onTextClick={openTextPanel} />
+            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+              <CanvasEditor
+                elements={canvasElements}
+                onUpdate={updateCanvasElements}
+                onUndo={undo}
+                onRedo={redo}
+                theme={theme}
+              />
             </div>
           )}
         </section>
@@ -948,10 +1027,18 @@ export default function Home() {
         {/* Right: builder */}
         <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#F7F6F3", borderLeft: "1px solid rgba(0,0,0,0.07)" }}>
           <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: theme.text, marginBottom: 10 }}>Customize</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: theme.text, marginBottom: 10 }}>Builder</div>
             <div className="flex flex-wrap gap-1">
-              {(["quick", "sections", "design", "content", "products", "pages"] as const).map((tab) => (
-                <Tab key={tab} label={tab.charAt(0).toUpperCase() + tab.slice(1)} active={rightTab === tab} theme={theme} onClick={() => setRightTab(tab)} />
+              {([
+                ["quick", "Elements"],
+                ["design", "Design"],
+                ["content", "Content"],
+                ["products", "Products"],
+                ["sections", "Sections"],
+                ["pages", "Pages"],
+                ["layers", "Layers"],
+              ] as const).map(([tab, label]) => (
+                <Tab key={tab} label={label} active={rightTab === tab} theme={theme} onClick={() => setRightTab(tab as typeof rightTab)} />
               ))}
             </div>
           </div>
@@ -964,44 +1051,16 @@ export default function Home() {
                 <input ref={logoPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setLogoFromFile(e.target.files?.[0])} />
                 <input ref={heroPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])} />
 
-                {/* ── Quick tab ── */}
+                {/* ── Elements tab (canvas add elements) ── */}
                 {rightTab === "quick" && (
                   <div className="space-y-3">
-                    <Card theme={theme} title="Start here">
-                      <div className="text-sm" style={{ color: theme.mutedText }}>These make your site feel real fast.</div>
-                      <div className="mt-3 space-y-2">
-                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>Upload Hero Image</ActionButton>
-                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>Upload Logo</ActionButton>
-                        <ActionButton theme={theme} onClick={() => addProduct()}>+ Add Product</ActionButton>
-                      </div>
-                    </Card>
-
-                    <Card theme={theme} title="Color palette">
-                      <div className="grid grid-cols-5 gap-2">
-                        {THEME_PRESETS.map((p) => {
-                          const isActive = site.theme.accent === p.theme.accent && site.theme.bg === p.theme.bg;
-                          return (
-                            <button
-                              key={p.name}
-                              title={p.name}
-                              onClick={() => setSite({ ...site, theme: { ...p.theme } })}
-                              className="flex flex-col items-center gap-1 group"
-                            >
-                              <div
-                                className="h-9 w-9 rounded-xl border-2 transition-all duration-150 shadow-sm group-hover:scale-110"
-                                style={{
-                                  background: p.accent,
-                                  borderColor: isActive ? p.accent : "transparent",
-                                  outline: isActive ? `3px solid ${p.accent}40` : "none",
-                                }}
-                              />
-                              <div className="text-[10px] text-center truncate w-full" style={{ color: theme.mutedText }}>{p.name}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Card>
-
+                    <AddElementsPanel
+                      theme={theme}
+                      onAdd={(newEl) => {
+                        const maxZ = canvasElements.reduce((m, e) => Math.max(m, e.zIndex), 0);
+                        updateCanvasElements([...canvasElements, { ...newEl, zIndex: maxZ + 1 }]);
+                      }}
+                    />
                     <Card theme={theme} title="AI Image">
                       <div className="space-y-2">
                         <textarea
@@ -1072,15 +1131,9 @@ export default function Home() {
                                 onClick={() => applyGeneratedImage(url)}
                                 title="Click to apply as hero image"
                                 style={{
-                                  width: 56,
-                                  height: 56,
-                                  borderRadius: 6,
-                                  overflow: "hidden",
-                                  border: `2px solid ${theme.border}`,
-                                  padding: 0,
-                                  cursor: "pointer",
-                                  background: "#F3F4F6",
-                                  flexShrink: 0,
+                                  width: 56, height: 56, borderRadius: 6, overflow: "hidden",
+                                  border: `2px solid ${theme.border}`, padding: 0,
+                                  cursor: "pointer", background: "#F3F4F6", flexShrink: 0,
                                   transition: "border-color 0.12s",
                                 }}
                                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = theme.accent; }}
@@ -1091,7 +1144,7 @@ export default function Home() {
                               </button>
                             ))}
                             <div style={{ fontSize: 10, color: theme.mutedText, alignSelf: "center", lineHeight: 1.4 }}>
-                              Click to apply as hero
+                              Click to apply
                             </div>
                           </div>
                         )}
@@ -1360,6 +1413,15 @@ export default function Home() {
                       <ActionButton theme={theme} onClick={addPage}>+ Add Page</ActionButton>
                     </div>
                   </Card>
+                )}
+
+                {/* ── Layers tab ── */}
+                {rightTab === "layers" && (
+                  <LayersPanel
+                    elements={canvasElements}
+                    theme={theme}
+                    onUpdate={updateCanvasElements}
+                  />
                 )}
               </>
             )}
@@ -1749,6 +1811,153 @@ function ContactPage({ site }: { site: SiteSpec }) {
         <input className="w-full px-3 py-2 rounded-lg border text-sm" style={{ borderColor: t.border, background: "transparent", color: t.text }} placeholder="Your email" readOnly />
         <textarea className="w-full px-3 py-2 rounded-lg border text-sm resize-none" style={{ borderColor: t.border, background: "transparent", color: t.text }} rows={3} placeholder="Your message" readOnly />
         <button className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: t.accent, color: "#fff" }}>Send</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Canvas right panel components ─────────────────────────────────────── */
+
+function AddElementsPanel({ theme, onAdd }: { theme: Theme; onAdd: (el: CanvasElement) => void }) {
+  const base = (overrides: Partial<CanvasElement>): CanvasElement => ({
+    id: uid(), type: "text", x: 300, y: 300, width: 400, height: 60,
+    rotation: 0, zIndex: 10, locked: false, visible: true, name: "New Element",
+    fontSize: 16, fontWeight: "400", color: theme.text, ...overrides,
+  });
+
+  const btnStyle: React.CSSProperties = {
+    flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${theme.border}`,
+    background: "#fff", color: theme.text, fontSize: 12, fontWeight: 500,
+    cursor: "pointer", textAlign: "center", transition: "all 0.12s",
+  };
+
+  return (
+    <div className="space-y-3">
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: theme.mutedText, marginBottom: 4 }}>Text</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "text", name: "Heading", content: "Your Heading Here", fontSize: 36, fontWeight: "700", width: 600, height: 60 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Heading</button>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "text", name: "Body Text", content: "Your text here", fontSize: 16, width: 500, height: 80, lineHeight: 1.6 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Body Text</button>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "text", name: "Label", content: "LABEL TEXT", fontSize: 11, fontWeight: "600", width: 200, height: 30 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Label</button>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: theme.mutedText, marginBottom: 4 }}>Shapes</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "shape", name: "Rectangle", width: 240, height: 140, backgroundColor: "#E2E8F0", borderRadius: 8 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Rectangle</button>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "shape", name: "Circle", width: 120, height: 120, backgroundColor: "#E2E8F0", borderRadius: 999 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Circle</button>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "shape", name: "Divider", width: 500, height: 2, backgroundColor: "#E2E8F0" }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Line</button>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: theme.mutedText, marginBottom: 4 }}>Components</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "button", name: "Button", content: "Click Here", buttonStyle: "filled", backgroundColor: theme.accent, color: "#fff", borderRadius: 8, fontSize: 14, fontWeight: "600", width: 160, height: 48 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Button</button>
+        <button style={btnStyle}
+          onClick={() => onAdd(base({ type: "image", name: "Image", width: 400, height: 300, backgroundColor: "#F1F5F9", borderRadius: 8 }))}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.accent}08`; e.currentTarget.style.borderColor = theme.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = theme.border; }}
+        >+ Image</button>
+      </div>
+    </div>
+  );
+}
+
+function LayersPanel({ elements, theme, onUpdate }: { elements: CanvasElement[]; theme: Theme; onUpdate: (els: CanvasElement[]) => void }) {
+  const sorted = [...elements].sort((a, b) => b.zIndex - a.zIndex);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const toggleVisible = (id: string) => {
+    onUpdate(elements.map((el) => el.id === id ? { ...el, visible: !el.visible } : el));
+  };
+  const toggleLock = (id: string) => {
+    onUpdate(elements.map((el) => el.id === id ? { ...el, locked: !el.locked } : el));
+  };
+  const drop = (toIdx: number) => {
+    if (dragIdx === null || dragIdx === toIdx) { setDragIdx(null); setHoverIdx(null); return; }
+    const next = [...sorted];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(toIdx, 0, moved);
+    // Re-assign zIndex based on new order (top of list = highest z)
+    const updated = elements.map((el) => {
+      const pos = next.findIndex((n) => n.id === el.id);
+      return { ...el, zIndex: next.length - pos };
+    });
+    onUpdate(updated);
+    setDragIdx(null);
+    setHoverIdx(null);
+  };
+
+  const typeIcon = (type: string) => {
+    if (type === "text") return "T";
+    if (type === "image") return "▣";
+    if (type === "button") return "◉";
+    if (type === "shape" || type === "section") return "▭";
+    return "•";
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold text-sm">Layers</div>
+        <div className="text-xs" style={{ color: theme.mutedText }}>{elements.length} elements</div>
+      </div>
+      <div className="text-xs mb-2" style={{ color: theme.mutedText }}>Drag ⠿ to reorder. Top = front.</div>
+      <div className="space-y-1">
+        {sorted.map((el, idx) => (
+          <div
+            key={el.id}
+            draggable
+            onDragStart={() => setDragIdx(idx)}
+            onDragOver={(e) => { e.preventDefault(); setHoverIdx(idx); }}
+            onDrop={() => drop(idx)}
+            onDragEnd={() => { setDragIdx(null); setHoverIdx(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 8px", borderRadius: 7,
+              border: `1px solid ${hoverIdx === idx && dragIdx !== idx ? theme.accent : theme.border}`,
+              background: dragIdx === idx ? `${theme.accent}08` : "#fff",
+              opacity: el.visible === false ? 0.5 : 1,
+              cursor: "default",
+            }}
+          >
+            <span style={{ cursor: "grab", color: theme.mutedText, fontSize: 14, flexShrink: 0 }} title="Drag to reorder">⠿</span>
+            <span style={{ fontSize: 12, fontWeight: "600", color: theme.accent, width: 18, textAlign: "center", flexShrink: 0 }}>{typeIcon(el.type)}</span>
+            <span style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.text }}>{el.name}</span>
+            <button title={el.visible === false ? "Show" : "Hide"} onClick={() => toggleVisible(el.id)} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: el.visible === false ? theme.mutedText : theme.text, padding: 0 }}>
+              {el.visible === false ? "○" : "●"}
+            </button>
+            <button title={el.locked ? "Unlock" : "Lock"} onClick={() => toggleLock(el.id)} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 12, color: el.locked ? theme.accent : theme.mutedText, padding: 0 }}>
+              {el.locked ? "🔒" : "🔓"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
