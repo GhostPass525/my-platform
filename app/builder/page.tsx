@@ -245,6 +245,11 @@ export default function Home() {
   const [aiEditMode, setAiEditMode] = useState(false);
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const [ordersCount, setOrdersCount] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [chatLoaded, setChatLoaded] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const openingShownRef = useRef(false);
 
   // Free-floating draggable text boxes
   const [pageElements, setPageElements] = useState<Record<string, TextBoxItem[]>>({});
@@ -275,23 +280,46 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load project on mount
+  // Load project + chat history on mount
   useEffect(() => {
     const pid = searchParams.get("project");
-    if (!pid) return;
-    fetch(`/api/projects/${pid}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.site) {
-          setSite(data.site as SiteSpec);
-          setProjectId(pid);
-          setProjectName(data.name ?? "");
-          setProjectCreatedAt(data.createdAt ?? null);
-          setActivePageId(data.site.pages?.[0]?.id ?? "");
-          setRightTab("quick");
-        }
-      })
-      .catch(() => {});
+    const supabase = createClient();
+
+    // Get current user
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+
+    if (!pid) { setChatLoaded(true); return; }
+
+    // Load project and history in parallel
+    Promise.all([
+      fetch(`/api/projects/${pid}`).then((r) => r.json()).catch(() => ({})),
+      supabase
+        .from("mentor_messages")
+        .select("role, content, created_at")
+        .eq("project_id", pid)
+        .order("created_at", { ascending: true })
+        .then(({ data }) => data ?? []),
+    ]).then(([projectData, historyRows]) => {
+      if (projectData?.site) {
+        setSite(projectData.site as SiteSpec);
+        setProjectId(pid);
+        setProjectName(projectData.name ?? "");
+        setProjectCreatedAt(projectData.createdAt ?? null);
+        setActivePageId(projectData.site.pages?.[0]?.id ?? "");
+        setRightTab("quick");
+      }
+      if (Array.isArray(historyRows) && historyRows.length > 0) {
+        setMessages(
+          historyRows.map((m: { role: string; content: string }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }))
+        );
+      }
+      setChatLoaded(true);
+    }).catch(() => { setChatLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -320,6 +348,77 @@ export default function Home() {
   const trackAction = (label: string) => {
     setRecentActions((prev) => [label, ...prev].slice(0, 3));
   };
+
+  // ── Opening message ───────────────────────────────────────────
+  function buildOpeningMessage(
+    s: SiteSpec | null,
+    published: string | null,
+    orders: number,
+    pid: string
+  ): string {
+    const brand = s?.brandName ? `**${s.brandName}**` : "your store";
+    const daysSince = (() => {
+      const key = `project_first_visit_${pid}`;
+      const stored = localStorage.getItem(key);
+      if (!stored) { localStorage.setItem(key, Date.now().toString()); return 0; }
+      return Math.floor((Date.now() - parseInt(stored)) / (1000 * 60 * 60 * 24));
+    })();
+
+    if (orders > 0) {
+      return `You've got ${orders} order${orders > 1 ? "s" : ""}. What's your biggest bottleneck right now — getting more traffic, converting better, or fulfilling faster?`;
+    }
+    if (published) {
+      return `${brand} is live but you haven't made a sale yet. Let's fix that. Who are you going to tell about it today — got a specific person or channel in mind?`;
+    }
+    if (s && daysSince > 3) {
+      return `You've been building ${brand} for a few days. What's actually stopping you from launching today?`;
+    }
+    if (s) {
+      return `You just started building ${brand}. Before you touch anything else — who's the first real person you'd call and say "I built this for you"?`;
+    }
+    return "What are you building? Give me the one-sentence version.";
+  }
+
+  // ── Suggestion chips ─────────────────────────────────────────
+  function getSuggestions(stageIdx: number): string[] {
+    if (stageIdx <= 1) {
+      return [
+        "Help me define my target customer",
+        "What should I price this at?",
+        "How do I validate this fast?",
+      ];
+    }
+    if (stageIdx === 2) {
+      return [
+        "How do I get my first 10 customers?",
+        "Help me write a launch message",
+        "What platforms should I be on?",
+      ];
+    }
+    return [
+      "How do I get more repeat buyers?",
+      "Help me improve my offer",
+      "What's killing my conversion?",
+    ];
+  }
+
+  // Show opening message once history is loaded and site is known
+  useEffect(() => {
+    if (!chatLoaded || openingShownRef.current) return;
+    setMessages((prev) => {
+      if (prev.length > 0) return prev; // History exists — don't overwrite
+      openingShownRef.current = true;
+      const pid = projectId ?? searchParams.get("project") ?? "";
+      const opening = buildOpeningMessage(site, publishedUrl, ordersCount, pid);
+      return [{ role: "assistant", content: opening }];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatLoaded, site]);
+
+  // Auto-scroll chat to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loadingChat]);
 
   // ── Inline text editing ────────────────────────────────────────
   const openTextPanel = (field: string, label: string, value: string) => {
@@ -432,6 +531,12 @@ export default function Home() {
           niche: [site?.audience, site?.firstProductOrService].filter(Boolean).join(", ") || undefined,
           stage: stageLabels[stageIdx],
           recentActions: recentActions.length > 0 ? recentActions : undefined,
+          productList: site?.products?.map((p) => p.name).filter(Boolean),
+          revenue: undefined as number | undefined,
+          isPublished: !!publishedUrl,
+          daysSinceCreated: projectCreatedAt
+            ? Math.floor((Date.now() - new Date(projectCreatedAt).getTime()) / (1000 * 60 * 60 * 24))
+            : undefined,
         };
         const res = await fetch("/api/idea", {
           method: "POST",
@@ -443,7 +548,16 @@ export default function Home() {
           setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Server issue. Try again." }]);
           return;
         }
-        setMessages((prev) => [...prev, { role: "assistant", content: data?.result || "No reply. Try again." }]);
+        const assistantReply = data?.result || "No reply. Try again.";
+        setMessages((prev) => [...prev, { role: "assistant", content: assistantReply }]);
+        // Save both messages to DB (fire-and-forget)
+        if (projectId && userId) {
+          const supabase = createClient();
+          void supabase.from("mentor_messages").insert([
+            { project_id: projectId, user_id: userId, role: "user", content: text },
+            { project_id: projectId, user_id: userId, role: "assistant", content: assistantReply },
+          ]);
+        }
       }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Try again." }]);
@@ -911,63 +1025,144 @@ export default function Home() {
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto space-y-3" style={{ padding: "20px 18px" }}>
+          <div className="min-h-0 flex-1 overflow-y-auto space-y-4" style={{ padding: "20px 18px" }}>
             {messages.map((m, i) => (
-              <div key={i} className="animate-fadeIn" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+              <div key={i} className="animate-fadeIn" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: 8 }}>
+                {m.role === "assistant" && (
+                  <div style={{
+                    flexShrink: 0,
+                    width: 20, height: 20,
+                    borderRadius: 6,
+                    background: "#2563EB",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginTop: 2,
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  </div>
+                )}
                 {m.role === "assistant" ? (
-                  <div style={{ maxWidth: "100%", fontSize: 16, fontWeight: 500, lineHeight: 1.7, color: "#1A1A1A", whiteSpace: "pre-line" }}>
+                  <div style={{ flex: 1, fontSize: 15, fontWeight: 500, lineHeight: 1.7, color: "#1A1A1A", whiteSpace: "pre-line" }}>
                     {m.content}
                   </div>
                 ) : (
-                  <div
-                    style={{
-                      maxWidth: "88%",
-                      fontSize: 15,
-                      fontWeight: 400,
-                      lineHeight: 1.7,
-                      color: theme.text,
-                      background: `${theme.accent}10`,
-                      borderLeft: `3px solid ${theme.accent}`,
-                      padding: "8px 12px",
-                      borderRadius: "0 8px 8px 0",
-                      whiteSpace: "pre-line",
-                    }}
-                  >
+                  <div style={{
+                    maxWidth: "88%",
+                    fontSize: 14,
+                    fontWeight: 400,
+                    lineHeight: 1.65,
+                    color: "#1A1A1A",
+                    background: "#F0F0F0",
+                    padding: "8px 12px",
+                    borderRadius: "12px 12px 2px 12px",
+                    whiteSpace: "pre-line",
+                  }}>
                     {m.content}
                   </div>
                 )}
               </div>
             ))}
             {loadingChat && (
-              <div className="flex gap-1 px-2 py-2">
-                {[0, 1, 2].map((d) => (
-                  <span key={d} className="h-2 w-2 rounded-full inline-block" style={{ background: theme.mutedText, animation: `dotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />
-                ))}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                </div>
+                <div className="flex gap-1 py-2">
+                  {[0, 1, 2].map((d) => (
+                    <span key={d} className="h-2 w-2 rounded-full inline-block" style={{ background: "#9CA3AF", animation: `dotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />
+                  ))}
+                </div>
               </div>
             )}
+            <div ref={chatEndRef} />
           </div>
 
-          <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(0,0,0,0.07)" }}>
-            <div style={{ fontSize: 11, fontWeight: 500, color: "#AAA", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Ask your mentor anything
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
+          <div style={{ padding: "10px 16px 14px", borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+            {/* Suggestion chips */}
+            {!aiEditMode && (() => {
+              const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+              const chips = getSuggestions(stageIdx);
+              return (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {chips.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => { setInput(chip); textareaRef.current?.focus(); }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #E5E7EB",
+                        background: "#FAFAFA",
+                        fontSize: 12,
+                        color: "#6B7280",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                        whiteSpace: "nowrap",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "#BFDBFE";
+                        e.currentTarget.style.color = "#2563EB";
+                        e.currentTarget.style.background = "#EFF6FF";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#E5E7EB";
+                        e.currentTarget.style.color = "#6B7280";
+                        e.currentTarget.style.background = "#FAFAFA";
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+              <textarea
+                ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder={aiEditMode ? 'e.g. "Change tagline to…"' : "Tell me about your business idea..."}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Auto-grow
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={
+                  aiEditMode
+                    ? 'e.g. "Change tagline to…"'
+                    : (() => {
+                        const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+                        if (stageIdx <= 1) return "What are you building?";
+                        if (stageIdx === 2) return "How's the launch going?";
+                        return "What's your biggest challenge right now?";
+                      })()
+                }
+                rows={1}
                 style={{
                   flex: 1,
-                  height: 48,
-                  padding: "0 14px",
+                  minHeight: 44,
+                  maxHeight: 120,
+                  padding: "10px 14px",
                   borderRadius: 8,
                   border: `1px solid ${aiEditMode ? theme.accent + "35" : "#D0CFC9"}`,
-                  fontSize: 15,
+                  fontSize: 14,
                   outline: "none",
                   background: aiEditMode ? `${theme.accent}06` : "#FFFFFF",
                   color: theme.text,
+                  resize: "none",
+                  lineHeight: 1.5,
                   transition: "border-color 0.15s, box-shadow 0.15s",
+                  overflowY: "auto",
+                  boxSizing: "border-box",
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.12)";
@@ -982,7 +1177,7 @@ export default function Home() {
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
                 style={{
-                  height: 48,
+                  height: 44,
                   padding: "0 16px",
                   borderRadius: 8,
                   border: "none",
@@ -993,6 +1188,7 @@ export default function Home() {
                   flexShrink: 0,
                   cursor: loadingChat ? "default" : "pointer",
                   transition: "opacity 0.15s",
+                  alignSelf: "flex-end",
                 }}
               >
                 Send
