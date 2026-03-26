@@ -200,7 +200,7 @@ export default function DashboardClient({
         body: JSON.stringify({ name }),
       });
       const data = await res.json();
-      if (data?.id) router.push(`/?project=${data.id}`);
+      if (data?.id) router.push(`/builder?project=${data.id}`);
     } finally {
       setLoading(false);
     }
@@ -448,7 +448,7 @@ export default function DashboardClient({
                   </div>
 
                   <button
-                    onClick={() => router.push(`/?project=${project.id}`)}
+                    onClick={() => router.push(`/builder?project=${project.id}`)}
                     style={{
                       marginTop: "auto",
                       width: "100%",

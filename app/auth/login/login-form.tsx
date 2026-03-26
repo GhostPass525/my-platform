@@ -4,6 +4,20 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 44,
+  padding: "0 12px",
+  borderRadius: 8,
+  border: "1px solid #E0E0E0",
+  fontSize: 15,
+  color: "#1A1A1A",
+  background: "#fff",
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
 export default function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -16,49 +30,49 @@ export default function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
+    if (error) { setError(error.message); setLoading(false); return; }
     const next = searchParams.get("next") ?? "/dashboard";
     router.push(next);
     router.refresh();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>Email address</label>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none transition-all duration-150 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 bg-white text-slate-900 placeholder:text-slate-400"
           placeholder="you@example.com"
+          style={inputStyle}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.1)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "#E0E0E0"; e.currentTarget.style.boxShadow = "none"; }}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <label style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Password</label>
+          <a href="#" style={{ fontSize: 12, color: "#2563EB", textDecoration: "none" }}>Forgot password?</a>
+        </div>
         <input
           type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none transition-all duration-150 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 bg-white text-slate-900 placeholder:text-slate-400"
           placeholder="••••••••"
+          style={inputStyle}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.1)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "#E0E0E0"; e.currentTarget.style.boxShadow = "none"; }}
         />
       </div>
 
       {error && (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 animate-fadeIn">
+        <div style={{ fontSize: 13, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 12px" }}>
           {error}
         </div>
       )}
@@ -66,18 +80,32 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
+        style={{
+          height: 44,
+          width: "100%",
+          borderRadius: 8,
+          border: "none",
+          background: loading ? "#93C5FD" : "#2563EB",
+          color: "#fff",
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: loading ? "not-allowed" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          transition: "background 0.15s",
+          marginTop: 4,
+        }}
       >
-        {loading && (
-          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />
-        )}
+        {loading && <span style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block", animation: "spin 0.7s linear infinite" }} />}
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
-      <p className="text-sm text-center text-slate-500 pt-1">
-        No account?{" "}
-        <a href="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
-          Create one
+      <p style={{ textAlign: "center", fontSize: 14, color: "#6B7280", margin: 0 }}>
+        Don&apos;t have an account?{" "}
+        <a href="/auth/signup" style={{ color: "#2563EB", fontWeight: 500, textDecoration: "none" }}>
+          Create one free
         </a>
       </p>
     </form>

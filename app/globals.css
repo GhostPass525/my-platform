@@ -173,6 +173,11 @@
   .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
+/* ─── Store preview color transitions ─────────────────────────── */
+.store-preview * {
+  transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+
 /* ─── Scrollbar (webkit) ──────────────────────────────────────── */
 ::-webkit-scrollbar         { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track   { background: transparent; }

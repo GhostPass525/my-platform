@@ -120,7 +120,7 @@ export default function MarketingClient() {
             {loadingProjects ? (
               <div className="h-9 bg-slate-100 rounded-lg animate-pulse w-52" />
             ) : projects.length === 0 ? (
-              <p className="text-sm text-slate-500">No projects. <a href="/" className="text-blue-600 hover:underline">Create one.</a></p>
+              <p className="text-sm text-slate-500">No projects. <a href="/dashboard" className="text-blue-600 hover:underline">Create one.</a></p>
             ) : (
               <select
                 value={selectedProjectId}

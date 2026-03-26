@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
 export const dynamic = "force-dynamic";
 
@@ -71,60 +77,70 @@ async function handleCheckoutComplete(
 
   const publishId = session.metadata?.publishId || null;
   const userId = session.metadata?.userId || null;
+  const checkoutDataKey = session.metadata?.checkoutDataKey || null;
+  const primaryProductName = session.metadata?.primaryProductName || null;
+  const primaryProductType = session.metadata?.primaryProductType || "physical";
+
   const customerEmail =
     session.customer_details?.email ?? session.customer_email ?? "";
-  const total = (session.amount_total ?? 0) / 100;
+  const amount = (session.amount_total ?? 0) / 100;
+  const currency = session.currency ?? "usd";
 
-  const { data: order, error: orderError } = await supabase
+  // Retrieve customer data stored before checkout
+  let customerData: Record<string, string> = {};
+  if (checkoutDataKey) {
+    try {
+      const stored = await redis.get<Record<string, string>>(`checkout-data:${checkoutDataKey}`);
+      if (stored) customerData = stored;
+    } catch (err) {
+      console.error("Failed to retrieve checkout data:", err);
+    }
+  }
+
+  // Build shipping address object if present
+  const shippingAddress =
+    customerData.shippingLine1
+      ? {
+          line1: customerData.shippingLine1,
+          line2: customerData.shippingLine2 || null,
+          city: customerData.shippingCity || "",
+          state: customerData.shippingState || "",
+          zip: customerData.shippingZip || "",
+          country: customerData.shippingCountry || "",
+        }
+      : null;
+
+  const { error: orderError } = await supabase
     .from("orders")
     .insert({
       user_id: userId || null,
       site_id: publishId,
-      customer_email: customerEmail,
-      total,
+      customer_email: customerData.email || customerEmail,
+      customer_name: customerData.fullName || null,
+      customer_phone: customerData.phone || null,
+      product_name: primaryProductName,
+      product_type: primaryProductType,
+      amount,
+      currency,
+      shipping_address: shippingAddress,
+      preferred_datetime: customerData.preferredDateTime || null,
+      customer_notes: customerData.notes || customerData.briefDescription || null,
+      fulfillment_status: "unfulfilled",
+      stripe_payment_intent_id: (session.payment_intent as string) || null,
+      stripe_session_id: session.id,
+      // Legacy columns kept for compatibility
+      total: amount,
       status: "paid",
-    })
-    .select("id")
-    .single();
+    });
 
-  if (orderError || !order) {
+  if (orderError) {
     console.error("Failed to insert order:", orderError);
     return false;
   }
 
-  let lineItems: Stripe.LineItem[] = [];
-  try {
-    const secretKey = process.env.STRIPE_SECRET_KEY!.trim();
-    const liRes = await fetch(
-      `https://api.stripe.com/v1/checkout/sessions/${session.id}/line_items?limit=100`,
-      {
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-          "Stripe-Version": "2024-06-20",
-        },
-      }
-    );
-    const liData = await liRes.json();
-    lineItems = liData?.data ?? [];
-  } catch (err) {
-    console.error("Failed to list line items:", err);
-    return false;
-  }
-
-  if (lineItems.length > 0) {
-    const items = lineItems.map((item) => ({
-      order_id: order.id,
-      product_id: item.price?.id ?? null,
-      product_name: item.description ?? "Item",
-      quantity: item.quantity ?? 1,
-      price: (item.price?.unit_amount ?? 0) / 100,
-    }));
-
-    const { error: itemsError } = await supabase.from("order_items").insert(items);
-    if (itemsError) {
-      console.error("Failed to insert order_items:", itemsError);
-      return false;
-    }
+  // Clean up the temporary checkout data from Redis
+  if (checkoutDataKey) {
+    await redis.del(`checkout-data:${checkoutDataKey}`).catch(() => {});
   }
 
   return true;

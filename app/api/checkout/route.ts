@@ -13,6 +13,22 @@ type CartItem = {
   name: string;
   price: number; // dollars (e.g. 49.99)
   quantity: number;
+  product_type?: string;
+};
+
+type CustomerData = {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  shippingLine1?: string;
+  shippingLine2?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingZip?: string;
+  shippingCountry?: string;
+  preferredDateTime?: string;
+  notes?: string;
+  briefDescription?: string;
 };
 
 async function stripePost(params: Record<string, string | number | Record<string, unknown>>, connectedAccountId?: string | null) {
@@ -59,9 +75,10 @@ async function stripePost(params: Record<string, string | number | Record<string
 
 export async function POST(req: Request) {
   try {
-    const { cart, publishId } = (await req.json()) as {
+    const { cart, publishId, customerData } = (await req.json()) as {
       cart: CartItem[];
       publishId?: string;
+      customerData?: CustomerData;
     };
 
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
@@ -121,12 +138,22 @@ export async function POST(req: Request) {
       lineItemParams[`line_items[${i}][price_data][product_data][name]`] = (item.name || "Item").slice(0, 250);
     });
 
+    // Store customer data in Redis so the webhook can retrieve it
+    let checkoutDataKey = "";
+    if (customerData && Object.keys(customerData).length > 0) {
+      checkoutDataKey = crypto.randomUUID().replace(/-/g, "");
+      await redis.set(`checkout-data:${checkoutDataKey}`, customerData, { ex: 3600 });
+    }
+
     const sessionParams: Record<string, string> = {
       mode: "payment",
       success_url: `${origin}/checkout/success?pid=${encodeURIComponent(publishId || "")}`,
       cancel_url: `${origin}/checkout/cancel?pid=${encodeURIComponent(publishId || "")}`,
       "metadata[publishId]": publishId || "",
       "metadata[userId]": ownerId,
+      "metadata[checkoutDataKey]": checkoutDataKey,
+      "metadata[primaryProductName]": cart[0]?.name || "",
+      "metadata[primaryProductType]": cart[0]?.product_type || "physical",
       ...lineItemParams,
     };
 

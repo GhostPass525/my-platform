@@ -4,21 +4,36 @@ import OrdersClient from "./orders-client";
 
 export const dynamic = "force-dynamic";
 
-type OrderItem = {
-  id: string;
-  product_name: string;
-  quantity: number;
-  price: number;
-};
-
-type Order = {
+export type Order = {
   id: string;
   site_id: string | null;
-  customer_email: string;
-  total: number;
-  status: string;
+  user_id: string | null;
   created_at: string;
-  order_items: OrderItem[];
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  product_name: string | null;
+  product_type: string | null;
+  product_variants: Record<string, string> | null;
+  amount: number | null;
+  currency: string | null;
+  shipping_address: {
+    line1: string;
+    line2?: string | null;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+  } | null;
+  preferred_datetime: string | null;
+  customer_notes: string | null;
+  fulfillment_status: string;
+  fulfillment_notes: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_session_id: string | null;
+  // Legacy
+  total?: number | null;
+  status?: string | null;
 };
 
 export default async function OrdersPage() {
@@ -33,22 +48,29 @@ export default async function OrdersPage() {
   const { data: orders } = await supabase
     .from("orders")
     .select(
-      `id, site_id, customer_email, total, status, created_at,
-       order_items ( id, product_name, quantity, price )`
+      `id, site_id, user_id, created_at,
+       customer_name, customer_email, customer_phone,
+       product_name, product_type, product_variants,
+       amount, currency, shipping_address,
+       preferred_datetime, customer_notes,
+       fulfillment_status, fulfillment_notes,
+       stripe_payment_intent_id, stripe_session_id,
+       total, status`
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   const list: Order[] = (orders ?? []) as Order[];
 
-  const totalRevenue = list.reduce((s, o) => s + Number(o.total), 0);
+  const totalRevenue = list.reduce((s, o) => s + Number(o.amount ?? o.total ?? 0), 0);
   const totalOrders = list.length;
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const unfulfilledCount = list.filter((o) => o.fulfillment_status === "unfulfilled").length;
+  const inProgressCount = list.filter((o) => o.fulfillment_status === "in_progress").length;
 
   return (
     <OrdersClient
-      orders={list}
-      stats={{ totalRevenue, totalOrders, avgOrderValue }}
+      initialOrders={list}
+      stats={{ totalRevenue, totalOrders, unfulfilledCount, inProgressCount }}
     />
   );
 }

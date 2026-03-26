@@ -8,29 +8,50 @@ export default async function SignupPage() {
   if (user) redirect("/dashboard");
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-sm animate-slideUp">
-
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-blue-600 mb-5 shadow-md shadow-blue-200/60">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Create your account</h1>
-          <p className="text-sm text-slate-500 mt-1">Start building with VentureOS</p>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#F5F4F0",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif",
+      }}
+    >
+      <a href="/" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 32, textDecoration: "none" }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
         </div>
+        <span style={{ fontWeight: 700, fontSize: 17, color: "#1A1A1A", letterSpacing: "-0.3px" }}>VentureOS</span>
+      </a>
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-7 shadow-sm">
-          <SignupForm />
-        </div>
-
-        <p className="text-center text-xs text-slate-400 mt-6">
-          By creating an account you agree to our{" "}
-          <span className="text-slate-500">Terms of Service</span> and{" "}
-          <span className="text-slate-500">Privacy Policy</span>.
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          padding: 40,
+          width: "100%",
+          maxWidth: 420,
+          border: "1px solid #E8E8E4",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+        }}
+      >
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: "0 0 4px", letterSpacing: "-0.3px" }}>
+          Create your account
+        </h1>
+        <p style={{ fontSize: 14, color: "#6B7280", margin: "0 0 28px" }}>
+          Free to start. No credit card required.
         </p>
+        <SignupForm />
       </div>
+
+      <p style={{ marginTop: 20, fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>
+        By signing up you agree to our Terms and Privacy Policy.
+      </p>
     </main>
   );
 }

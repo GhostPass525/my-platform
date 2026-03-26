@@ -4,16 +4,21 @@ import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-function tryParseJSON(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      return JSON.parse(match[0]);
-    }
-    throw new Error("Invalid JSON returned by model.");
+function tryParseJSON(raw: unknown) {
+  if (typeof raw === "object" && raw !== null) return raw;
+  let str = String(raw).trim();
+  // Strip markdown code fences
+  str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  // Direct parse
+  try { return JSON.parse(str); } catch { /* fall through */ }
+  // Double-stringified
+  try { return JSON.parse(JSON.parse(str)); } catch { /* fall through */ }
+  // Extract JSON object with regex
+  const match = str.match(/\{[\s\S]*\}/);
+  if (match) {
+    try { return JSON.parse(match[0]); } catch { /* fall through */ }
   }
+  throw new Error("Could not parse brand kit response from AI");
 }
 
 export async function POST(req: Request) {
@@ -57,7 +62,7 @@ Analyze this store and develop a complete brand identity. Return ONLY valid JSON
   "colorRationale": "Explanation of why the current colors work for this brand and what they communicate psychologically"
 }
 
-Be specific, creative, and strategic. Return only the JSON object, no other text.`;
+Be specific, creative, and strategic. Respond with ONLY a raw JSON object. Do not wrap it in markdown code fences. Do not stringify it. Do not escape quotes. Return valid JSON only.`;
 
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
