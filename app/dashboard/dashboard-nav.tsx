@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { href: "/dashboard/insights",   label: "Insights" },
   { href: "/dashboard/marketing",  label: "Marketing" },
   { href: "/dashboard/brand",      label: "Brand Kit" },
-  { href: "/",                     label: "Builder" },
+  { href: "/builder",              label: "Builder" },
 ];
 
 export default function DashboardNav() {
