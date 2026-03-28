@@ -348,17 +348,33 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle ?subscribed=1 redirect from Stripe
+  // Flag set when Stripe redirects back with ?subscribed=1
+  const autoPublishPendingRef = useRef(false);
+
+  // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
   useEffect(() => {
     if (searchParams.get("subscribed") === "1") {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Welcome to Volcity Pro! You can now publish your site." },
-      ]);
-      router.replace("/", { scroll: false });
+      autoPublishPendingRef.current = true;
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("subscribed");
+      const newPath = params.toString() ? `/builder?${params.toString()}` : "/builder";
+      router.replace(newPath, { scroll: false });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-publish once site data is available after Stripe redirect
+  useEffect(() => {
+    if (autoPublishPendingRef.current && site && chatLoaded) {
+      autoPublishPendingRef.current = false;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Publishing your store..." },
+      ]);
+      publish();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site, chatLoaded]);
 
   // Fetch order count once on mount for stage computation
   useEffect(() => {
@@ -1842,7 +1858,7 @@ export default function Home() {
       )}
 
       {/* Phase 3: Paywall modal */}
-      {showPaywall && <PaywallModal theme={theme} onClose={() => setShowPaywall(false)} />}
+      {showPaywall && <PaywallModal theme={theme} onClose={() => setShowPaywall(false)} projectId={projectId} />}
 
       {/* Launch Moment — first publish celebration */}
       {showLaunchMoment && site && publishedUrl && (
@@ -1905,13 +1921,17 @@ export default function Home() {
 }
 
 // ─── Paywall Modal (Phase 3) ──────────────────────────────────────
-function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void }) {
+function PaywallModal({ theme, onClose, projectId }: { theme: Theme; onClose: () => void; projectId: string | null }) {
   const [loading, setLoading] = useState(false);
 
   const startSubscription = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/subscription/checkout", { method: "POST" });
+      const res = await fetch("/api/subscription/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
       const data = await res.json().catch(() => ({}));
       if (data?.url) {
         window.location.href = data.url;

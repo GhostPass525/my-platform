@@ -5,6 +5,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const body = await req.json().catch(() => ({}));
+    const projectId: string | null = body?.projectId ?? null;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -48,7 +51,7 @@ export async function POST(req: Request) {
       "subscription_data[trial_settings][end_behavior][missing_payment_method]": "cancel",
       "subscription_data[metadata][userId]": user.id,
       payment_method_collection: "always",
-      success_url: `${origin}/?subscribed=1`,
+      success_url: `${origin}/builder?${projectId ? `project=${projectId}&` : ""}subscribed=1`,
       cancel_url: `${origin}/`,
       "metadata[userId]": user.id,
       "metadata[type]": "platform_subscription",
