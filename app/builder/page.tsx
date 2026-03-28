@@ -120,6 +120,26 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+// Strip any base64/blob strings that may have slipped into site data before saving.
+// These are large and will cause 413 errors — images must be uploaded to Storage first.
+function sanitizeSiteJson(data: unknown): unknown {
+  if (Array.isArray(data)) return data.map(sanitizeSiteJson);
+  if (data && typeof data === "object") {
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(data as Record<string, unknown>)) {
+      const val = (data as Record<string, unknown>)[key];
+      if (typeof val === "string" && (val.startsWith("data:image/") || val.startsWith("blob:"))) {
+        console.warn(`[save] Stripped oversized image at key "${key}" — upload to Storage first.`);
+        result[key] = "";
+      } else {
+        result[key] = sanitizeSiteJson(val);
+      }
+    }
+    return result;
+  }
+  return data;
+}
+
 // ─── Theme presets ───────────────────────────────────────────────
 const LIGHT_THEME: Theme = {
   accent: "#2563eb",
@@ -278,7 +298,12 @@ export default function Home() {
   const theme = LIGHT_THEME;
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const [saveErrorMsg, setSaveErrorMsg] = useState("");
+  const [uploadsPending, setUploadsPending] = useState(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const siteRef = useRef<SiteSpec | null>(null);
+  const projectIdRef = useRef<string | null>(null);
 
   // Load project + chat history on mount
   useEffect(() => {
@@ -328,7 +353,7 @@ export default function Home() {
     if (searchParams.get("subscribed") === "1") {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Welcome to VentureOS Pro! You can now publish your site." },
+        { role: "assistant", content: "Welcome to Volcity Pro! You can now publish your site." },
       ]);
       router.replace("/", { scroll: false });
     }
@@ -415,6 +440,39 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatLoaded, site]);
 
+  // Keep refs in sync for use inside async callbacks / timers
+  useEffect(() => { siteRef.current = site; }, [site]);
+  useEffect(() => { projectIdRef.current = projectId; }, [projectId]);
+
+  // Auto-save: debounce 30s after any site change (only when project exists)
+  useEffect(() => {
+    if (!site || !projectId) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      const currentSite = siteRef.current;
+      const currentProjectId = projectIdRef.current;
+      if (!currentSite || !currentProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ site: currentSite }),
+        });
+        if (res.ok) {
+          setSaveStatus("saved");
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+        }
+      } catch {
+        // Silent fail for auto-save — user can always save manually
+      }
+    }, 30000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site, projectId]);
+
   // Auto-scroll chat to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -437,6 +495,12 @@ export default function Home() {
   // ── Save ──────────────────────────────────────────────────────
   const save = async () => {
     if (!site) { alert("Generate a site first."); return; }
+
+    if (uploadsPending > 0) {
+      alert("Please wait for images to finish uploading before saving.");
+      return;
+    }
+
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -449,19 +513,29 @@ export default function Home() {
     setSaving(true);
     try {
       if (projectId) {
-        await fetch(`/api/projects/${projectId}`, {
+        const res = await fetch(`/api/projects/${projectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ site }),
+          body: JSON.stringify({ site: sanitizeSiteJson(site) }),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 401) throw new Error("Session expired — please refresh the page.");
+          if (res.status === 413) throw new Error("Site data is too large — remove any large images and try again.");
+          throw new Error(body?.error || `Save failed (${res.status}) — please try again.`);
+        }
       } else {
         const name = window.prompt("Project name?", site.brandName || "My Project");
-        if (!name) return;
+        if (!name) { setSaving(false); return; }
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, site }),
+          body: JSON.stringify({ name, site: sanitizeSiteJson(site) }),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Failed to create project (${res.status}).`);
+        }
         const data = await res.json();
         if (data?.id) {
           setProjectId(data.id);
@@ -471,10 +545,14 @@ export default function Home() {
       }
       trackAction("Saved project");
       setSaveStatus("saved");
+      setSaveErrorMsg("");
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch {
+    } catch (err: unknown) {
+      const msg = (err as Error)?.message || "Save failed — please try again.";
       setSaveStatus("failed");
+      setSaveErrorMsg(msg);
+      console.error("Save error:", err);
     } finally {
       setSaving(false);
     }
@@ -530,6 +608,7 @@ export default function Home() {
           brandName: site?.brandName || undefined,
           niche: [site?.audience, site?.firstProductOrService].filter(Boolean).join(", ") || undefined,
           stage: stageLabels[stageIdx],
+          siteGenerated: !!site,
           recentActions: recentActions.length > 0 ? recentActions : undefined,
           productList: site?.products?.map((p) => p.name).filter(Boolean),
           revenue: undefined as number | undefined,
@@ -632,19 +711,35 @@ export default function Home() {
 
   // ── Publish (with subscription check) ─────────────────────────
   const publish = async () => {
+    console.log("[publish] clicked");
     if (!site) { alert("Generate a site first."); return; }
     if (publishing) return;
 
     // Must be logged in
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    console.log("[publish] user:", user?.id ?? "not logged in");
     if (!user) {
       router.push("/auth/login");
       return;
     }
 
+    // ── Subscription gate ──────────────────────────────────────
+    console.log("[publish] checking subscription…");
     setPublishing(true);
     try {
+      const subRes = await fetch("/api/subscription");
+      const subData = await subRes.json().catch(() => ({ active: false, status: "parse_error" }));
+      console.log("[publish] subscription response:", subData);
+
+      if (!subData.active) {
+        console.log("[publish] no active subscription (status:", subData.status, ") — showing paywall");
+        setShowPaywall(true);
+        return;
+      }
+
+      console.log("[publish] subscription active — proceeding to publish");
+
       // Strip base64 data URLs before publishing (they inflate payload past Vercel's 4.5MB limit)
       const siteToPublish: SiteSpec = {
         ...site,
@@ -656,12 +751,14 @@ export default function Home() {
         })),
       };
 
+      console.log("[publish] calling /api/publish…");
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ site: siteToPublish }),
       });
       const data = await res.json().catch(() => ({}));
+      console.log("[publish] /api/publish response:", res.status, data);
 
       if (!res.ok || !data?.id) {
         alert(data?.error || "Publish failed. Try again.");
@@ -669,6 +766,7 @@ export default function Home() {
       }
 
       const url = `${window.location.origin}/s/${data.id}`;
+      console.log("[publish] published successfully:", url);
       trackAction("Published store");
       const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${projectId ?? data.id}`);
       setPublishedUrl(url);
@@ -677,6 +775,7 @@ export default function Home() {
         setShowLaunchMoment(true);
       }
     } catch (e: any) {
+      console.error("[publish] unexpected error:", e);
       alert(`Publish error: ${e?.message || String(e)}`);
     } finally {
       setPublishing(false);
@@ -746,14 +845,48 @@ export default function Home() {
   };
 
   // ── Images ────────────────────────────────────────────────────
+  // Upload a file to Supabase Storage and return its public URL.
+  // Throws on failure — never falls back to base64 (which causes 413 save errors).
+  const uploadSiteImage = async (file: File, prefix: string): Promise<string> => {
+    const uid_ = userId ?? "anon";
+    const pid = projectId ?? "draft";
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const filePath = `project-images/${uid_}/${pid}/${prefix}-${Date.now()}.${ext}`;
+    const supabase = createClient();
+    const { error } = await supabase.storage
+      .from("project-assets")
+      .upload(filePath, file, { upsert: true, contentType: file.type });
+    if (error) throw new Error(`Image upload failed: ${error.message}. Make sure the "project-assets" Storage bucket exists and is set to Public in Supabase.`);
+    const { data: { publicUrl } } = supabase.storage
+      .from("project-assets")
+      .getPublicUrl(filePath);
+    return publicUrl;
+  };
+
   const setLogoFromFile = async (file?: File) => {
     if (!file || !site) return;
-    setSite({ ...site, logoDataUrl: await fileToDataUrl(file) });
-    trackAction("Uploaded brand logo");
+    setUploadsPending((n) => n + 1);
+    try {
+      const url = await uploadSiteImage(file, "logo");
+      setSite((prev) => prev ? { ...prev, logoDataUrl: url } : prev);
+      trackAction("Uploaded brand logo");
+    } catch (err: unknown) {
+      alert((err as Error)?.message || "Logo upload failed. Please try again.");
+    } finally {
+      setUploadsPending((n) => n - 1);
+    }
   };
   const setHeroImageFromFile = async (file?: File) => {
     if (!file || !site) return;
-    setSite({ ...site, heroImageDataUrl: await fileToDataUrl(file) });
+    setUploadsPending((n) => n + 1);
+    try {
+      const url = await uploadSiteImage(file, "hero");
+      setSite((prev) => prev ? { ...prev, heroImageDataUrl: url } : prev);
+    } catch (err: unknown) {
+      alert((err as Error)?.message || "Hero image upload failed. Please try again.");
+    } finally {
+      setUploadsPending((n) => n - 1);
+    }
   };
 
   // ── Canvas image upload ────────────────────────────────────────
@@ -881,7 +1014,7 @@ export default function Home() {
             </svg>
           </div>
           <div className="leading-tight">
-            <div className="font-semibold text-sm" style={{ color: theme.text }}>VentureOS</div>
+            <div className="font-semibold text-sm" style={{ color: theme.text }}>Volcity</div>
             {projectName && <div className="text-xs truncate max-w-[140px]" style={{ color: theme.mutedText }}>{projectName}</div>}
           </div>
           <a href="/dashboard" className="hidden md:inline-block px-2.5 py-1 rounded-lg text-xs border hover:opacity-80 transition-all duration-150" style={{ borderColor: theme.border, color: theme.mutedText }}>
@@ -916,18 +1049,23 @@ export default function Home() {
             Templates
           </button>
 
-          {saveStatus === "saved" && (
+          {uploadsPending > 0 && (
+            <span style={{ fontSize: 12, color: "#d97706", flexShrink: 0 }}>Uploading image…</span>
+          )}
+          {saveStatus === "saved" && uploadsPending === 0 && (
             <span style={{ fontSize: 12, color: "#059669", flexShrink: 0 }}>Saved ✓</span>
           )}
           {saveStatus === "failed" && (
-            <span style={{ fontSize: 12, color: "#dc2626", flexShrink: 0 }}>Save failed</span>
+            <span style={{ fontSize: 12, color: "#dc2626", flexShrink: 0, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={saveErrorMsg}>
+              {saveErrorMsg || "Save failed — please try again."}
+            </span>
           )}
 
           <button
             onClick={save}
-            disabled={saving}
+            disabled={saving || uploadsPending > 0}
             className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-70"
-            style={{ height: 32, fontSize: 13, background: "transparent", border: "none", color: theme.mutedText, cursor: "pointer" }}
+            style={{ height: 32, fontSize: 13, background: "transparent", border: "none", color: theme.mutedText, cursor: saving || uploadsPending > 0 ? "not-allowed" : "pointer", opacity: uploadsPending > 0 ? 0.5 : 1 }}
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -1620,7 +1758,15 @@ export default function Home() {
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
-                            updateProduct(p.id, { imageDataUrl: await fileToDataUrl(file) });
+                            setUploadsPending((n) => n + 1);
+                            try {
+                              const url = await uploadSiteImage(file, `product-${p.id}`);
+                              updateProduct(p.id, { imageDataUrl: url });
+                            } catch (err: unknown) {
+                              alert((err as Error)?.message || "Image upload failed. Please try again.");
+                            } finally {
+                              setUploadsPending((n) => n - 1);
+                            }
                           }}
                         />
                         <div className="h-2" />
@@ -1672,7 +1818,7 @@ export default function Home() {
           </div>
 
           <div className="px-4 py-2.5 border-t text-[10px] text-center" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            VentureOS Builder
+            Volcity Builder
           </div>
         </aside>
       </div>
@@ -1770,7 +1916,7 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        alert(data?.error || `Checkout failed (HTTP ${res.status}). Check that STRIPE_SECRET_KEY and VENTUREOS_PRICE_ID are set in your environment.`);
+        alert(data?.error || `Checkout failed (HTTP ${res.status}). Check that STRIPE_SECRET_KEY and VOLCITY_PRICE_ID are set in your environment.`);
       }
     } catch (err: any) {
       alert(`Checkout failed: ${err?.message || err}. Check your Vercel environment variables and function logs.`);
@@ -1798,16 +1944,16 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
 
         <h2 className="text-lg font-semibold text-center text-slate-900 tracking-tight">Publish your store</h2>
         <p className="mt-1.5 text-center text-slate-500 text-sm">
-          Subscribe to go live and start selling.
+          Try free for 7 days, then go live and start selling.
         </p>
 
         {/* Price */}
         <div className="mt-5 rounded-xl border border-slate-200 p-4 text-center bg-slate-50">
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">$14.99</div>
-          <div className="text-xs text-slate-500 mt-0.5">per month · cancel anytime</div>
-          <div className="mt-2.5 inline-block px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ background: `${theme.accent}12`, color: theme.accent }}>
+          <div className="mt-1 inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2" style={{ background: `${theme.accent}15`, color: theme.accent }}>
             7-day free trial
           </div>
+          <div className="text-3xl font-bold text-slate-900 tracking-tight">$14.99<span className="text-base font-normal text-slate-400">/month</span></div>
+          <div className="text-xs text-slate-400 mt-1">Cancel anytime. No charge during your trial.</div>
         </div>
 
         {/* Features */}
@@ -1835,12 +1981,16 @@ function PaywallModal({ theme, onClose }: { theme: Theme; onClose: () => void })
           className="mt-5 w-full py-3 rounded-lg font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
           style={{ background: theme.accent, color: "#fff", opacity: loading ? 0.7 : 1 }}
         >
-          {loading ? "Loading…" : "Start free trial — then $14.99/mo"}
+          {loading ? "Loading…" : "Start 7-day free trial"}
         </button>
+
+        <p className="mt-2 text-center text-xs text-slate-400">
+          7-day free trial, then $14.99/month. Cancel anytime.
+        </p>
 
         <button
           onClick={onClose}
-          className="mt-2 w-full py-2 rounded-lg text-sm text-slate-400 hover:text-slate-600 transition-colors duration-150"
+          className="mt-1 w-full py-2 rounded-lg text-sm text-slate-400 hover:text-slate-600 transition-colors duration-150"
         >
           Maybe later
         </button>

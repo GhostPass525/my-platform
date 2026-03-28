@@ -17,12 +17,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "STRIPE_SECRET_KEY is not set in environment." }, { status: 500 });
     }
 
-    const priceId = process.env.VENTUREOS_PRICE_ID?.trim();
+    const priceId = process.env.VOLCITY_PRICE_ID?.trim();
     if (!priceId) {
-      return NextResponse.json({ error: "VENTUREOS_PRICE_ID is not set in Vercel environment variables." }, { status: 500 });
+      return NextResponse.json({ error: "VOLCITY_PRICE_ID is not set in Vercel environment variables." }, { status: 500 });
     }
 
-    const origin = req.headers.get("origin") || "https://my-platform-omega.vercel.app";
+    // Diagnostic: log key prefix (safe — only first 20 chars, never the full key)
+    const keyPrefix = secretKey.slice(0, 20);
+    const keyMode = secretKey.startsWith("sk_live") ? "LIVE" : secretKey.startsWith("sk_test") ? "TEST" : "UNKNOWN";
+    console.log(`[subscription/checkout] STRIPE key mode: ${keyMode}, prefix: ${keyPrefix}...`);
+    console.log(`[subscription/checkout] price ID: ${priceId}`);
+    console.log(`[subscription/checkout] price ID mode hint: ${priceId.includes("_test_") ? "TEST price" : "LIVE price (no _test_ in ID)"}`);
+
+    if (keyMode === "TEST" && !priceId.includes("_test_")) {
+      console.error("[subscription/checkout] MODE MISMATCH: using TEST key but price looks like a LIVE price");
+    }
+    if (keyMode === "LIVE" && priceId.includes("_test_")) {
+      console.error("[subscription/checkout] MODE MISMATCH: using LIVE key but price looks like a TEST price");
+    }
+
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://volcity.to";
 
     // Create Stripe checkout session via direct REST API call (avoids SDK connection issues)
     const params = new URLSearchParams({
@@ -57,8 +71,10 @@ export async function POST(req: Request) {
     const session = await stripeRes.json();
 
     if (!stripeRes.ok || !session.url) {
+      const stripeError = session.error?.message || "Failed to create Stripe checkout session.";
+      console.error(`[subscription/checkout] Stripe error: ${stripeError} (key mode: ${keyMode}, price: ${priceId})`);
       return NextResponse.json(
-        { error: session.error?.message || "Failed to create Stripe checkout session." },
+        { error: `${stripeError} [key: ${keyMode}, price: ${priceId}]` },
         { status: 500 }
       );
     }
