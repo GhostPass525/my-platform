@@ -27,11 +27,30 @@ type Theme = {
 type FontChoice =
   | "Inter"
   | "Plus Jakarta Sans"
-  | "Poppins"
-  | "Montserrat"
   | "DM Sans"
+  | "Manrope"
+  | "Work Sans"
+  | "Poppins"
+  | "Nunito"
+  | "Raleway"
+  | "Josefin Sans"
+  | "Montserrat"
+  | "Space Grotesk"
+  | "Syne"
+  | "Oswald"
+  | "Bebas Neue"
+  | "Playfair Display"
+  | "Cormorant Garamond"
+  | "Lora"
+  | "Merriweather"
+  | "Fraunces"
+  | "Crimson Pro"
+  | "Instrument Serif"
+  | "Source Serif 4"
+  | "Libre Baskerville"
   | "Georgia"
-  | "Times New Roman";
+  | "Times New Roman"
+  | "Pacifico";
 
 type Product = {
   id: string;
@@ -225,24 +244,171 @@ const THEME_PRESETS: ThemePreset[] = [
     text: "#171717",
     theme: { accent: "#171717", accent2: "#404040", bg: "#ffffff", panel: "#ffffff", surface: "#f9f9f9", text: "#171717", mutedText: "#737373", border: "rgba(0,0,0,0.10)" },
   },
+  // ── Bold & Vibrant ────────────────────────────────────────────
+  {
+    name: "Electric",
+    accent: "#06b6d4",
+    bg: "#f0fdff",
+    text: "#083344",
+    theme: { accent: "#06b6d4", accent2: "#0ea5e9", bg: "#f0fdff", panel: "#ffffff", surface: "#ffffff", text: "#083344", mutedText: "#0e7490", border: "rgba(8,51,68,0.10)" },
+  },
+  {
+    name: "Deep Navy",
+    accent: "#1e40af",
+    bg: "#eff6ff",
+    text: "#1e3a5f",
+    theme: { accent: "#1e40af", accent2: "#d97706", bg: "#eff6ff", panel: "#ffffff", surface: "#ffffff", text: "#1e3a5f", mutedText: "#3b82f6", border: "rgba(30,58,138,0.12)" },
+  },
+  {
+    name: "Crimson",
+    accent: "#dc2626",
+    bg: "#fff5f5",
+    text: "#450a0a",
+    theme: { accent: "#dc2626", accent2: "#f97316", bg: "#fff5f5", panel: "#ffffff", surface: "#ffffff", text: "#450a0a", mutedText: "#991b1b", border: "rgba(69,10,10,0.10)" },
+  },
+  // ── Dark & Premium ────────────────────────────────────────────
+  {
+    name: "Midnight",
+    accent: "#6366f1",
+    bg: "#0f0f23",
+    text: "#e8e8ff",
+    theme: { accent: "#6366f1", accent2: "#a78bfa", bg: "#0f0f23", panel: "#1a1a35", surface: "#1a1a35", text: "#e8e8ff", mutedText: "#8b8bcc", border: "rgba(255,255,255,0.08)" },
+  },
+  {
+    name: "Charcoal",
+    accent: "#f59e0b",
+    bg: "#1c1917",
+    text: "#fafaf9",
+    theme: { accent: "#f59e0b", accent2: "#fbbf24", bg: "#1c1917", panel: "#292524", surface: "#292524", text: "#fafaf9", mutedText: "#a8a29e", border: "rgba(255,255,255,0.08)" },
+  },
+  // ── Natural & Earthy ──────────────────────────────────────────
+  {
+    name: "Sage",
+    accent: "#4d7c5f",
+    bg: "#f4f7f0",
+    text: "#1a3324",
+    theme: { accent: "#4d7c5f", accent2: "#84a98c", bg: "#f4f7f0", panel: "#ffffff", surface: "#ffffff", text: "#1a3324", mutedText: "#6b7c71", border: "rgba(26,51,36,0.10)" },
+  },
+  {
+    name: "Sand",
+    accent: "#b45309",
+    bg: "#fdf8f0",
+    text: "#451a03",
+    theme: { accent: "#b45309", accent2: "#d97706", bg: "#fdf8f0", panel: "#ffffff", surface: "#ffffff", text: "#451a03", mutedText: "#92400e", border: "rgba(69,26,3,0.10)" },
+  },
+  // ── Fashion & Luxury ─────────────────────────────────────────
+  {
+    name: "Blush",
+    accent: "#e879a0",
+    bg: "#fff5f9",
+    text: "#5c1a33",
+    theme: { accent: "#e879a0", accent2: "#f9a8d4", bg: "#fff5f9", panel: "#ffffff", surface: "#ffffff", text: "#5c1a33", mutedText: "#be185d", border: "rgba(92,26,51,0.10)" },
+  },
+  {
+    name: "Mocha",
+    accent: "#8b5e3c",
+    bg: "#fdf5ee",
+    text: "#3d1e0f",
+    theme: { accent: "#8b5e3c", accent2: "#c4956a", bg: "#fdf5ee", panel: "#ffffff", surface: "#ffffff", text: "#3d1e0f", mutedText: "#9a6a50", border: "rgba(61,30,15,0.10)" },
+  },
+  {
+    name: "Onyx",
+    accent: "#c9a227",
+    bg: "#0a0a0a",
+    text: "#f5f0e8",
+    theme: { accent: "#c9a227", accent2: "#e5c87a", bg: "#0a0a0a", panel: "#1a1a1a", surface: "#1a1a1a", text: "#f5f0e8", mutedText: "#9e9e8c", border: "rgba(255,255,255,0.08)" },
+  },
+  {
+    name: "Lavender",
+    accent: "#9333ea",
+    bg: "#faf5ff",
+    text: "#3b0764",
+    theme: { accent: "#9333ea", accent2: "#d946ef", bg: "#faf5ff", panel: "#ffffff", surface: "#ffffff", text: "#3b0764", mutedText: "#7e22ce", border: "rgba(59,7,100,0.10)" },
+  },
+];
+
+const PALETTE_CATEGORIES: { label: string; names: string[] }[] = [
+  { label: "Minimal", names: ["Ocean", "Slate", "Minimal"] },
+  { label: "Bold & Vibrant", names: ["Sunset", "Violet", "Rose", "Electric", "Deep Navy", "Crimson"] },
+  { label: "Dark & Premium", names: ["Dark", "Midnight", "Charcoal", "Onyx"] },
+  { label: "Natural & Earthy", names: ["Forest", "Teal", "Gold", "Sage", "Sand"] },
+  { label: "Fashion & Luxury", names: ["Blush", "Mocha", "Lavender"] },
 ];
 
 const FONT_OPTIONS: FontChoice[] = [
-  "Inter",
-  "Plus Jakarta Sans",
-  "Poppins",
-  "Montserrat",
-  "DM Sans",
-  "Georgia",
-  "Times New Roman",
+  "Inter", "Plus Jakarta Sans", "DM Sans", "Manrope", "Work Sans", "Poppins",
+  "Nunito", "Raleway", "Josefin Sans", "Montserrat", "Space Grotesk", "Syne",
+  "Oswald", "Bebas Neue",
+  "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Fraunces",
+  "Crimson Pro", "Instrument Serif", "Source Serif 4", "Libre Baskerville",
+  "Georgia", "Times New Roman", "Pacifico",
 ];
 
-function fontStack(font: FontChoice) {
-  switch (font) {
-    case "Georgia": return `Georgia, "Times New Roman", Times, serif`;
-    case "Times New Roman": return `"Times New Roman", Times, serif`;
-    default: return `${font}, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji"`;
-  }
+const FONT_CATEGORIES: { label: string; fonts: FontChoice[] }[] = [
+  { label: "Sans-Serif", fonts: ["Inter", "Plus Jakarta Sans", "DM Sans", "Manrope", "Work Sans", "Poppins", "Nunito", "Raleway", "Josefin Sans", "Montserrat", "Space Grotesk", "Syne"] },
+  { label: "Display", fonts: ["Oswald", "Bebas Neue"] },
+  { label: "Serif", fonts: ["Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Fraunces", "Crimson Pro", "Instrument Serif", "Source Serif 4", "Libre Baskerville", "Georgia", "Times New Roman"] },
+  { label: "Script", fonts: ["Pacifico"] },
+];
+
+function fontStack(font: FontChoice): string {
+  const fontRef = font.includes(" ") ? `"${font}"` : font;
+  const serifFonts: FontChoice[] = ["Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Fraunces", "Crimson Pro", "Instrument Serif", "Source Serif 4", "Libre Baskerville", "Georgia", "Times New Roman"];
+  if (font === "Georgia") return `Georgia, "Times New Roman", Times, serif`;
+  if (font === "Times New Roman") return `"Times New Roman", Times, serif`;
+  if (serifFonts.includes(font)) return `${fontRef}, Georgia, "Times New Roman", serif`;
+  if (font === "Bebas Neue") return `"Bebas Neue", Impact, "Arial Narrow", sans-serif`;
+  if (font === "Pacifico") return `"Pacifico", cursive`;
+  return `${fontRef}, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+}
+
+// ─── Smart generation helpers ─────────────────────────────────────
+function selectColorPalette(msgs: { role: string; content: string }[]): Theme {
+  const text = msgs.map((m) => m.content).join(" ").toLowerCase();
+  if (/onyx|luxury|premium|exclusive|elite|gold\s*brand|high.?end|couture/.test(text)) return THEME_PRESETS.find((p) => p.name === "Onyx")!.theme;
+  if (/dark|night|gaming|hacker|noir|stealth|midnight/.test(text)) return THEME_PRESETS.find((p) => p.name === "Midnight")!.theme;
+  if (/charcoal|whiskey|bourbon|dark.*warm|warm.*dark/.test(text)) return THEME_PRESETS.find((p) => p.name === "Charcoal")!.theme;
+  if (/blush|feminine|bridal|wedding|bride|soft.*pink|pink.*soft/.test(text)) return THEME_PRESETS.find((p) => p.name === "Blush")!.theme;
+  if (/mocha|coffee|cafe|bakery|chocolate|warm.*brown/.test(text)) return THEME_PRESETS.find((p) => p.name === "Mocha")!.theme;
+  if (/fashion|beauty|cosmetic|makeup|skincare|style|boutique/.test(text)) return THEME_PRESETS.find((p) => p.name === "Lavender")!.theme;
+  if (/nature|organic|eco|plant|garden|herbal|natural|sustainab/.test(text)) return THEME_PRESETS.find((p) => p.name === "Sage")!.theme;
+  if (/forest|green|outdoor|hiking|camping/.test(text)) return THEME_PRESETS.find((p) => p.name === "Forest")!.theme;
+  if (/teal|spa|wellness|health|yoga|meditat|calm|therapy/.test(text)) return THEME_PRESETS.find((p) => p.name === "Teal")!.theme;
+  if (/sand|beach|boho|desert|earthy|rustic|handmade/.test(text)) return THEME_PRESETS.find((p) => p.name === "Sand")!.theme;
+  if (/gold|coach|wealth|invest|finance|course|coaching/.test(text)) return THEME_PRESETS.find((p) => p.name === "Gold")!.theme;
+  if (/sunset|art|creative|food|restaurant|warm|orange|vibrant/.test(text)) return THEME_PRESETS.find((p) => p.name === "Sunset")!.theme;
+  if (/violet|purple|spiritual|tarot|psychic|mystical/.test(text)) return THEME_PRESETS.find((p) => p.name === "Violet")!.theme;
+  if (/rose|pink|floral|florist/.test(text)) return THEME_PRESETS.find((p) => p.name === "Rose")!.theme;
+  if (/electric|cyan|saas|tech|startup|app|software|ai|digital/.test(text)) return THEME_PRESETS.find((p) => p.name === "Electric")!.theme;
+  if (/navy|professional|corporate|law|legal|consult|b2b/.test(text)) return THEME_PRESETS.find((p) => p.name === "Deep Navy")!.theme;
+  if (/minimal|clean|simple|portfolio|freelance|agency|studio/.test(text)) return THEME_PRESETS.find((p) => p.name === "Minimal")!.theme;
+  if (/slate|gray|grey|neutral|architect/.test(text)) return THEME_PRESETS.find((p) => p.name === "Slate")!.theme;
+  return THEME_PRESETS.find((p) => p.name === "Ocean")!.theme;
+}
+
+function selectFont(msgs: { role: string; content: string }[]): FontChoice {
+  const text = msgs.map((m) => m.content).join(" ").toLowerCase();
+  if (/luxury|law|legal|heritage|traditional|classic|publish|book|magazine|wedding|bridal/.test(text)) return "Playfair Display";
+  if (/elegant|fashion|beauty|cosmetic|couture|editorial/.test(text)) return "Cormorant Garamond";
+  if (/fitness|gym|sport|bold|power|energy|hustle|strength/.test(text)) return "Oswald";
+  if (/kids|children|playful|fun|friendly|food|bakery|cafe/.test(text)) return "Nunito";
+  if (/handmade|artisan|craft|script|personal|signature/.test(text)) return "Pacifico";
+  if (/tech|startup|app|software|saas|digital|product|ai/.test(text)) return "Space Grotesk";
+  if (/minimal|clean|simple|portfolio|modern|contemporary/.test(text)) return "Manrope";
+  if (/corporate|professional|consulting|b2b|finance|invest/.test(text)) return "Work Sans";
+  if (/wellness|calm|spa|yoga|organic|natural/.test(text)) return "Raleway";
+  if (/vibrant|bold|magazine|editorial/.test(text)) return "Syne";
+  return "Inter";
+}
+
+function selectTemplate(msgs: { role: string; content: string }[]): import("@/app/components/LayoutTemplates").LayoutId | undefined {
+  const text = msgs.map((m) => m.content).join(" ").toLowerCase();
+  if (/shop|store|sell|ecommerce|product|merch/.test(text)) return "classic-shop";
+  if (/portfolio|designer|artist|photographer|creative|studio/.test(text)) return "editorial-magazine";
+  if (/minimal|clean|simple|blog|writer|consult|landing/.test(text)) return "centered-minimal";
+  if (/brand|statement|hero|bold|startup|launch/.test(text)) return "big-hero";
+  if (/split|service|offer|two.col/.test(text)) return "split-screen";
+  return undefined;
 }
 
 // ─── Main builder ─────────────────────────────────────────────────
@@ -700,8 +866,9 @@ export default function Home() {
 
       const hydrated: SiteSpec = {
         ...base,
-        theme: THEME_PRESETS[0].theme,
-        font: "Inter",
+        theme: selectColorPalette(messages),
+        font: selectFont(messages),
+        activeLayout: selectTemplate(messages),
         pages,
         products: [
           { id: uid(), name: "Product One", price: "$49" },
@@ -1583,31 +1750,42 @@ export default function Home() {
                 {/* ── Design tab (Phase 2: visual color UI) ── */}
                 {rightTab === "design" && (
                   <div className="space-y-3">
-                    {/* Palette grid */}
+                    {/* Palette categories */}
                     <Card theme={theme} title="Theme palette">
-                      <div className="grid grid-cols-5 gap-2 mb-1">
-                        {THEME_PRESETS.map((p) => {
-                          const isActive = site.theme.accent === p.theme.accent && site.theme.bg === p.theme.bg;
+                      <div className="space-y-3">
+                        {PALETTE_CATEGORIES.map((cat) => {
+                          const presets = cat.names.map((n) => THEME_PRESETS.find((p) => p.name === n)!).filter(Boolean);
                           return (
-                            <button
-                              key={p.name}
-                              title={p.name}
-                              onClick={() => setSite({ ...site, theme: { ...p.theme } })}
-                              className="flex items-center justify-center group"
-                              style={{ padding: 4 }}
-                            >
-                              <div
-                                className="relative h-10 w-10 rounded-full transition-all duration-150 group-hover:scale-110 overflow-hidden"
-                                style={{
-                                  boxShadow: isActive
-                                    ? "0 0 0 2px #fff, 0 0 0 4px #2563EB"
-                                    : "0 1px 3px rgba(0,0,0,0.18)",
-                                }}
-                              >
-                                <div className="absolute inset-0" style={{ background: p.bg }} />
-                                <div className="absolute bottom-0 left-0 right-0 h-5" style={{ background: p.accent }} />
+                            <div key={cat.label}>
+                              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.mutedText, marginBottom: 6 }}>{cat.label}</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {presets.map((p) => {
+                                  const isActive = site.theme.accent === p.theme.accent && site.theme.bg === p.theme.bg;
+                                  return (
+                                    <button
+                                      key={p.name}
+                                      title={p.name}
+                                      onClick={() => setSite({ ...site, theme: { ...p.theme } })}
+                                      className="group flex flex-col items-center gap-1"
+                                      style={{ padding: "2px 4px" }}
+                                    >
+                                      <div
+                                        className="relative h-8 w-8 rounded-full transition-all duration-150 group-hover:scale-110 overflow-hidden"
+                                        style={{
+                                          boxShadow: isActive
+                                            ? "0 0 0 2px #fff, 0 0 0 4px #2563EB"
+                                            : "0 1px 3px rgba(0,0,0,0.18)",
+                                        }}
+                                      >
+                                        <div className="absolute inset-0" style={{ background: p.bg }} />
+                                        <div className="absolute bottom-0 left-0 right-0 h-4" style={{ background: p.accent }} />
+                                      </div>
+                                      <span style={{ fontSize: 9, color: isActive ? "#2563EB" : theme.mutedText, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>{p.name}</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -1624,27 +1802,34 @@ export default function Home() {
                       </div>
                     </Card>
 
-                    {/* Font */}
+                    {/* Font — categorized */}
                     <Card theme={theme} title="Font">
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {FONT_OPTIONS.map((f) => {
-                          const active = site.font === f;
-                          return (
-                            <button
-                              key={f}
-                              onClick={() => setSite({ ...site, font: f })}
-                              className="px-3 py-2 rounded-xl text-sm text-left border transition-all duration-150 flex items-center justify-between"
-                              style={{
-                                borderColor: active ? "#2563EB" : theme.border,
-                                background: active ? "#2563EB10" : "#fff",
-                                color: active ? "#2563EB" : theme.text,
-                              }}
-                            >
-                              <span style={{ fontFamily: fontStack(f), fontWeight: active ? 600 : 400 }}>{f}</span>
-                              <span style={{ fontFamily: fontStack(f), fontSize: 13, color: active ? "#2563EB99" : "#9CA3AF", fontWeight: 400 }}>Aa</span>
-                            </button>
-                          );
-                        })}
+                      <div className="space-y-3">
+                        {FONT_CATEGORIES.map((cat) => (
+                          <div key={cat.label}>
+                            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.mutedText, marginBottom: 6 }}>{cat.label}</div>
+                            <div className="grid grid-cols-1 gap-1">
+                              {cat.fonts.map((f) => {
+                                const active = site.font === f;
+                                return (
+                                  <button
+                                    key={f}
+                                    onClick={() => setSite({ ...site, font: f })}
+                                    className="px-3 py-2 rounded-xl text-sm text-left border transition-all duration-150 flex items-center justify-between"
+                                    style={{
+                                      borderColor: active ? "#2563EB" : theme.border,
+                                      background: active ? "#2563EB10" : "#fff",
+                                      color: active ? "#2563EB" : theme.text,
+                                    }}
+                                  >
+                                    <span style={{ fontFamily: fontStack(f), fontWeight: active ? 600 : 400, fontSize: 14 }}>{f}</span>
+                                    <span style={{ fontFamily: fontStack(f), fontSize: 15, color: active ? "#2563EB99" : "#9CA3AF", fontWeight: 400 }}>Aa</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </Card>
                   </div>

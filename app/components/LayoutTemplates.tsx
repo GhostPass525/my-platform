@@ -23,11 +23,30 @@ type Theme = {
 type FontChoice =
   | "Inter"
   | "Plus Jakarta Sans"
-  | "Poppins"
-  | "Montserrat"
   | "DM Sans"
+  | "Manrope"
+  | "Work Sans"
+  | "Poppins"
+  | "Nunito"
+  | "Raleway"
+  | "Josefin Sans"
+  | "Montserrat"
+  | "Space Grotesk"
+  | "Syne"
+  | "Oswald"
+  | "Bebas Neue"
+  | "Playfair Display"
+  | "Cormorant Garamond"
+  | "Lora"
+  | "Merriweather"
+  | "Fraunces"
+  | "Crimson Pro"
+  | "Instrument Serif"
+  | "Source Serif 4"
+  | "Libre Baskerville"
   | "Georgia"
-  | "Times New Roman";
+  | "Times New Roman"
+  | "Pacifico";
 
 type Product = {
   id: string;
@@ -77,12 +96,15 @@ type LayoutProps = {
 };
 
 // ─── Font stack ───────────────────────────────────────────────────
-function fontStack(font: FontChoice) {
-  switch (font) {
-    case "Georgia": return `Georgia, "Times New Roman", Times, serif`;
-    case "Times New Roman": return `"Times New Roman", Times, serif`;
-    default: return `${font}, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
-  }
+function fontStack(font: FontChoice): string {
+  const fontRef = font.includes(" ") ? `"${font}"` : font;
+  const serifFonts: FontChoice[] = ["Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Fraunces", "Crimson Pro", "Instrument Serif", "Source Serif 4", "Libre Baskerville", "Georgia", "Times New Roman"];
+  if (font === "Georgia") return `Georgia, "Times New Roman", Times, serif`;
+  if (font === "Times New Roman") return `"Times New Roman", Times, serif`;
+  if (serifFonts.includes(font)) return `${fontRef}, Georgia, "Times New Roman", serif`;
+  if (font === "Bebas Neue") return `"Bebas Neue", Impact, "Arial Narrow", sans-serif`;
+  if (font === "Pacifico") return `"Pacifico", cursive`;
+  return `${fontRef}, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
 }
 
 // ─── Shared inner page components ────────────────────────────────

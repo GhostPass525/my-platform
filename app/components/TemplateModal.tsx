@@ -16,11 +16,30 @@ type Theme = {
 type FontChoice =
   | "Inter"
   | "Plus Jakarta Sans"
-  | "Poppins"
-  | "Montserrat"
   | "DM Sans"
+  | "Manrope"
+  | "Work Sans"
+  | "Poppins"
+  | "Nunito"
+  | "Raleway"
+  | "Josefin Sans"
+  | "Montserrat"
+  | "Space Grotesk"
+  | "Syne"
+  | "Oswald"
+  | "Bebas Neue"
+  | "Playfair Display"
+  | "Cormorant Garamond"
+  | "Lora"
+  | "Merriweather"
+  | "Fraunces"
+  | "Crimson Pro"
+  | "Instrument Serif"
+  | "Source Serif 4"
+  | "Libre Baskerville"
   | "Georgia"
-  | "Times New Roman";
+  | "Times New Roman"
+  | "Pacifico";
 
 type Template = {
   id: string;

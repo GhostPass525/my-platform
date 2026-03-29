@@ -43,7 +43,7 @@ export default async function LandingPage() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <span style={{ fontWeight: 700, fontSize: 16, color: "#1A1A1A", letterSpacing: "-0.3px" }}>VentureOS</span>
+          <span style={{ fontWeight: 700, fontSize: 16, color: "#1A1A1A", letterSpacing: "-0.3px" }}>Volcity</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <a
@@ -116,7 +116,7 @@ export default async function LandingPage() {
               margin: "0 auto 36px",
             }}
           >
-            VentureOS is your AI mentor, store builder, and launch platform in one place.
+            Volcity is your AI mentor, store builder, and launch platform in one place.
           </p>
 
           <a
@@ -391,12 +391,16 @@ export default async function LandingPage() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <span style={{ fontSize: 13, color: "#6B7280" }}>© {new Date().getFullYear()} VentureOS</span>
+          <span style={{ fontSize: 13, color: "#6B7280" }}>© {new Date().getFullYear()} Volcity</span>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
-          {["Privacy", "Terms", "Contact"].map((link) => (
-            <a key={link} href="#" style={{ fontSize: 13, color: "#9CA3AF", textDecoration: "none" }}>
-              {link}
+          {[
+            { label: "Privacy", href: "/privacy" },
+            { label: "Terms", href: "/terms" },
+            { label: "Contact", href: "#" },
+          ].map(({ label, href }) => (
+            <a key={label} href={href} style={{ fontSize: 13, color: "#9CA3AF", textDecoration: "none" }}>
+              {label}
             </a>
           ))}
         </div>
