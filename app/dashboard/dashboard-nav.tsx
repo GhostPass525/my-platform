@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/dashboard/marketing",  label: "Marketing" },
   { href: "/dashboard/brand",      label: "Brand Kit" },
   { href: "/builder",              label: "Builder" },
+  { href: "/dashboard/account",    label: "Account" },
 ];
 
 export default function DashboardNav() {
@@ -35,7 +36,7 @@ export default function DashboardNav() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <span className="font-semibold text-sm text-slate-900 tracking-tight">VentureOS</span>
+          <span className="font-semibold text-sm text-slate-900 tracking-tight">Volcity</span>
         </a>
 
         {/* Nav links */}

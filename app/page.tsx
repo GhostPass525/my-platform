@@ -298,18 +298,22 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* ── Feature List ────────────────────────────────────────── */}
+      {/* ── Why Volcity ─────────────────────────────────────────── */}
       <section style={{ background: "#fff", padding: "64px 24px" }}>
         <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#9CA3AF", marginBottom: 12 }}>
+            Built for first-time entrepreneurs
+          </div>
           <h2 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.4px", color: "#1A1A1A", marginBottom: 36 }}>
             Everything you need to start selling
           </h2>
           <div style={{ textAlign: "left", display: "inline-block" }}>
             {[
-              "AI mentor that guides you step by step",
-              "Beautiful layout templates for your store",
-              "Stripe payments built in from day one",
-              "Brand kit, marketing tools, and order tracking",
+              "No coding required — ever",
+              "Your store live in under an hour",
+              "AI mentor available 24/7",
+              "Real Stripe payments from day one",
+              "7-day free trial — no commitment needed",
             ].map((feat) => (
               <div key={feat} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                 <div

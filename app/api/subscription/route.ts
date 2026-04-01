@@ -14,7 +14,7 @@ export async function GET() {
 
     const { data } = await supabase
       .from("subscriptions")
-      .select("status, trial_end, current_period_end")
+      .select("status, trial_end, current_period_end, stripe_customer_id")
       .eq("user_id", user.id)
       .single();
 
@@ -23,7 +23,13 @@ export async function GET() {
     }
 
     const active = data.status === "active" || data.status === "trialing";
-    return NextResponse.json({ active, status: data.status });
+    return NextResponse.json({
+      active,
+      status: data.status,
+      trial_end: data.trial_end,
+      current_period_end: data.current_period_end,
+      stripe_customer_id: data.stripe_customer_id,
+    });
   } catch (err: any) {
     console.error("Subscription check error:", err);
     return NextResponse.json({ active: false, status: "error", error: err?.message }, { status: 500 });
