@@ -27,7 +27,7 @@ export default function DashboardNav() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
+      <div className="max-w-7xl mx-auto px-6 h-[60px] flex items-center justify-between gap-6">
 
         {/* Brand */}
         <a href="/dashboard" className="flex items-center gap-2.5 flex-shrink-0 group">
@@ -36,21 +36,21 @@ export default function DashboardNav() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <span className="font-semibold text-sm text-slate-900 tracking-tight">Volcity</span>
+          <span className="text-[18px] font-bold text-slate-900 tracking-tight">Volcity</span>
         </a>
 
         {/* Nav links */}
-        <nav className="hidden md:flex items-center gap-0.5 flex-1">
+        <nav className="hidden md:flex items-center justify-between flex-1 gap-3 px-4">
           {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href;
             return (
               <a
                 key={href}
                 href={href}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 ${
+                className={`rounded-lg text-[15px] font-medium transition-all duration-150 ${
                   active
-                    ? "bg-slate-900 text-white font-medium"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                    ? "bg-slate-900 text-white px-5 py-2"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-4 py-2"
                 }`}
               >
                 {label}
