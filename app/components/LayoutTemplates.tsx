@@ -179,15 +179,23 @@ function getActivePage(site: SiteSpec, activePageId: string) {
   return site.pages.find((p) => p.id === activePageId) ?? site.pages[0];
 }
 
+// ─── Placeholder products (shown when store has no products yet) ──
+const PLACEHOLDER_PRODUCTS: Product[] = [
+  { id: "placeholder-1", name: "Product One", price: "$00" },
+  { id: "placeholder-2", name: "Product Two", price: "$00" },
+  { id: "placeholder-3", name: "Product Three", price: "$00" },
+];
+
 // ─── 1. BigHeroLayout ─────────────────────────────────────────────
 function BigHeroLayout({ site, activePageId, onSelectPage, onAddToCart, cartCount, onOpenCart }: LayoutProps) {
   const t = site.theme;
   const font = fontStack(site.font);
   const activePage = getActivePage(site, activePageId);
   const isHome = activePage?.key === "home";
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
 
   return (
-    <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+    <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
       {/* Nav */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -233,7 +241,7 @@ function BigHeroLayout({ site, activePageId, onSelectPage, onAddToCart, cartCoun
           {/* Hero */}
           <div
             style={{
-              height: 280,
+              minHeight: "60vh",
               position: "relative",
               display: "flex",
               flexDirection: "column",
@@ -262,12 +270,12 @@ function BigHeroLayout({ site, activePageId, onSelectPage, onAddToCart, cartCoun
           </div>
 
           {/* Products section */}
-          <div style={{ padding: "32px 24px" }}>
+          <div style={{ padding: "32px 24px", minHeight: 200 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: t.mutedText, marginBottom: 16 }}>
               Featured Products
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-              {site.products.map((p) => (
+              {productsToShow.map((p) => (
                 <div key={p.id} style={{ borderRadius: 10, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff" }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -322,9 +330,10 @@ function SplitScreenLayout({ site, activePageId, onSelectPage, onAddToCart, cart
   const font = fontStack(site.font);
   const activePage = getActivePage(site, activePageId);
   const isHome = activePage?.key === "home";
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
 
   return (
-    <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+    <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
       {/* Nav */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -368,7 +377,7 @@ function SplitScreenLayout({ site, activePageId, onSelectPage, onAddToCart, cart
       {isHome ? (
         <>
           {/* Split hero */}
-          <div style={{ display: "flex", height: 260 }}>
+          <div style={{ display: "flex", minHeight: "60vh" }}>
             {/* Left: text */}
             <div style={{ flex: 1, background: "#fff", padding: "40px 36px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <h1 style={{ fontSize: 32, fontWeight: 800, color: t.text, lineHeight: 1.15, letterSpacing: "-0.5px", margin: 0 }}>
@@ -393,12 +402,12 @@ function SplitScreenLayout({ site, activePageId, onSelectPage, onAddToCart, cart
           </div>
 
           {/* Product grid - 2 column */}
-          <div style={{ padding: "28px 24px" }}>
+          <div style={{ padding: "28px 24px", minHeight: 200 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: t.mutedText, marginBottom: 14 }}>
               Our Products
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
-              {site.products.map((p) => (
+              {productsToShow.map((p) => (
                 <div key={p.id} style={{ borderRadius: 10, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff", display: "flex" }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -448,9 +457,10 @@ function CenteredMinimalLayout({ site, activePageId, onSelectPage, onAddToCart, 
   const font = fontStack(site.font);
   const activePage = getActivePage(site, activePageId);
   const isHome = activePage?.key === "home";
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
 
   return (
-    <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+    <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
       {/* Nav */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 32px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -494,7 +504,7 @@ function CenteredMinimalLayout({ site, activePageId, onSelectPage, onAddToCart, 
       {isHome ? (
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px" }}>
           {/* Hero - centered */}
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ textAlign: "center", marginBottom: 48, minHeight: "40vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
             <h1 style={{ fontSize: 28, fontWeight: 500, color: t.text, lineHeight: 1.3, letterSpacing: "-0.3px", margin: 0 }}>
               {site.heroHeadline}
             </h1>
@@ -507,12 +517,12 @@ function CenteredMinimalLayout({ site, activePageId, onSelectPage, onAddToCart, 
           </div>
 
           {/* Products */}
-          <div>
+          <div style={{ minHeight: 200 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: t.mutedText, marginBottom: 16, textAlign: "center" }}>
               Products
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-              {site.products.map((p) => (
+              {productsToShow.map((p) => (
                 <div key={p.id} style={{ borderRadius: 12, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff", padding: "0 0 14px" }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -562,9 +572,10 @@ function EditorialMagazineLayout({ site, activePageId, onSelectPage, onAddToCart
   const font = fontStack(site.font);
   const activePage = getActivePage(site, activePageId);
   const isHome = activePage?.key === "home";
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
 
   return (
-    <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+    <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
       {/* Nav - bold editorial style */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: `2px solid ${t.text}`, background: t.bg }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -621,28 +632,26 @@ function EditorialMagazineLayout({ site, activePageId, onSelectPage, onAddToCart
           {/* Asymmetric product grid: 2fr 1fr 1fr */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, minHeight: 240 }}>
             {/* First product - large */}
-            {site.products[0] && (
-              <div style={{ borderRadius: 4, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff" }}>
-                {site.products[0].imageDataUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={site.products[0].imageDataUrl} alt={site.products[0].name} style={{ width: "100%", height: 180, objectFit: "cover" }} />
-                ) : (
-                  <div style={{ height: 180, background: `${t.accent}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: t.mutedText }}>
-                    No image
-                  </div>
-                )}
-                <div style={{ padding: "12px 14px" }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: t.text, textTransform: "uppercase", letterSpacing: "0.03em" }}>{site.products[0].name}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: t.accent, marginTop: 4 }}>{site.products[0].price}</div>
-                  <button onClick={() => onAddToCart(site.products[0])} style={{ marginTop: 8, padding: "6px 16px", border: `2px solid ${t.accent}`, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
-                    Add to cart
-                  </button>
+            <div style={{ borderRadius: 4, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff" }}>
+              {productsToShow[0].imageDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={productsToShow[0].imageDataUrl} alt={productsToShow[0].name} style={{ width: "100%", height: 180, objectFit: "cover" }} />
+              ) : (
+                <div style={{ height: 180, background: `${t.accent}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: t.mutedText }}>
+                  No image
                 </div>
+              )}
+              <div style={{ padding: "12px 14px" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: t.text, textTransform: "uppercase", letterSpacing: "0.03em" }}>{productsToShow[0].name}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: t.accent, marginTop: 4 }}>{productsToShow[0].price}</div>
+                <button onClick={() => onAddToCart(productsToShow[0])} style={{ marginTop: 8, padding: "6px 16px", border: `2px solid ${t.accent}`, background: "transparent", color: t.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
+                  Add to cart
+                </button>
               </div>
-            )}
+            </div>
             {/* Products 2 & 3 - stacked right column */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, gridColumn: "2 / 4" }}>
-              {[site.products[1], site.products[2]].filter(Boolean).map((p) => (
+              {[productsToShow[1], productsToShow[2]].filter(Boolean).map((p) => (
                 <div key={p.id} style={{ borderRadius: 4, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff", flex: 1, display: "flex" }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -699,9 +708,10 @@ function ClassicShopLayout({ site, activePageId, onSelectPage, onAddToCart, cart
   const font = fontStack(site.font);
   const activePage = getActivePage(site, activePageId);
   const isHome = activePage?.key === "home";
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
 
   return (
-    <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+    <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
       {/* Nav - logo left, links center, cart right */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -750,7 +760,7 @@ function ClassicShopLayout({ site, activePageId, onSelectPage, onAddToCart, cart
           {/* Banner */}
           <div
             style={{
-              height: 200,
+              minHeight: "60vh",
               position: "relative",
               display: "flex",
               alignItems: "center",
@@ -787,7 +797,7 @@ function ClassicShopLayout({ site, activePageId, onSelectPage, onAddToCart, cart
             <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 14 }}>Our Products</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
               {/* Repeat products to fill 4 columns, cycling if fewer than 4 */}
-              {Array.from({ length: Math.max(site.products.length, 4) }, (_, i) => site.products[i % site.products.length]).map((p, idx) => (
+              {Array.from({ length: Math.max(productsToShow.length, 4) }, (_, i) => productsToShow[i % productsToShow.length]).map((p, idx) => (
                 <div key={`${p.id}-${idx}`} style={{ borderRadius: 8, border: `1px solid ${t.border}`, overflow: "hidden", background: t.surface || "#fff" }}>
                   {p.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -877,7 +887,7 @@ function OnePageScrollLayout({ site, activePageId, onSelectPage, onAddToCart, ca
 
   if (!isHome) {
     return (
-      <div style={{ fontFamily: font, background: t.bg, minHeight: "100%", color: t.text }}>
+      <div style={{ fontFamily: font, background: t.bg, minHeight: "100vh", width: "100%", color: t.text }}>
         {/* Sticky nav */}
         <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -918,8 +928,10 @@ function OnePageScrollLayout({ site, activePageId, onSelectPage, onAddToCart, ca
     );
   }
 
+  const productsToShow = site.products.length > 0 ? site.products : PLACEHOLDER_PRODUCTS;
+
   return (
-    <div style={{ fontFamily: font, color: t.text }}>
+    <div style={{ fontFamily: font, color: t.text, minHeight: "100vh", width: "100%", background: t.bg }}>
       {/* Sticky nav */}
       <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", borderBottom: `1px solid ${t.border}`, background: t.panel || "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -952,7 +964,7 @@ function OnePageScrollLayout({ site, activePageId, onSelectPage, onAddToCart, ca
       </nav>
 
       {/* Hero section */}
-      <div style={{ minHeight: 280, background: `linear-gradient(135deg, ${t.accent}, ${t.accent2 || t.accent})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", textAlign: "center" }}>
+      <div style={{ minHeight: "60vh", background: `linear-gradient(135deg, ${t.accent}, ${t.accent2 || t.accent})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", textAlign: "center" }}>
         <h1 style={{ fontSize: 40, fontWeight: 800, color: "#fff", lineHeight: 1.1, letterSpacing: "-1px", margin: 0 }}>
           {site.heroHeadline}
         </h1>
@@ -981,10 +993,10 @@ function OnePageScrollLayout({ site, activePageId, onSelectPage, onAddToCart, ca
       </div>
 
       {/* Products section */}
-      <div style={{ background: "#F9FAFB", padding: "36px 24px" }}>
+      <div style={{ background: "#F9FAFB", padding: "36px 24px", minHeight: 200 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, textAlign: "center", color: t.text, marginBottom: 24 }}>Shop Now</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, maxWidth: 700, margin: "0 auto" }}>
-          {site.products.map((p) => (
+          {productsToShow.map((p) => (
             <div key={p.id} style={{ borderRadius: 10, border: `1px solid #E5E7EB`, overflow: "hidden", background: "#fff" }}>
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element

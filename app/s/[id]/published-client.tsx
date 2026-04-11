@@ -237,6 +237,7 @@ export default function PublishedClient({ site }: { site: SiteSpec }) {
 
   return (
     <>
+      <style>{`html, body { min-height: 100%; width: 100%; margin: 0; padding: 0; }`}</style>
       {site.activeLayout ? (
         <>
           <StoreLayout

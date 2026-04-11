@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { computeStageIndex } from "@/app/components/StageTracker";
@@ -11,6 +11,14 @@ import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
 const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
 const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
 const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+type DashMsg = { role: "user" | "assistant"; content: string };
+
+const DASH_PROMPTS: Record<string, string[]> = {
+  noProjects:  ["Help me find my business idea", "What sells well online?", "How do I start?"],
+  hasProjects: ["How do I get my first sale?", "Review my store", "Help me with marketing"],
+  hasSales:    ["How do I scale?", "What should I focus on?", "Help me with content"],
+};
 
 type Project = {
   id: string;
@@ -101,6 +109,13 @@ export default function DashboardClient({
   const [mentorMessage, setMentorMessage] = useState<string | null>(null);
   const [hasPublished, setHasPublished] = useState(false);
 
+  // ── Dashboard Mentor Panel ────────────────────────────────────
+  const [dashMessages, setDashMessages] = useState<DashMsg[]>([]);
+  const [dashInput, setDashInput] = useState("");
+  const [dashLoading, setDashLoading] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const dashBottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     try {
       const ids = new Set<string>();
@@ -152,6 +167,105 @@ export default function DashboardClient({
     ordersCount
   );
   const currentStage = STAGE_LABELS[stageIndex];
+
+  // ── Dashboard Mentor: compute opening message & load history ──
+  useEffect(() => {
+    // Compute opening message based on user state
+    let openingMsg = "";
+    try {
+      const liveCount = initialProjects.filter(p => {
+        try { return !!localStorage.getItem(`launched_${p.id}`); } catch { return false; }
+      }).length;
+      const lastVisitKey = `last_dash_visit_${userId}`;
+      const lastVisit = parseInt(localStorage.getItem(lastVisitKey) ?? "0", 10);
+      const daysSince = lastVisit ? Math.floor((Date.now() - lastVisit) / (1000 * 60 * 60 * 24)) : 0;
+      localStorage.setItem(lastVisitKey, String(Date.now()));
+
+      if (daysSince >= 2 && initialProjects.length > 0) {
+        openingMsg = `Welcome back! What's your next move with ${initialProjects[0].name}?`;
+      } else if (initialProjects.length === 0) {
+        openingMsg = "Welcome! What kind of business are you thinking about building?";
+      } else if (liveCount > 0 && initialOrdersCount === 0) {
+        openingMsg = `You have ${liveCount} ${liveCount === 1 ? "store" : "stores"} live. Let's talk about getting your first sale.`;
+      } else if (initialOrdersCount > 0) {
+        openingMsg = `You have ${initialOrdersCount} ${initialOrdersCount === 1 ? "sale" : "sales"}. Let's keep the momentum going.`;
+      } else {
+        openingMsg = "What are you working on today? I'm here to help.";
+      }
+    } catch {
+      openingMsg = "What are you working on today? I'm here to help.";
+    }
+
+    // Load saved chat history from Supabase, fall back to opening message
+    const supabase = createClient();
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("mentor_messages")
+          .select("role, content")
+          .eq("user_id", userId)
+          .is("project_id", null)
+          .order("created_at", { ascending: true })
+          .limit(50);
+        if (data && data.length > 0) {
+          setDashMessages(data as DashMsg[]);
+        } else {
+          setDashMessages([{ role: "assistant", content: openingMsg }]);
+        }
+      } catch {
+        setDashMessages([{ role: "assistant", content: openingMsg }]);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-scroll dash mentor to bottom
+  useEffect(() => {
+    dashBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [dashMessages, dashLoading]);
+
+  const dashPromptSet = useMemo(() => {
+    if (initialOrdersCount > 0) return DASH_PROMPTS.hasSales;
+    if (initialProjects.length > 0) return DASH_PROMPTS.hasProjects;
+    return DASH_PROMPTS.noProjects;
+  }, [initialProjects.length, initialOrdersCount]);
+
+  const sendDashMentor = async () => {
+    const text = dashInput.trim();
+    if (!text || dashLoading) return;
+
+    const userMsg: DashMsg = { role: "user", content: text };
+    const updated = [...dashMessages, userMsg];
+    setDashMessages(updated);
+    setDashInput("");
+    setDashLoading(true);
+
+    const supabase = createClient();
+    supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "user", content: text }).then(() => {});
+
+    try {
+      const res = await fetch("/api/idea", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updated,
+          mentorContext: {
+            brandName: brandName || undefined,
+            stage: currentStage,
+            niche: niche || undefined,
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const reply = data?.result || "Something went wrong. Try again.";
+      setDashMessages(prev => [...prev, { role: "assistant", content: reply }]);
+      supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "assistant", content: reply }).then(() => {});
+    } catch {
+      setDashMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Try again." }]);
+    } finally {
+      setDashLoading(false);
+    }
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -223,16 +337,34 @@ export default function DashboardClient({
   const liveCount = projects.filter((p) => publishedIds.has(p.id)).length;
 
   return (
-    <div>
-      {/* First Sale Funnel Widget */}
-      {showFirstSaleWidget && (
-        <FirstSaleWidget
-          brandName={brandName}
-          totalRevenue={initialRevenue}
-          userId={userId}
-          onStepClick={(msg) => setMentorMessage(msg)}
-        />
-      )}
+    <>
+      <style>{`
+        div:hover .delete-btn { opacity: 1 !important; }
+        .dash-mentor-panel { display: flex; }
+        .dash-mentor-fab { display: none; }
+        @media (max-width: 900px) {
+          .dash-mentor-panel { display: none !important; }
+          .dash-mentor-fab { display: flex !important; }
+        }
+        @keyframes dashFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dashDotPulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+      `}</style>
+
+      {/* Full-width flex layout: content + mentor sidebar */}
+      <div style={{ display: "flex", margin: "-40px -24px", minHeight: "calc(100vh - 60px)" }}>
+
+        {/* ── Left: main content ── */}
+        <div style={{ flex: 1, minWidth: 0, padding: "40px 24px", overflowX: "hidden" }}>
+
+          {/* First Sale Funnel Widget */}
+          {showFirstSaleWidget && (
+            <FirstSaleWidget
+              brandName={brandName}
+              totalRevenue={initialRevenue}
+              userId={userId}
+              onStepClick={(msg) => setMentorMessage(msg)}
+            />
+          )}
 
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 }}>
@@ -349,7 +481,7 @@ export default function DashboardClient({
           </div>
           <p style={{ fontSize: 16, fontWeight: 500, color: "#333", margin: "0 0 6px" }}>No projects yet</p>
           <p style={{ fontSize: 14, color: "#999", margin: "0 0 24px", maxWidth: 280, marginLeft: "auto", marginRight: "auto" }}>
-            Start building your first store with VentureOS.
+            Start building your first store with Volcity.
           </p>
           <button
             onClick={() => setCreating(true)}
@@ -519,10 +651,149 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* Delete button hover style */}
-      <style>{`
-        div:hover .delete-btn { opacity: 1 !important; }
-      `}</style>
+        </div>{/* end left content */}
+
+        {/* ── Right: Mentor Panel (desktop) ── */}
+        <div
+          className="dash-mentor-panel"
+          style={{
+            width: 320,
+            flexShrink: 0,
+            borderLeft: "1px solid #E8E8E4",
+            background: "#F7F6F3",
+            flexDirection: "column",
+            position: "sticky",
+            top: 0,
+            alignSelf: "flex-start",
+            height: "calc(100vh - 60px)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Panel header */}
+          <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #E8E8E4", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>Your Mentor</div>
+                <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.2 }}>Ready to help you build</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+            {dashMessages.map((m, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "dashFadeIn 0.15s ease-out both" }}>
+                <div style={{
+                  maxWidth: "88%",
+                  padding: "9px 12px",
+                  borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: m.role === "user" ? "#1e40af" : "#334155",
+                  background: m.role === "user" ? "#eff6ff" : "#ffffff",
+                  border: m.role === "user" ? "1px solid #bfdbfe" : "1px solid #E8E8E4",
+                  whiteSpace: "pre-line",
+                }}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+
+            {/* Suggested prompts — shown until first user message */}
+            {dashMessages.filter(m => m.role === "user").length === 0 && dashPromptSet.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {dashPromptSet.map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => { setDashInput(prompt); setTimeout(() => { setDashInput(""); const userMsg: DashMsg = { role: "user", content: prompt }; const updated = [...dashMessages, userMsg]; setDashMessages(updated); setDashLoading(true); const supabase = createClient(); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "user", content: prompt }).then(() => {}); fetch("/api/idea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated, mentorContext: { brandName: brandName || undefined, stage: currentStage, niche: niche || undefined } }) }).then(r => r.json().catch(() => ({}))).then(data => { const reply = data?.result || "Something went wrong."; setDashMessages(prev => [...prev, { role: "assistant", content: reply }]); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "assistant", content: reply }).then(() => {}); }).catch(() => { setDashMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]); }).finally(() => setDashLoading(false)); }, 0); }}
+                    style={{ textAlign: "left", padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", background: "#ffffff", color: "#334155", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s" }}
+                    onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = "#2563eb"; (e.target as HTMLButtonElement).style.color = "#1e40af"; (e.target as HTMLButtonElement).style.background = "#eff6ff"; }}
+                    onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = "#E8E8E4"; (e.target as HTMLButtonElement).style.color = "#334155"; (e.target as HTMLButtonElement).style.background = "#ffffff"; }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {dashLoading && (
+              <div style={{ display: "flex", gap: 4, padding: "4px 4px" }}>
+                {[0, 1, 2].map(d => (
+                  <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#cbd5e1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />
+                ))}
+              </div>
+            )}
+            <div ref={dashBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0, background: "#F7F6F3" }}>
+            <input
+              value={dashInput}
+              onChange={e => setDashInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
+              placeholder="Ask your mentor anything..."
+              style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s" }}
+              onFocus={e => (e.target.style.borderColor = "#2563eb")}
+              onBlur={e => (e.target.style.borderColor = "#E8E8E4")}
+            />
+            <button
+              onClick={sendDashMentor}
+              disabled={dashLoading || !dashInput.trim()}
+              style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+
+      </div>{/* end flex layout */}
+
+      {/* Mobile: floating mentor chat button */}
+      <button
+        className="dash-mentor-fab"
+        onClick={() => setShowMobileChat(true)}
+        style={{ position: "fixed", bottom: 24, right: 24, width: 52, height: 52, borderRadius: "50%", background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", boxShadow: "0 4px 16px rgba(37,99,235,0.35)", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+      </button>
+
+      {/* Mobile: mentor chat modal */}
+      {showMobileChat && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: "0 16px 80px" }}>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(2,6,23,0.35)", backdropFilter: "blur(4px)" }} onClick={() => setShowMobileChat(false)} />
+          <div style={{ position: "relative", width: "100%", maxWidth: 380, background: "#F7F6F3", borderRadius: 20, boxShadow: "0 24px 48px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "75vh" }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #E8E8E4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+              </div>
+              <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Your Mentor</div>
+              <button onClick={() => setShowMobileChat(false)} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #E8E8E4", background: "#fff", color: "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {dashMessages.map((m, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: m.role === "user" ? "#1e40af" : "#334155", background: m.role === "user" ? "#eff6ff" : "#ffffff", border: m.role === "user" ? "1px solid #bfdbfe" : "1px solid #E8E8E4", whiteSpace: "pre-line" }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {dashLoading && <div style={{ display: "flex", gap: 4 }}>{[0,1,2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#cbd5e1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}</div>}
+            </div>
+            <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0 }}>
+              <input value={dashInput} onChange={e => setDashInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }} placeholder="Ask your mentor anything..." style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a" }} />
+              <button onClick={sendDashMentor} disabled={dashLoading || !dashInput.trim()} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Send</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* First Sale Celebration */}
       {firstSaleOrder && (
@@ -534,7 +805,7 @@ export default function DashboardClient({
         />
       )}
 
-      {/* Mentor Chat modal */}
+      {/* Mentor Chat modal (nudge-triggered) */}
       {mentorMessage && (
         <MentorChat
           openingMessage={mentorMessage}
@@ -544,6 +815,6 @@ export default function DashboardClient({
           onClose={() => setMentorMessage(null)}
         />
       )}
-    </div>
+    </>
   );
 }

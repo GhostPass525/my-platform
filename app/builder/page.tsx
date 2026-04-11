@@ -425,6 +425,7 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishPhase, setPublishPhase] = useState<"saving" | "publishing" | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [showLaunchMoment, setShowLaunchMoment] = useState(false);
   const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
@@ -463,8 +464,9 @@ export default function Home() {
   // Builder UI always uses this fixed theme — store preview reads site.theme directly
   const theme = LIGHT_THEME;
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [saveErrorMsg, setSaveErrorMsg] = useState("");
+  const lastSavedSiteJsonRef = useRef<string>("");
   const [uploadsPending, setUploadsPending] = useState(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -634,19 +636,48 @@ export default function Home() {
       const currentSite = siteRef.current;
       const currentProjectId = projectIdRef.current;
       if (!currentSite || !currentProjectId) return;
-      try {
+      // Skip if nothing changed since last save
+      const siteJson = JSON.stringify(currentSite);
+      if (siteJson === lastSavedSiteJsonRef.current) return;
+
+      const doSave = async (): Promise<boolean> => {
         const res = await fetch(`/api/projects/${currentProjectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ site: currentSite }),
         });
-        if (res.ok) {
+        return res.ok;
+      };
+
+      setSaveStatus("saving");
+      try {
+        const ok = await doSave();
+        if (ok) {
+          lastSavedSiteJsonRef.current = siteJson;
           setSaveStatus("saved");
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+          saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
+        } else {
+          throw new Error("not ok");
         }
       } catch {
-        // Silent fail for auto-save — user can always save manually
+        setSaveStatus("failed");
+        setSaveErrorMsg("Save failed — retrying");
+        // Retry once after 3 seconds
+        setTimeout(async () => {
+          try {
+            const ok = await doSave();
+            if (ok) {
+              lastSavedSiteJsonRef.current = siteJson;
+              setSaveStatus("saved");
+              setSaveErrorMsg("");
+              if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
+            }
+          } catch {
+            // Leave failed state visible
+          }
+        }, 3000);
       }
     }, 30000);
     return () => {
@@ -693,12 +724,14 @@ export default function Home() {
     }
 
     setSaving(true);
+    setSaveStatus("saving");
     try {
       if (projectId) {
+        const sanitized = sanitizeSiteJson(site);
         const res = await fetch(`/api/projects/${projectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ site: sanitizeSiteJson(site) }),
+          body: JSON.stringify({ site: sanitized }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -706,13 +739,15 @@ export default function Home() {
           if (res.status === 413) throw new Error("Site data is too large — remove any large images and try again.");
           throw new Error(body?.error || `Save failed (${res.status}) — please try again.`);
         }
+        lastSavedSiteJsonRef.current = JSON.stringify(sanitized);
       } else {
         const name = window.prompt("Project name?", site.brandName || "My Project");
-        if (!name) { setSaving(false); return; }
+        if (!name) { setSaving(false); setSaveStatus("idle"); return; }
+        const sanitized = sanitizeSiteJson(site);
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, site: sanitizeSiteJson(site) }),
+          body: JSON.stringify({ name, site: sanitized }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -722,6 +757,7 @@ export default function Home() {
         if (data?.id) {
           setProjectId(data.id);
           setProjectName(name);
+          lastSavedSiteJsonRef.current = JSON.stringify(sanitized);
           router.replace(`/builder?project=${data.id}`, { scroll: false });
         }
       }
@@ -729,7 +765,7 @@ export default function Home() {
       setSaveStatus("saved");
       setSaveErrorMsg("");
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+      saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (err: unknown) {
       const msg = (err as Error)?.message || "Save failed — please try again.";
       setSaveStatus("failed");
@@ -892,7 +928,7 @@ export default function Home() {
     }
   };
 
-  // ── Publish (with subscription check) ─────────────────────────
+  // ── Publish (subscription check → save → publish) ────────────
   const publish = async () => {
     console.log("[publish] clicked");
     if (!site) { alert("Generate a site first."); return; }
@@ -907,10 +943,11 @@ export default function Home() {
       return;
     }
 
-    // ── Subscription gate ──────────────────────────────────────
-    console.log("[publish] checking subscription…");
     setPublishing(true);
+    setPublishPhase("saving");
     try {
+      // ── Step 1: Subscription gate ──────────────────────────────
+      console.log("[publish] checking subscription…");
       const subRes = await fetch("/api/subscription");
       const subData = await subRes.json().catch(() => ({ active: false, status: "parse_error" }));
       console.log("[publish] subscription response:", subData);
@@ -921,7 +958,39 @@ export default function Home() {
         return;
       }
 
-      console.log("[publish] subscription active — proceeding to publish");
+      // ── Step 2: Save current state FIRST (blocking) ────────────
+      console.log("[publish] saving before publish…");
+      if (projectId) {
+        const sanitized = sanitizeSiteJson(site);
+        const siteJson = JSON.stringify(sanitized);
+        if (siteJson !== lastSavedSiteJsonRef.current) {
+          setSaveStatus("saving");
+          const saveRes = await fetch(`/api/projects/${projectId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ site: sanitized }),
+          });
+          if (!saveRes.ok) {
+            const body = await saveRes.json().catch(() => ({}));
+            let errMsg = body?.error || `Save failed (${saveRes.status}) — please try again.`;
+            if (saveRes.status === 401) errMsg = "Session expired — please refresh the page.";
+            if (saveRes.status === 413) errMsg = "Site data is too large — remove any large images and try again.";
+            setSaveStatus("failed");
+            setSaveErrorMsg(errMsg);
+            alert(`Failed to save your changes. Please try again.\n\n${errMsg}`);
+            return;
+          }
+          lastSavedSiteJsonRef.current = siteJson;
+          setSaveStatus("saved");
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
+          console.log("[publish] save complete");
+        }
+      }
+
+      // ── Step 3: Publish ────────────────────────────────────────
+      setPublishPhase("publishing");
+      console.log("[publish] proceeding to publish");
 
       // Strip base64 data URLs before publishing (they inflate payload past Vercel's 4.5MB limit)
       const siteToPublish: SiteSpec = {
@@ -962,6 +1031,7 @@ export default function Home() {
       alert(`Publish error: ${e?.message || String(e)}`);
     } finally {
       setPublishing(false);
+      setPublishPhase(null);
     }
   };
 
@@ -1235,23 +1305,20 @@ export default function Home() {
           {uploadsPending > 0 && (
             <span style={{ fontSize: 12, color: "#d97706", flexShrink: 0 }}>Uploading image…</span>
           )}
-          {saveStatus === "saved" && uploadsPending === 0 && (
-            <span style={{ fontSize: 12, color: "#059669", flexShrink: 0 }}>Saved ✓</span>
+          {uploadsPending === 0 && saveStatus === "saving" && (
+            <span style={{ fontSize: 12, color: theme.mutedText, flexShrink: 0 }}>Saving...</span>
           )}
-          {saveStatus === "failed" && (
-            <span style={{ fontSize: 12, color: "#dc2626", flexShrink: 0, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={saveErrorMsg}>
-              {saveErrorMsg || "Save failed — please try again."}
+          {uploadsPending === 0 && saveStatus === "saved" && (
+            <span style={{ fontSize: 12, color: theme.mutedText, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,6 5,9 10,3" /></svg>
+              All changes saved
             </span>
           )}
-
-          <button
-            onClick={save}
-            disabled={saving || uploadsPending > 0}
-            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-70"
-            style={{ height: 32, fontSize: 13, background: "transparent", border: "none", color: theme.mutedText, cursor: saving || uploadsPending > 0 ? "not-allowed" : "pointer", opacity: uploadsPending > 0 ? 0.5 : 1 }}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+          {saveStatus === "failed" && (
+            <span style={{ fontSize: 12, color: "#b45309", flexShrink: 0 }}>
+              {saveErrorMsg || "Save failed — retrying"}
+            </span>
+          )}
 
           <div style={{ width: 1, height: 20, background: theme.border, margin: "0 2px", flexShrink: 0, alignSelf: "center" }} />
 
@@ -1261,7 +1328,7 @@ export default function Home() {
             className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-90"
             style={{ height: 32, fontSize: 13, background: "#2563EB", color: "#fff", border: "none", opacity: publishing ? 0.7 : 1, cursor: "pointer" }}
           >
-            {publishing ? "Checking…" : "Publish"}
+            {publishPhase === "saving" ? "Saving…" : publishPhase === "publishing" ? "Publishing…" : "Publish"}
           </button>
 
           {publishedUrl && (
