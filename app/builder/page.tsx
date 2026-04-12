@@ -535,11 +535,28 @@ export default function Home() {
   useEffect(() => {
     if (autoPublishPendingRef.current && site && chatLoaded) {
       autoPublishPendingRef.current = false;
+      // Sync subscription from Stripe first (fixes race condition where webhook
+      // hasn't fired yet when the user lands back in the builder)
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Publishing your store..." },
+        { role: "assistant", content: "Activating your subscription..." },
       ]);
-      publish();
+      fetch("/api/subscription/sync", { method: "POST" })
+        .then(() => {
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: "Publishing your store..." },
+          ]);
+          publish();
+        })
+        .catch(() => {
+          // Sync failed — attempt publish anyway (webhook may have already fired)
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: "Publishing your store..." },
+          ]);
+          publish();
+        });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site, chatLoaded]);

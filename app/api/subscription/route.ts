@@ -12,17 +12,23 @@ export async function GET() {
       return NextResponse.json({ active: false, status: "unauthenticated" });
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("subscriptions")
       .select("status, trial_end, current_period_end, stripe_customer_id")
       .eq("user_id", user.id)
       .single();
 
+    if (error) {
+      console.log("[subscription/check] Supabase query error", { userId: user.id, error });
+    }
+
     if (!data) {
+      console.log("[subscription/check] No subscription row found for user", { userId: user.id });
       return NextResponse.json({ active: false, status: "none" });
     }
 
     const active = data.status === "active" || data.status === "trialing";
+    console.log("[subscription/check] Found subscription", { userId: user.id, status: data.status, active });
     return NextResponse.json({
       active,
       status: data.status,

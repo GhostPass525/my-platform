@@ -44,7 +44,19 @@ export async function POST(req: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.metadata?.type === "platform_subscription") {
-      // Subscription checkout — status will come from subscription events
+      // Write subscription record immediately — don't rely solely on subscription events
+      const userId = session.metadata?.userId;
+      console.log("[webhook] platform_subscription checkout.session.completed", {
+        sessionId: session.id,
+        userId,
+        customerId: session.customer,
+        subscriptionId: session.subscription,
+      });
+      if (!userId) {
+        console.error("[webhook] CRITICAL: platform_subscription checkout missing userId in metadata", { sessionId: session.id });
+      } else {
+        await handlePlatformSubscriptionCheckout(stripe, session, userId);
+      }
     } else {
       // Store customer checkout
       const ok = await handleCheckoutComplete(stripe, session);
@@ -54,7 +66,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // --- Platform subscription lifecycle ---
+  // --- Platform subscription lifecycle (handles upgrades, cancellations, renewals) ---
   if (
     event.type === "customer.subscription.created" ||
     event.type === "customer.subscription.updated" ||
@@ -80,6 +92,19 @@ async function handleCheckoutComplete(
   const checkoutDataKey = session.metadata?.checkoutDataKey || null;
   const primaryProductName = session.metadata?.primaryProductName || null;
   const primaryProductType = session.metadata?.primaryProductType || "physical";
+
+  console.log("[webhook] checkout.session.completed", {
+    sessionId: session.id,
+    publishId,
+    userId,
+    checkoutDataKey,
+    primaryProductName,
+    amount_total: session.amount_total,
+  });
+
+  if (!userId) {
+    console.error("[webhook] Missing userId in session metadata — order will be unlinked. session.id:", session.id);
+  }
 
   const customerEmail =
     session.customer_details?.email ?? session.customer_email ?? "";
@@ -134,9 +159,11 @@ async function handleCheckoutComplete(
     });
 
   if (orderError) {
-    console.error("Failed to insert order:", orderError);
+    console.error("[webhook] Failed to insert order:", orderError, { userId, publishId, amount });
     return false;
   }
+
+  console.log("[webhook] Order inserted successfully for session:", session.id);
 
   // Clean up the temporary checkout data from Redis
   if (checkoutDataKey) {
@@ -146,35 +173,96 @@ async function handleCheckoutComplete(
   return true;
 }
 
-// ---------- Platform subscription ----------
+// ---------- Platform subscription (from checkout.session.completed) ----------
+
+async function handlePlatformSubscriptionCheckout(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+  userId: string
+) {
+  const supabase = getServiceClient();
+  const customerId = session.customer as string;
+  const subscriptionId = session.subscription as string;
+
+  if (!subscriptionId) {
+    console.error("[webhook] handlePlatformSubscriptionCheckout: no subscription ID on session", { sessionId: session.id, userId });
+    return;
+  }
+
+  // Retrieve the full subscription object from Stripe
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
+  } catch (err) {
+    console.error("[webhook] Failed to retrieve subscription from Stripe", { subscriptionId, err });
+    return;
+  }
+
+  console.log("[webhook] Retrieved subscription from Stripe", {
+    subscriptionId: stripeSub.id,
+    status: stripeSub.status,
+    userId,
+    customerId,
+  });
+
+  const trialEnd = stripeSub.trial_end
+    ? new Date(stripeSub.trial_end * 1000).toISOString()
+    : null;
+  const rawPeriodEnd = (stripeSub as any).current_period_end as number | undefined;
+  const periodEnd = rawPeriodEnd ? new Date(rawPeriodEnd * 1000).toISOString() : null;
+
+  const { error } = await supabase.from("subscriptions").upsert(
+    {
+      user_id: userId,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: stripeSub.id,
+      status: stripeSub.status,
+      trial_end: trialEnd,
+      current_period_end: periodEnd,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) {
+    console.error("[webhook] CRITICAL: Failed to upsert subscription from checkout", { error, userId, subscriptionId });
+  } else {
+    console.log("[webhook] Subscription upserted successfully from checkout", { userId, status: stripeSub.status });
+  }
+}
+
+// ---------- Platform subscription lifecycle (upgrades, renewals, cancellations) ----------
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const supabase = getServiceClient();
   const userId = subscription.metadata?.userId;
 
-  if (!userId) {
-    // Try to find user by customer ID
-    const { data } = await supabase
+  console.log("[webhook] handleSubscriptionChange", {
+    subscriptionId: subscription.id,
+    customer: subscription.customer,
+    metadataUserId: userId,
+    status: subscription.status,
+  });
+
+  let resolvedUserId = userId;
+
+  if (!resolvedUserId) {
+    // Fall back to looking up by Stripe customer ID (e.g. after plan change)
+    const { data, error } = await supabase
       .from("subscriptions")
       .select("user_id")
       .eq("stripe_customer_id", subscription.customer as string)
       .single();
-    if (!data?.user_id) {
-      console.error("No userId in subscription metadata and no customer match");
+    if (error || !data?.user_id) {
+      console.error("[webhook] handleSubscriptionChange: no userId in metadata and no customer match in subscriptions table", {
+        customer: subscription.customer,
+        lookupError: error,
+      });
       return;
     }
+    resolvedUserId = data.user_id;
+    console.log("[webhook] handleSubscriptionChange: resolved userId by customer ID", { resolvedUserId });
   }
-
-  const resolvedUserId =
-    userId ||
-    (await supabase
-      .from("subscriptions")
-      .select("user_id")
-      .eq("stripe_customer_id", subscription.customer as string)
-      .single()
-      .then((r) => r.data?.user_id));
-
-  if (!resolvedUserId) return;
 
   const trialEnd = subscription.trial_end
     ? new Date(subscription.trial_end * 1000).toISOString()
@@ -184,7 +272,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const rawPeriodEnd = (subscription as any).current_period_end as number | undefined;
   const periodEnd = rawPeriodEnd ? new Date(rawPeriodEnd * 1000).toISOString() : null;
 
-  await supabase.from("subscriptions").upsert(
+  const { error } = await supabase.from("subscriptions").upsert(
     {
       user_id: resolvedUserId,
       stripe_customer_id: subscription.customer as string,
@@ -196,4 +284,10 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     },
     { onConflict: "user_id" }
   );
+
+  if (error) {
+    console.error("[webhook] CRITICAL: Failed to upsert subscription", { error, resolvedUserId, subscriptionId: subscription.id });
+  } else {
+    console.log("[webhook] Subscription upserted successfully", { resolvedUserId, status: subscription.status });
+  }
 }
