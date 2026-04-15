@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     }
 
     // Generate an account onboarding link
-    const origin = req.headers.get("origin") || "https://my-platform-omega.vercel.app";
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://volcity.to";
     const accountLink = await stripePost("account_links", {
       account: accountId,
       refresh_url: `${origin}/dashboard/connect?refresh=1`,

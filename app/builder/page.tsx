@@ -424,6 +424,7 @@ export default function Home() {
   const [projectName, setProjectName] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [autoPublishPending, setAutoPublishPending] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishPhase, setPublishPhase] = useState<"saving" | "publishing" | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -516,13 +517,10 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Flag set when Stripe redirects back with ?subscribed=1
-  const autoPublishPendingRef = useRef(false);
-
   // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
   useEffect(() => {
     if (searchParams.get("subscribed") === "1") {
-      autoPublishPendingRef.current = true;
+      setAutoPublishPending(true);
       const params = new URLSearchParams(searchParams.toString());
       params.delete("subscribed");
       const newPath = params.toString() ? `/builder?${params.toString()}` : "/builder";
@@ -531,35 +529,24 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-publish once site data is available after Stripe redirect
+  // Auto-publish once pending flag is set AND site data is loaded.
+  // Using state (not a ref) so this effect re-fires immediately when
+  // setAutoPublishPending(true) is called, even if site+chatLoaded are already true.
   useEffect(() => {
-    if (autoPublishPendingRef.current && site && chatLoaded) {
-      autoPublishPendingRef.current = false;
-      // Sync subscription from Stripe first (fixes race condition where webhook
-      // hasn't fired yet when the user lands back in the builder)
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Activating your subscription..." },
-      ]);
-      fetch("/api/subscription/sync", { method: "POST" })
-        .then(() => {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: "Publishing your store..." },
-          ]);
-          publish();
-        })
-        .catch(() => {
-          // Sync failed — attempt publish anyway (webhook may have already fired)
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: "Publishing your store..." },
-          ]);
-          publish();
-        });
-    }
+    if (!autoPublishPending || !site || !chatLoaded) return;
+    setAutoPublishPending(false);
+    setMessages((prev) => [...prev, { role: "assistant", content: "Activating your subscription..." }]);
+    fetch("/api/subscription/sync", { method: "POST" })
+      .then(() => {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Publishing your store..." }]);
+        publish();
+      })
+      .catch(() => {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Publishing your store..." }]);
+        publish();
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [site, chatLoaded]);
+  }, [autoPublishPending, site, chatLoaded]);
 
   // Fetch order count once on mount for stage computation
   useEffect(() => {
@@ -965,9 +952,31 @@ export default function Home() {
     try {
       // ── Step 1: Subscription gate ──────────────────────────────
       console.log("[publish] checking subscription…");
-      const subRes = await fetch("/api/subscription");
-      const subData = await subRes.json().catch(() => ({ active: false, status: "parse_error" }));
+      let subRes = await fetch("/api/subscription");
+      let subData = await subRes.json().catch(() => ({ active: false, status: "parse_error" }));
       console.log("[publish] subscription response:", subData);
+
+      // If no subscription row found, try syncing from Stripe before giving up.
+      // This handles: (a) webhook hasn't fired yet, (b) user returning without ?subscribed=1.
+      if (!subData.active && (subData.status === "none" || subData.status === "no_customer")) {
+        console.log("[publish] no subscription row — attempting sync from Stripe…");
+        try {
+          const syncRes = await fetch("/api/subscription/sync", { method: "POST" });
+          const syncData = await syncRes.json().catch(() => ({}));
+          console.log("[publish] sync result:", syncData);
+          if (syncData.active) {
+            subData = syncData;
+          } else {
+            // Re-check DB after sync attempt (webhook may have written it)
+            const retryRes = await fetch("/api/subscription");
+            const retryData = await retryRes.json().catch(() => ({ active: false, status: "retry_error" }));
+            console.log("[publish] retry subscription response:", retryData);
+            if (retryData.active) subData = retryData;
+          }
+        } catch (e) {
+          console.warn("[publish] sync attempt failed:", e);
+        }
+      }
 
       if (!subData.active) {
         console.log("[publish] no active subscription (status:", subData.status, ") — showing paywall");
@@ -2127,7 +2136,14 @@ export default function Home() {
       )}
 
       {/* Phase 3: Paywall modal */}
-      {showPaywall && <PaywallModal theme={theme} onClose={() => setShowPaywall(false)} projectId={projectId} />}
+      {showPaywall && (
+        <PaywallModal
+          theme={theme}
+          onClose={() => setShowPaywall(false)}
+          projectId={projectId}
+          onAlreadySubscribed={() => { setShowPaywall(false); publish(); }}
+        />
+      )}
 
       {/* Launch Moment — first publish celebration */}
       {showLaunchMoment && site && publishedUrl && (
@@ -2190,7 +2206,7 @@ export default function Home() {
 }
 
 // ─── Paywall Modal (Phase 3) ──────────────────────────────────────
-function PaywallModal({ theme, onClose, projectId }: { theme: Theme; onClose: () => void; projectId: string | null }) {
+function PaywallModal({ theme, onClose, projectId, onAlreadySubscribed }: { theme: Theme; onClose: () => void; projectId: string | null; onAlreadySubscribed?: () => void }) {
   const [loading, setLoading] = useState(false);
 
   const startSubscription = async () => {
@@ -2202,6 +2218,11 @@ function PaywallModal({ theme, onClose, projectId }: { theme: Theme; onClose: ()
         body: JSON.stringify({ projectId }),
       });
       const data = await res.json().catch(() => ({}));
+      if (data?.alreadySubscribed) {
+        // User already has an active subscription — no need to go through checkout
+        onAlreadySubscribed?.();
+        return;
+      }
       if (data?.url) {
         window.location.href = data.url;
       } else {

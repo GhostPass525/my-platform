@@ -47,7 +47,7 @@ export default function SignupForm() {
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
           </svg>
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", marginBottom: 8, letterSpacing: "-0.3px" }}>Welcome to VentureOS</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", marginBottom: 8, letterSpacing: "-0.3px" }}>Welcome to Volcity</h2>
         <p style={{ fontSize: 15, color: "#6B7280", marginBottom: 28 }}>Your AI mentor is ready to help you build.</p>
         <button
           onClick={() => router.push("/dashboard")}

@@ -20,6 +20,14 @@ const DASH_PROMPTS: Record<string, string[]> = {
   hasSales:    ["How do I scale?", "What should I focus on?", "Help me with content"],
 };
 
+const STAGE_CONTEXT = [
+  "Create your first project to get started.",
+  "Open the builder and generate your store to move to Launch.",
+  "Publish your store to go live.",
+  "You're live! Share your store to get your first sale.",
+  "You're growing! Keep building momentum.",
+];
+
 type Project = {
   id: string;
   name: string;
@@ -350,21 +358,61 @@ export default function DashboardClient({
         @keyframes dashDotPulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
       `}</style>
 
-      {/* Full-width flex layout: content + mentor sidebar */}
-      <div style={{ display: "flex", margin: "-40px -24px", minHeight: "calc(100vh - 60px)" }}>
+      {/* Main content — right margin reserves space for fixed mentor panel */}
+      <div style={{ marginRight: 380 }}>
 
-        {/* ── Left: main content ── */}
-        <div style={{ flex: 1, minWidth: 0, padding: "40px 24px", overflowX: "hidden" }}>
+        {/* ── Main content ── */}
+        <div style={{ minWidth: 0, padding: "0", overflowX: "hidden" }}>
 
-          {/* First Sale Funnel Widget */}
-          {showFirstSaleWidget && (
-            <FirstSaleWidget
-              brandName={brandName}
-              totalRevenue={initialRevenue}
-              userId={userId}
-              onStepClick={(msg) => setMentorMessage(msg)}
-            />
-          )}
+          {/* Stage Progress Bar */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              {/* Track line */}
+              <div style={{ position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)", height: 2, background: "#E8E8E4", zIndex: 0 }} />
+              {/* Filled track */}
+              <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 2, background: "#2563EB", zIndex: 0, width: `${(stageIndex / (STAGE_LABELS.length - 1)) * 100}%`, transition: "width 0.4s ease" }} />
+              {STAGE_LABELS.map((label, i) => {
+                const done = i < stageIndex;
+                const active = i === stageIndex;
+                return (
+                  <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 1 }}>
+                    <div style={{
+                      width: active ? 18 : 14,
+                      height: active ? 18 : 14,
+                      borderRadius: "50%",
+                      background: done ? "#2563EB" : active ? "#2563EB" : "#E8E8E4",
+                      border: active ? "3px solid #2563EB" : done ? "none" : "2px solid #D0CFC9",
+                      boxShadow: active ? "0 0 0 4px rgba(37,99,235,0.15)" : "none",
+                      transition: "all 0.3s ease",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {done && (
+                        <svg width="7" height="7" viewBox="0 0 12 12" fill="none">
+                          <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? "#1A1A1A" : done ? "#2563EB" : "#AAA", whiteSpace: "nowrap" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 12, color: "#888", marginTop: 10, textAlign: "center" }}>{STAGE_CONTEXT[stageIndex]}</p>
+          </div>
+
+          {/* Quick Stats Row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 32 }}>
+            {[
+              { label: "Projects", value: projects.length },
+              { label: "Live Stores", value: liveCount },
+              { label: "Total Sales", value: ordersCount },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ background: "#fff", borderRadius: 10, border: "1px solid #E8E8E4", padding: "14px 16px" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
 
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 }}>
@@ -651,35 +699,50 @@ export default function DashboardClient({
         </div>
       )}
 
-        </div>{/* end left content */}
 
-        {/* ── Right: Mentor Panel (desktop) ── */}
+          {/* First Sale Funnel Widget — below projects */}
+          {showFirstSaleWidget && (
+            <div style={{ marginTop: 28 }}>
+              <FirstSaleWidget
+                brandName={brandName}
+                totalRevenue={initialRevenue}
+                userId={userId}
+                onStepClick={(msg) => setMentorMessage(msg)}
+              />
+            </div>
+          )}
+
+        </div>{/* end main content */}
+
+      </div>{/* end margin wrapper */}
+
+        {/* ── Right: Mentor Panel (desktop, fixed) ── */}
         <div
           className="dash-mentor-panel"
           style={{
-            width: 320,
-            flexShrink: 0,
+            position: "fixed",
+            top: 60,
+            right: 0,
+            bottom: 0,
+            width: 380,
             borderLeft: "1px solid #E8E8E4",
             background: "#F7F6F3",
             flexDirection: "column",
-            position: "sticky",
-            top: 0,
-            alignSelf: "flex-start",
-            height: "calc(100vh - 60px)",
             overflow: "hidden",
+            zIndex: 20,
           }}
         >
           {/* Panel header */}
           <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #E8E8E4", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>Your Mentor</div>
-                <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.2 }}>Ready to help you build</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
+                <div style={{ fontSize: 12, color: "#AAA", lineHeight: 1.3, marginTop: 1 }}>Ready to help you build</div>
               </div>
             </div>
           </div>
@@ -694,9 +757,9 @@ export default function DashboardClient({
                   borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
                   fontSize: 13,
                   lineHeight: 1.55,
-                  color: m.role === "user" ? "#1e40af" : "#334155",
-                  background: m.role === "user" ? "#eff6ff" : "#ffffff",
-                  border: m.role === "user" ? "1px solid #bfdbfe" : "1px solid #E8E8E4",
+                  color: m.role === "user" ? "#334155" : "#334155",
+                  background: m.role === "user" ? "#ffffff" : "#F0EFE9",
+                  border: m.role === "user" ? "1px solid #E8E8E4" : "none",
                   whiteSpace: "pre-line",
                 }}>
                   {m.content}
@@ -704,16 +767,16 @@ export default function DashboardClient({
               </div>
             ))}
 
-            {/* Suggested prompts — shown until first user message */}
+            {/* Suggested prompts — pill-shaped, shown until first user message */}
             {dashMessages.filter(m => m.role === "user").length === 0 && dashPromptSet.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                 {dashPromptSet.map((prompt) => (
                   <button
                     key={prompt}
-                    onClick={() => { setDashInput(prompt); setTimeout(() => { setDashInput(""); const userMsg: DashMsg = { role: "user", content: prompt }; const updated = [...dashMessages, userMsg]; setDashMessages(updated); setDashLoading(true); const supabase = createClient(); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "user", content: prompt }).then(() => {}); fetch("/api/idea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated, mentorContext: { brandName: brandName || undefined, stage: currentStage, niche: niche || undefined } }) }).then(r => r.json().catch(() => ({}))).then(data => { const reply = data?.result || "Something went wrong."; setDashMessages(prev => [...prev, { role: "assistant", content: reply }]); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "assistant", content: reply }).then(() => {}); }).catch(() => { setDashMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]); }).finally(() => setDashLoading(false)); }, 0); }}
-                    style={{ textAlign: "left", padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", background: "#ffffff", color: "#334155", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s" }}
-                    onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = "#2563eb"; (e.target as HTMLButtonElement).style.color = "#1e40af"; (e.target as HTMLButtonElement).style.background = "#eff6ff"; }}
-                    onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = "#E8E8E4"; (e.target as HTMLButtonElement).style.color = "#334155"; (e.target as HTMLButtonElement).style.background = "#ffffff"; }}
+                    onClick={() => { setDashInput(""); const userMsg: DashMsg = { role: "user", content: prompt }; const updated = [...dashMessages, userMsg]; setDashMessages(updated); setDashLoading(true); const supabase = createClient(); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "user", content: prompt }).then(() => {}); fetch("/api/idea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated, mentorContext: { brandName: brandName || undefined, stage: currentStage, niche: niche || undefined } }) }).then(r => r.json().catch(() => ({}))).then(data => { const reply = data?.result || "Something went wrong."; setDashMessages(prev => [...prev, { role: "assistant", content: reply }]); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "assistant", content: reply }).then(() => {}); }).catch(() => { setDashMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]); }).finally(() => setDashLoading(false)); }}
+                    style={{ padding: "6px 14px", borderRadius: 999, border: "1px solid #D0CFC9", background: "#ffffff", color: "#555", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s", whiteSpace: "nowrap" }}
+                    onMouseEnter={e => { (e.currentTarget).style.borderColor = "#2563eb"; (e.currentTarget).style.color = "#2563eb"; (e.currentTarget).style.background = "#EFF6FF"; }}
+                    onMouseLeave={e => { (e.currentTarget).style.borderColor = "#D0CFC9"; (e.currentTarget).style.color = "#555"; (e.currentTarget).style.background = "#ffffff"; }}
                   >
                     {prompt}
                   </button>
@@ -738,21 +801,19 @@ export default function DashboardClient({
               onChange={e => setDashInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
               placeholder="Ask your mentor anything..."
-              style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s" }}
+              style={{ flex: 1, height: 44, padding: "0 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s", boxSizing: "border-box" }}
               onFocus={e => (e.target.style.borderColor = "#2563eb")}
               onBlur={e => (e.target.style.borderColor = "#E8E8E4")}
             />
             <button
               onClick={sendDashMentor}
               disabled={dashLoading || !dashInput.trim()}
-              style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
+              style={{ height: 44, padding: "0 16px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
             >
               Send
             </button>
           </div>
         </div>
-
-      </div>{/* end flex layout */}
 
       {/* Mobile: floating mentor chat button */}
       <button

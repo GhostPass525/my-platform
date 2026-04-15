@@ -40,10 +40,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-100 rounded-lg ${className}`} />;
-}
-
 function SalesChart({ orders }: { orders: Order[] }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
@@ -56,11 +52,7 @@ function SalesChart({ orders }: { orders: Order[] }) {
     const amount = orders
       .filter((o) => {
         const od = new Date(o.created_at);
-        return (
-          od.getDate() === d.getDate() &&
-          od.getMonth() === d.getMonth() &&
-          od.getFullYear() === d.getFullYear()
-        );
+        return od.getDate() === d.getDate() && od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
       })
       .reduce((sum, o) => sum + (o.total || 0), 0);
     return { label, amount };
@@ -76,28 +68,15 @@ function SalesChart({ orders }: { orders: Order[] }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "center" }}>
-        <svg
-          width={totalW}
-          height={chartH + 28}
-          style={{ overflow: "visible" }}
-        >
+        <svg width={totalW} height={chartH + 28} style={{ overflow: "visible" }}>
           {data.map((d, i) => {
             const barH = Math.max((d.amount / maxVal) * chartH, 0);
             const x = i * (barW + gap);
             return (
               <g key={i}>
-                <rect x={x} y={0} width={barW} height={chartH} rx={6} fill="#F1F0EC" />
-                {barH > 0 && (
-                  <rect x={x} y={chartH - barH} width={barW} height={barH} rx={6} fill="#2563EB" />
-                )}
-                <text
-                  x={x + barW / 2}
-                  y={chartH + 20}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fill="#94a3b8"
-                  fontFamily="inherit"
-                >
+                <rect x={x} y={0} width={barW} height={chartH} rx={6} fill="#EEEDE9" />
+                {barH > 0 && <rect x={x} y={chartH - barH} width={barW} height={barH} rx={6} fill="#2563EB" />}
+                <text x={x + barW / 2} y={chartH + 20} textAnchor="middle" fontSize={11} fill="#AAA" fontFamily="inherit">
                   {d.label}
                 </text>
               </g>
@@ -106,13 +85,36 @@ function SalesChart({ orders }: { orders: Order[] }) {
         </svg>
       </div>
       {!hasData && (
-        <p className="text-center text-sm text-slate-400 mt-3">
+        <p style={{ textAlign: "center", fontSize: 13, color: "#AAA", marginTop: 12 }}>
           Your sales chart will appear here
         </p>
       )}
     </div>
   );
 }
+
+const CARD: React.CSSProperties = {
+  background: "#fff",
+  borderRadius: 12,
+  border: "1px solid #E8E8E4",
+  padding: 24,
+  marginBottom: 16,
+};
+
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "#AAA",
+  marginBottom: 16,
+};
+
+const SpinIcon = () => (
+  <svg style={{ animation: "spin 1s linear infinite" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 11-6.219-8.56" />
+  </svg>
+);
 
 export default function ConnectClient() {
   const searchParams = useSearchParams();
@@ -124,7 +126,6 @@ export default function ConnectClient() {
   const [onboarding, setOnboarding] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [ordersData, setOrdersData] = useState<OrdersData | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
@@ -132,7 +133,10 @@ export default function ConnectClient() {
     setLoading(true);
     try {
       const res = await fetch("/api/connect/status");
-      if (res.ok) setStatus(await res.json());
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) setStatus(data);
+    } catch (e) {
+      console.error("Connect status fetch failed:", e);
     } finally {
       setLoading(false);
     }
@@ -169,10 +173,16 @@ export default function ConnectClient() {
   useEffect(() => {
     if (isConnected) {
       setShowBanner(true);
-      const t = setTimeout(() => setShowBanner(false), 5000);
-      return () => clearTimeout(t);
+      const bannerTimer = setTimeout(() => setShowBanner(false), 6000);
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        await fetchStatus();
+        if (attempts >= 5) clearInterval(poll);
+      }, 2000);
+      return () => { clearTimeout(bannerTimer); clearInterval(poll); };
     }
-  }, [isConnected]);
+  }, [isConnected, fetchStatus]);
 
   useEffect(() => {
     if (isRefresh && !loading && status && !status.charges_enabled) startOnboarding();
@@ -181,7 +191,6 @@ export default function ConnectClient() {
   const orders = ordersData?.orders ?? [];
   const stats = ordersData?.stats;
 
-  // group order items by product name for top products
   const productMap = new Map<string, { count: number; revenue: number }>();
   for (const o of orders) {
     for (const item of o.order_items ?? []) {
@@ -191,40 +200,27 @@ export default function ConnectClient() {
     }
   }
   const topProducts = [...productMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
-
   const now = new Date();
   const ordersThisMonth = orders.filter((o) => {
     const d = new Date(o.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
-
-  const recentOrders = [...orders]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 5);
-
-  const SpinIcon = () => (
-    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12a9 9 0 11-6.219-8.56" />
-    </svg>
-  );
+  const recentOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
 
   return (
-    <div className="max-w-3xl">
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>
-          Payments
-        </h1>
-        <p style={{ fontSize: 14, color: "#888", margin: "4px 0 0" }}>
-          Connect Stripe to accept payments and track your revenue
-        </p>
-        <div style={{ marginTop: 20, borderBottom: "1px solid #E8E8E4" }} />
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Payments</h1>
+        <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Connect Stripe to accept payments and track your revenue</p>
       </div>
 
       {/* Error banner */}
       {error && error !== "CONNECT_NOT_ENABLED" && (
-        <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+        <div style={{ ...CARD, background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           {error}
@@ -233,112 +229,113 @@ export default function ConnectClient() {
 
       {/* Success banner */}
       {showBanner && (
-        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium animate-fadeIn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
           Your Stripe account is connected!
         </div>
       )}
 
-      {/* ── Stripe Connect Card ─────────────────────────────────── */}
+      {/* ── Stripe Connect Card ── */}
       {loading ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <div className="flex items-center gap-3 text-slate-400 text-sm">
+        <div style={CARD}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#AAA", fontSize: 13 }}>
             <SpinIcon /> Loading account status…
           </div>
         </div>
       ) : !status?.connected ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div style={CARD}>
           {error === "CONNECT_NOT_ENABLED" ? (
-            <div className="flex flex-col items-start gap-5">
-              <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-1">Create or connect a Stripe account</h2>
-                <p className="text-sm text-slate-500 max-w-sm">Sign up for Stripe — it only takes a few minutes.</p>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Create or connect a Stripe account</div>
+                <div style={{ fontSize: 13, color: "#888" }}>Sign up for Stripe — it only takes a few minutes.</div>
               </div>
-              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-2">
+              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", textDecoration: "none", width: "fit-content" }}>
                 Sign up for Stripe
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                 </svg>
               </a>
-              <p className="text-xs text-slate-400">Already have an account?{" "}
-                <button onClick={() => { setError(null); startOnboarding(); }} className="underline text-slate-500 hover:text-slate-700">Try connecting again</button>
-              </p>
+              <div style={{ fontSize: 12, color: "#AAA" }}>
+                Already have an account?{" "}
+                <button onClick={() => { setError(null); startOnboarding(); }} style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "#888", cursor: "pointer", textDecoration: "underline" }}>
+                  Try connecting again
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-start gap-5">
-              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-1">Connect your Stripe account</h2>
-                <p className="text-sm text-slate-500 max-w-sm">
-                  Accept payments directly. VentureOS takes a <span className="font-medium text-slate-700">1% platform fee</span> per sale.
-                </p>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Connect your Stripe account</div>
+                <div style={{ fontSize: 13, color: "#888" }}>Accept payments directly. Volcity takes a <strong style={{ color: "#1A1A1A" }}>1% platform fee</strong> per sale.</div>
               </div>
-              <button onClick={startOnboarding} disabled={onboarding} className="px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+              <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}>
                 {onboarding ? <><SpinIcon /> Redirecting…</> : "Connect Stripe Account"}
               </button>
             </div>
           )}
         </div>
       ) : !status.charges_enabled ? (
-        <div className="bg-white rounded-xl border border-amber-200 p-6 mb-6" style={{ background: "rgba(254,243,199,0.2)" }}>
-          <div className="flex flex-col items-start gap-5">
-            <div className="h-12 w-12 rounded-xl bg-yellow-50 flex items-center justify-center">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ ...CARD, background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-1">Finish setting up your account</h2>
-              <p className="text-sm text-slate-500 max-w-sm">Complete Stripe onboarding to start receiving payments.</p>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Finish setting up your account</div>
+              <div style={{ fontSize: 13, color: "#888" }}>Complete Stripe onboarding to start receiving payments.</div>
             </div>
-            <button onClick={startOnboarding} disabled={onboarding} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-yellow-500 hover:bg-yellow-600 text-white transition-colors disabled:opacity-60 flex items-center gap-2">
+            <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}>
               {onboarding ? <><SpinIcon /> Redirecting…</> : "Complete Setup"}
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-emerald-200 p-6 mb-6" style={{ background: "rgba(240,253,244,0.4)" }}>
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Connected to Stripe</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Your account is active and ready to accept payments.</p>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Connected to Stripe</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>Your account is active and ready to accept payments.</div>
               </div>
             </div>
-            <div className="grid gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 { label: "Account ID", value: status.connected_account_id, mono: true },
                 { label: "Payments", value: "Enabled", green: true },
                 { label: "Payouts", value: status.payouts_enabled ? "Enabled" : "Pending", green: status.payouts_enabled, yellow: !status.payouts_enabled },
               ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between px-4 py-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-sm text-slate-600">{row.label}</span>
-                  <span className={`text-sm font-medium ${row.mono ? "font-mono text-slate-800" : row.green ? "text-emerald-700" : "text-yellow-600"}`}>
+                <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.7)", border: "1px solid #D1FAE5" }}>
+                  <span style={{ fontSize: 13, color: "#555" }}>{row.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, fontFamily: row.mono ? "monospace" : "inherit", color: row.green ? "#16a34a" : row.yellow ? "#D97706" : "#1A1A1A" }}>
                     {row.value}
                   </span>
                 </div>
               ))}
             </div>
-            <a href="https://dashboard.stripe.com/express" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-slate-900 hover:bg-slate-800 text-white transition-colors w-fit">
+            <a href="https://dashboard.stripe.com/express" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}>
               Manage Account
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
               </svg>
             </a>
@@ -346,76 +343,62 @@ export default function ConnectClient() {
         </div>
       )}
 
-      {/* ── Payment Summary Stats ────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+      {/* ── Stats Row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         {loadingOrders ? (
           [1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-slate-200 p-5">
-              <Skeleton className="h-3 w-20 mb-3" />
-              <Skeleton className="h-7 w-28 mb-2" />
-              <Skeleton className="h-3 w-16" />
-            </div>
+            <div key={i} style={{ ...CARD, marginBottom: 0, height: 86 }} />
           ))
         ) : (
           <>
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 8 }}>Total Earned</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "#1A1A1A", letterSpacing: "-0.02em" }}>{fmt(stats?.totalRevenue ?? 0)}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>{stats?.totalOrders ?? 0} orders all time</div>
-            </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 8 }}>This Month</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "#1A1A1A", letterSpacing: "-0.02em" }}>{ordersThisMonth}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                orders in {new Date().toLocaleDateString("en-US", { month: "long" })}
+            {[
+              { label: "Total Earned", value: fmt(stats?.totalRevenue ?? 0), sub: `${stats?.totalOrders ?? 0} orders all time` },
+              { label: "This Month", value: String(ordersThisMonth), sub: `orders in ${new Date().toLocaleDateString("en-US", { month: "long" })}` },
+              { label: "Avg Order", value: fmt(stats?.avgOrderValue ?? 0), sub: "per transaction" },
+            ].map(({ label, value, sub }) => (
+              <div key={label} style={{ ...CARD, marginBottom: 0 }}>
+                <div style={SECTION_LABEL}>{label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", letterSpacing: "-0.02em", lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: 12, color: "#AAA", marginTop: 4 }}>{sub}</div>
               </div>
-            </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 8 }}>Avg Order</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "#1A1A1A", letterSpacing: "-0.02em" }}>{fmt(stats?.avgOrderValue ?? 0)}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>per transaction</div>
-            </div>
+            ))}
           </>
         )}
       </div>
 
-      {/* ── Sales Chart ──────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-5">
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 20 }}>
-          Sales — Last 7 Days
-        </div>
+      {/* ── Sales Chart ── */}
+      <div style={CARD}>
+        <div style={SECTION_LABEL}>Sales — Last 7 Days</div>
         {loadingOrders ? (
-          <div className="h-32 animate-pulse bg-slate-50 rounded-lg" />
+          <div style={{ height: 128, background: "#EEEDE9", borderRadius: 8 }} />
         ) : (
           <SalesChart orders={orders} />
         )}
       </div>
 
-      {/* ── Top Products ─────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-5">
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 16 }}>
-          Best Sellers
-        </div>
+      {/* ── Best Sellers ── */}
+      <div style={CARD}>
+        <div style={SECTION_LABEL}>Best Sellers</div>
         {loadingOrders ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-11" />)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1, 2, 3].map((i) => <div key={i} style={{ height: 44, background: "#EEEDE9", borderRadius: 8 }} />)}
           </div>
         ) : topProducts.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-100 mb-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEEDE9", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
             </div>
-            <p className="text-sm text-slate-400">Your best sellers will appear here once you start getting sales.</p>
+            <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>Your best sellers will appear here once you start getting sales.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {topProducts.map(([name, data], i) => (
-              <div key={name} className="flex items-center gap-4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#94a3b8", width: 20, flexShrink: 0 }}>{i + 1}.</span>
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "#1A1A1A" }} className="truncate">{name}</span>
-                <span style={{ fontSize: 12, color: "#64748b" }}>{data.count} sold</span>
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, background: "#FAFAF8", border: "1px solid #EEEDE9" }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "#AAA", width: 18, flexShrink: 0 }}>{i + 1}.</span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "#1A1A1A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                <span style={{ fontSize: 12, color: "#888" }}>{data.count} sold</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>{fmt(data.revenue)}</span>
               </div>
             ))}
@@ -423,42 +406,40 @@ export default function ConnectClient() {
         )}
       </div>
 
-      {/* ── Recent Activity ──────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 16 }}>
-          Recent Activity
-        </div>
+      {/* ── Recent Activity ── */}
+      <div style={CARD}>
+        <div style={SECTION_LABEL}>Recent Activity</div>
         {loadingOrders ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8" />)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4].map((i) => <div key={i} style={{ height: 32, background: "#EEEDE9", borderRadius: 8 }} />)}
           </div>
         ) : recentOrders.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-100 mb-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEEDE9", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
               </svg>
             </div>
-            <p className="text-sm text-slate-400">Activity will appear here once you start getting orders.</p>
+            <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>Activity will appear here once you start getting orders.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {recentOrders.map((o) => {
               const name = o.customer_name || o.customer_email?.split("@")[0] || "a customer";
               return (
-                <div key={o.id} className="flex items-center gap-3">
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 14, color: "#374151" }}>
-                    New order from <span style={{ fontWeight: 500 }}>{name}</span>
-                    {" "}— <span style={{ fontWeight: 500 }}>{fmt(o.total)}</span>
+                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 13, color: "#555" }}>
+                    New order from <strong style={{ color: "#1A1A1A", fontWeight: 500 }}>{name}</strong>
+                    {" "}— <strong style={{ color: "#1A1A1A", fontWeight: 500 }}>{fmt(o.total)}</strong>
                   </span>
-                  <span style={{ fontSize: 12, color: "#94a3b8", flexShrink: 0 }}>{timeAgo(o.created_at)}</span>
+                  <span style={{ fontSize: 12, color: "#AAA", flexShrink: 0 }}>{timeAgo(o.created_at)}</span>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }

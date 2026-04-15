@@ -26,7 +26,7 @@ export default async function SignupPage() {
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
-        <span style={{ fontWeight: 700, fontSize: 17, color: "#1A1A1A", letterSpacing: "-0.3px" }}>VentureOS</span>
+        <span style={{ fontWeight: 700, fontSize: 17, color: "#1A1A1A", letterSpacing: "-0.3px" }}>Volcity</span>
       </a>
 
       <div

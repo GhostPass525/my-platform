@@ -14,6 +14,32 @@ type Props = {
   onClose: () => void;
 };
 
+const STAGE_SUGGESTIONS: Record<string, string[]> = {
+  launch: [
+    "What's my first move to get sales?",
+    "Help me make a TikTok about my store",
+    "How do I find my first customers?",
+  ],
+  "first sale": [
+    "How do I get my next 10 sales?",
+    "Should I run ads yet?",
+    "How do I find affiliates for my store?",
+  ],
+  growing: [
+    "What's my highest leverage move right now?",
+    "How do I build a content strategy?",
+    "When should I start paid ads?",
+  ],
+};
+
+function getStageSuggestions(stage: string): string[] {
+  const s = stage.toLowerCase();
+  for (const key of Object.keys(STAGE_SUGGESTIONS)) {
+    if (s.includes(key)) return STAGE_SUGGESTIONS[key];
+  }
+  return [];
+}
+
 export default function MentorChat({ openingMessage, brandName, stage = "Launch", niche, recentActions, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: openingMessage },
@@ -203,6 +229,78 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               </div>
             </div>
           ))}
+
+          {/* Stage-based suggestion pills — only show when no user message yet */}
+          {messages.length === 1 && getStageSuggestions(stage).length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {getStageSuggestions(stage).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => {
+                    setInput(suggestion);
+                    setTimeout(() => {
+                      setInput("");
+                      const userMsg: Message = { role: "user", content: suggestion };
+                      const updated = [messages[0], userMsg];
+                      setMessages(updated);
+                      setLoading(true);
+                      fetch("/api/idea", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          messages: updated,
+                          mentorContext: {
+                            brandName: brandName || undefined,
+                            stage,
+                            niche: niche || undefined,
+                            recentActions: recentActions?.length ? recentActions : undefined,
+                          },
+                        }),
+                      })
+                        .then((r) => r.json().catch(() => ({})))
+                        .then((data) => {
+                          setMessages((prev) => [
+                            ...prev,
+                            { role: "assistant", content: data?.result || "Something went wrong. Try again." },
+                          ]);
+                        })
+                        .catch(() => {
+                          setMessages((prev) => [
+                            ...prev,
+                            { role: "assistant", content: "Something went wrong. Try again." },
+                          ]);
+                        })
+                        .finally(() => setLoading(false));
+                    }, 0);
+                  }}
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                    color: "#334155",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    lineHeight: 1.4,
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLButtonElement).style.borderColor = "#2563eb";
+                    (e.target as HTMLButtonElement).style.color = "#1e40af";
+                    (e.target as HTMLButtonElement).style.background = "#eff6ff";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLButtonElement).style.borderColor = "#e2e8f0";
+                    (e.target as HTMLButtonElement).style.color = "#334155";
+                    (e.target as HTMLButtonElement).style.background = "#f8fafc";
+                  }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
 
           {loading && (
             <div style={{ display: "flex", gap: 4, padding: "4px 4px" }}>

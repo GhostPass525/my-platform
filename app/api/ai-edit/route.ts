@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "messages is required" }, { status: 400 });
     }
 
-    const systemPrompt = `You are an AI site editor for VentureOS. When the user asks to change the site, respond conversationally AND return a siteUpdate JSON object with the specific fields to change.
+    const systemPrompt = `You are an AI site editor for Volcity. When the user asks to change the site, respond conversationally AND return a siteUpdate JSON object with the specific fields to change.
 
 You can modify: brandName, tagline, primaryCTA, heroHeadline, heroSubheadline, theme.accent, theme.bg, theme.text, font, sections (array), products (array).
 

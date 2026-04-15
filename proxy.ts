@@ -2,6 +2,16 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const host = request.headers.get("host") ?? "";
+
+  // Redirect non-www → www, but NEVER for API routes (Stripe webhooks don't follow redirects)
+  if (host === "volcity.to" && !pathname.startsWith("/api/")) {
+    const url = request.nextUrl.clone();
+    url.host = "www.volcity.to";
+    return NextResponse.redirect(url, { status: 308 });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -29,8 +39,6 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
 
   // Protect /dashboard — redirect unauthenticated users to login
   if (!user && pathname.startsWith("/dashboard")) {
