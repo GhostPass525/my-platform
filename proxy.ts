@@ -3,10 +3,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Skip ALL middleware logic for API routes — webhooks (POST) must never be redirected
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   const host = request.headers.get("host") ?? "";
 
-  // Redirect non-www → www, but NEVER for API routes (Stripe webhooks don't follow redirects)
-  if (host === "volcity.to" && !pathname.startsWith("/api/")) {
+  // Redirect non-www → www for non-API routes only
+  if (host === "volcity.to") {
     const url = request.nextUrl.clone();
     url.host = "www.volcity.to";
     return NextResponse.redirect(url, { status: 308 });
@@ -63,6 +69,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Exclude static files, images, and ALL /api/ routes from middleware
+    "/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
