@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -49,13 +49,21 @@ Rules:
 - No extra text
 - Must be valid JSON`;
 
+  // Build alternating message list — Anthropic requires user/assistant alternation.
+  // Compress all conversation turns into a single user message to avoid 400 errors.
+  const conversationText = messages
+    .map((m) => `${m.role === "user" ? "Founder" : "Mentor"}: ${m.content}`)
+    .join("\n\n");
+
   const resp = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 1024,
     system: systemPrompt,
     messages: [
-      ...messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      { role: "user", content: "Generate the landing page JSON now." },
+      {
+        role: "user",
+        content: `Here is the conversation so far:\n\n${conversationText}\n\nNow generate the landing page JSON.`,
+      },
     ],
   });
 
@@ -119,7 +127,6 @@ MICRO-DETAIL REQUIREMENTS (these separate good from great):
 - Product card hover: translateY(-4px) + shadow, smooth transition
 - Nav links: underline animation from left on hover
 - Section transitions: staggered fade-in with animation-delay
-- Input focus states: smooth border color transition
 - Smooth scroll behavior on html element
 - Border radius consistency: 8px for cards, 6px for buttons, 4px for inputs
 - Line heights: 1.2 for headings, 1.7 for body text
@@ -133,27 +140,44 @@ OUTPUT: Return ONLY the complete HTML. Start with <!DOCTYPE html> and end with <
     messages: [{ role: "user", content: prompt }],
   });
 
-  const html = resp.content[0]?.type === "text" ? resp.content[0].text : "";
-  return html.replace(/^```html\n?/i, "").replace(/\n?```$/i, "").trim();
+  console.log("[generate] HTML response stop_reason:", resp.stop_reason);
+  console.log("[generate] HTML content[0] type:", resp.content[0]?.type);
+
+  const raw = resp.content[0]?.type === "text" ? resp.content[0].text : "";
+  console.log("[generate] HTML raw length:", raw.length, "first 120 chars:", raw.slice(0, 120));
+
+  // Strip any markdown code fences Claude may wrap around the HTML
+  const html = raw
+    .replace(/^```html\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  console.log("[generate] HTML after strip, length:", html.length, "starts with:", html.slice(0, 60));
+  return html;
 }
 
 export async function POST(req: Request) {
+  console.log("[generate] POST called");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  console.log("[generate] user:", user.id);
 
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
 
-    if (!messages || !Array.isArray(messages)) {
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { error: "No conversation messages provided." },
         { status: 400 }
       );
     }
+
+    console.log("[generate] message count:", messages.length);
 
     const businessDescription = (messages as Array<{ role: string; content: string }>)
       .filter((m) => m.role === "user")
@@ -164,15 +188,62 @@ export async function POST(req: Request) {
       .map((m) => `${m.role === "user" ? "Founder" : "Mentor"}: ${m.content}`)
       .join("\n\n");
 
-    // Run metadata and HTML generation in parallel
-    const [site, html] = await Promise.all([
-      generateSiteMetadata(messages as Array<{ role: string; content: string }>),
+    console.log("[generate] starting HTML + metadata generation in parallel");
+
+    // Run both in parallel; metadata failure is non-fatal — we use a fallback
+    const [htmlResult, metaResult] = await Promise.allSettled([
       generateUniqueStorefront(businessDescription, mentorConversation),
+      generateSiteMetadata(messages as Array<{ role: string; content: string }>),
     ]);
 
+    console.log("[generate] htmlResult status:", htmlResult.status);
+    console.log("[generate] metaResult status:", metaResult.status);
+
+    if (htmlResult.status === "rejected") {
+      console.error("[generate] HTML generation failed:", htmlResult.reason);
+      return NextResponse.json(
+        { error: `Store generation failed: ${(htmlResult.reason as Error)?.message || htmlResult.reason}` },
+        { status: 500 }
+      );
+    }
+
+    const html = htmlResult.value;
+
+    if (!html || !html.includes("<!DOCTYPE") && !html.includes("<html")) {
+      console.error("[generate] HTML appears invalid, length:", html?.length, "content:", html?.slice(0, 200));
+      return NextResponse.json(
+        { error: "Claude returned invalid HTML. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    // Use generated metadata if available; otherwise fall back to minimal defaults
+    let site: Record<string, unknown>;
+    if (metaResult.status === "fulfilled") {
+      site = metaResult.value;
+      console.log("[generate] metadata OK, brandName:", site.brandName);
+    } else {
+      console.warn("[generate] metadata failed (non-fatal):", (metaResult.reason as Error)?.message);
+      // Extract a rough brand name from the first user message
+      const firstUserMsg = (messages as Array<{ role: string; content: string }>).find(m => m.role === "user")?.content ?? "";
+      site = {
+        brandName: firstUserMsg.slice(0, 40) || "My Store",
+        tagline: "",
+        heroHeadline: "Welcome",
+        heroSubheadline: "",
+        primaryCTA: "Shop Now",
+        audience: "",
+        offer: "",
+        firstProductOrService: "",
+        sections: [],
+        faq: [],
+      };
+    }
+
+    console.log("[generate] returning html length:", html.length);
     return NextResponse.json({ site, html });
   } catch (err: unknown) {
-    console.error("GENERATE ROUTE ERROR:", err);
+    console.error("[generate] ROUTE ERROR:", err);
     return NextResponse.json(
       { error: (err as Error)?.message || "Server generation error" },
       { status: 500 }

@@ -971,21 +971,29 @@ export default function Home() {
 
     setGenerating(true);
     try {
+      console.log("[generateSite] calling /api/generate with", messages.length, "messages");
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
       });
 
+      console.log("[generateSite] response status:", res.status);
       const data = await res.json().catch(() => ({}));
+      console.log("[generateSite] data.site:", !!data.site, "data.html length:", data.html?.length ?? 0, "data.error:", data.error);
 
       if (!res.ok) {
+        console.error("[generateSite] API error:", data?.error);
         setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Generation failed -- try again." }]);
         return;
       }
       if (!data.site) {
+        console.error("[generateSite] no site in response, full data:", JSON.stringify(data).slice(0, 300));
         setMessages((prev) => [...prev, { role: "assistant", content: "No blueprint returned. Try again." }]);
         return;
+      }
+      if (!data.html) {
+        console.warn("[generateSite] no HTML in response — will use template preview instead");
       }
 
       const base = data.site as Omit<SiteSpec, "theme" | "products" | "logoDataUrl" | "heroImageDataUrl" | "pages" | "font">;
@@ -1010,6 +1018,7 @@ export default function Home() {
         generatedHtml: data.html || undefined,
       };
 
+      console.log("[generateSite] setting site, generatedHtml present:", !!hydrated.generatedHtml, "html starts with:", hydrated.generatedHtml?.slice(0, 60));
       setSite(hydrated);
       setActivePageId(pages[0].id);
       setRightTab("quick");
@@ -1018,8 +1027,9 @@ export default function Home() {
         ...prev,
         { role: "assistant", content: "Your store is live in the preview. Customize the copy, colors, and products in the right panel — or just tell me what to change." },
       ]);
-    } catch (e: any) {
-      setMessages((prev) => [...prev, { role: "assistant", content: `Generation error: ${e?.message || e}` }]);
+    } catch (e: unknown) {
+      console.error("[generateSite] caught exception:", e);
+      setMessages((prev) => [...prev, { role: "assistant", content: `Generation error: ${(e as Error)?.message || e}` }]);
     } finally {
       setGenerating(false);
     }
