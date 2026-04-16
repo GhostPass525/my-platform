@@ -128,7 +128,7 @@ MICRO-DETAIL REQUIREMENTS (these separate good from great):
 OUTPUT: Return ONLY the complete HTML. Start with <!DOCTYPE html> and end with </html>. No other text.`;
 
   const resp = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20251001",
+    model: "claude-sonnet-4-5",
     max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   });

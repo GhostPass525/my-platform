@@ -211,7 +211,7 @@ Warm, energized, and genuinely excited about what this person is building. Like 
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const resp = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20251001",
+      model: "claude-sonnet-4-5",
       max_tokens: 1024,
       system: systemPrompt,
       messages: safeMessages,

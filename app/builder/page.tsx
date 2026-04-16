@@ -1495,7 +1495,7 @@ export default function Home() {
       {/* Workspace */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
         {/* Left: chat */}
-        <aside style={{ width: 300, flexShrink: 0, height: "calc(100vh - 52px)", background: "#F7F6F3", borderRight: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto", scrollbarWidth: "thin" as const }}>
+        <aside style={{ width: 340, flexShrink: 0, height: "calc(100vh - 52px)", background: "#F7F6F3", borderRight: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" as const, wordWrap: "break-word" as const }}>
           <div style={{ padding: "14px 16px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 32, height: 32, background: "#2563EB", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
