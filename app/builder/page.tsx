@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
@@ -58,6 +58,8 @@ type Product = {
   price: string;
   imageDataUrl?: string;
   product_type?: string;
+  booking_method?: "email" | "calendly" | "custom";
+  booking_url?: string;
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -102,6 +104,7 @@ type SiteSpec = {
   value1?: string;
   value2?: string;
   value3?: string;
+  generatedHtml?: string;
 };
 
 type TextBoxItem = {
@@ -411,6 +414,33 @@ function selectTemplate(msgs: { role: string; content: string }[]): import("@/ap
   return undefined;
 }
 
+// ─── Price input with locked $ prefix ─────────────────────────────
+function PriceInput({ value, onChange, theme }: { value: string; onChange: (v: string) => void; theme: Theme }) {
+  const numericStr = (value || "").replace(/[^0-9.]/g, "");
+  return (
+    <div>
+      <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>Price</div>
+      <div style={{ display: "flex", alignItems: "center", border: `1px solid ${theme.border}`, borderRadius: 8, overflow: "hidden", height: 36 }}>
+        <span style={{ padding: "0 10px", background: "#F5F4F0", borderRight: `1px solid ${theme.border}`, color: theme.text, fontSize: 14, fontWeight: 500, height: "100%", display: "flex", alignItems: "center", userSelect: "none", flexShrink: 0 }}>
+          $
+        </span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={numericStr}
+          onChange={(e) => {
+            const val = e.target.value;
+            onChange(val === "" ? "" : `$${val}`);
+          }}
+          style={{ border: "none", outline: "none", padding: "0 10px", fontSize: 14, flex: 1, height: "100%", background: "white", color: theme.text, minWidth: 0 }}
+          placeholder="0.00"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main builder ─────────────────────────────────────────────────
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -474,6 +504,40 @@ export default function Home() {
   const siteRef = useRef<SiteSpec | null>(null);
   const projectIdRef = useRef<string | null>(null);
 
+  // ── Undo / Redo ───────────────────────────────────────────────
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyRef = useRef<SiteSpec[]>([]);
+  const historyIndexRef = useRef(-1);
+  const isUndoRedoRef = useRef(false);
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushToHistory = useCallback((state: SiteSpec) => {
+    const next = historyRef.current.slice(0, historyIndexRef.current + 1);
+    next.push(JSON.parse(JSON.stringify(state)));
+    if (next.length > 50) next.shift();
+    historyRef.current = next;
+    historyIndexRef.current = next.length - 1;
+    setHistoryIndex(next.length - 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    const newIndex = historyIndexRef.current - 1;
+    historyIndexRef.current = newIndex;
+    setHistoryIndex(newIndex);
+    isUndoRedoRef.current = true;
+    setSite(JSON.parse(JSON.stringify(historyRef.current[newIndex])));
+  }, []);
+
+  const redo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    const newIndex = historyIndexRef.current + 1;
+    historyIndexRef.current = newIndex;
+    setHistoryIndex(newIndex);
+    isUndoRedoRef.current = true;
+    setSite(JSON.parse(JSON.stringify(historyRef.current[newIndex])));
+  }, []);
+
   // Load project + chat history on mount
   useEffect(() => {
     const pid = searchParams.get("project");
@@ -516,6 +580,36 @@ export default function Home() {
     }).catch(() => { setChatLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Push site changes to history (debounced 500ms, suppressed during undo/redo)
+  useEffect(() => {
+    if (!site) return;
+    if (isUndoRedoRef.current) {
+      isUndoRedoRef.current = false;
+      return;
+    }
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(() => {
+      pushToHistory(site);
+    }, 500);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site]);
+
+  // Keyboard shortcuts: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z = redo
+  useEffect(() => {
+    function handleKeyboard(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, [undo, redo]);
 
   // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
   useEffect(() => {
@@ -877,14 +971,12 @@ export default function Home() {
 
     setGenerating(true);
     try {
-      const minDelay = sleep(5000);
-      const resPromise = fetch("/api/generate", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
       });
 
-      const [res] = await Promise.all([resPromise, minDelay]);
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -915,6 +1007,7 @@ export default function Home() {
           { id: uid(), name: "Product Two", price: "$36" },
           { id: uid(), name: "Product Three", price: "$28" },
         ],
+        generatedHtml: data.html || undefined,
       };
 
       setSite(hydrated);
@@ -923,7 +1016,7 @@ export default function Home() {
       trackAction("Generated site blueprint");
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Generated.\n\nNext: upload a hero image + fill in your Products." },
+        { role: "assistant", content: "Your store is live in the preview. Customize the copy, colors, and products in the right panel — or just tell me what to change." },
       ]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Generation error: ${e?.message || e}` }]);
@@ -1283,163 +1376,163 @@ export default function Home() {
   };
 
   return (
-    <main className="h-screen flex flex-col overflow-hidden" style={{ background: "#F0EFE9", color: theme.text }}>
+    <main className="h-screen flex flex-col overflow-hidden" style={{ background: "#EDECE8", color: theme.text }}>
       {/* Top bar */}
-      <div className="h-14 border-b flex items-center justify-between px-4" style={{ background: "#FFFFFF", borderColor: "#EBEBEB" }}>
-        <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.accent }}>
+      <div style={{ height: 52, background: "white", borderBottom: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", padding: "0 16px", gap: 8, flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.06)", zIndex: 100 }}>
+        {/* Left: logo + project name + dashboard */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto", marginRight: 8 }}>
+          <div style={{ width: 28, height: 28, background: "#2563EB", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <div className="leading-tight">
-            <div className="font-semibold text-sm" style={{ color: theme.text }}>Volcity</div>
-            {projectName && <div className="text-xs truncate max-w-[140px]" style={{ color: theme.mutedText }}>{projectName}</div>}
-          </div>
-          <a href="/dashboard" className="hidden md:inline-block px-2.5 py-1 rounded-lg text-xs border hover:opacity-80 transition-all duration-150" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            ← Dashboard
-          </a>
+          <span style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A" }}>{projectName || "Volcity"}</span>
+          {projectName && <span style={{ color: "#D1D5DB", fontSize: 16, lineHeight: 1 }}>/</span>}
+          <a href="/dashboard" style={{ fontSize: 13, color: "#6B7280", background: "none", border: "none", cursor: "pointer", textDecoration: "none", display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 6, transition: "background 150ms ease" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#F3F4F6"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
+          >← Dashboard</a>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Center: action buttons */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          <button
+            onClick={undo}
+            disabled={historyIndex <= 0}
+            title="Undo (Ctrl+Z)"
+            style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 7, cursor: historyIndex <= 0 ? "not-allowed" : "pointer", opacity: historyIndex <= 0 ? 0.3 : 1, color: "#6B7280", flexShrink: 0, transition: "all 150ms ease" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M3 13C5 7.5 11 4 17 6.5s9 9.5 5 15" /></svg>
+          </button>
+          <button
+            onClick={redo}
+            disabled={historyIndex >= historyRef.current.length - 1}
+            title="Redo (Ctrl+Shift+Z)"
+            style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 7, cursor: historyIndex >= historyRef.current.length - 1 ? "not-allowed" : "pointer", opacity: historyIndex >= historyRef.current.length - 1 ? 0.3 : 1, color: "#6B7280", flexShrink: 0, transition: "all 150ms ease" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M21 13C19 7.5 13 4 7 6.5S-2 16 2 21" /></svg>
+          </button>
+
+          <div style={{ width: 1, height: 20, background: "#E5E7EB", margin: "0 4px", flexShrink: 0 }} />
+
           <button
             onClick={generateSite}
             disabled={!canGenerate || generating}
-            className="px-3.5 rounded-lg font-medium transition-all duration-150 border"
             style={{
-              height: 32,
-              fontSize: 13,
-              borderColor: !canGenerate || generating ? theme.border : "#2563EB",
-              background: "transparent",
-              color: !canGenerate || generating ? theme.mutedText : "#2563EB",
+              height: 30, padding: "0 14px", borderRadius: 7, fontSize: 13, fontWeight: 500,
+              border: "1px solid rgba(0,0,0,0.1)",
+              background: !canGenerate || generating ? "transparent" : "rgba(37,99,235,0.06)",
+              color: !canGenerate || generating ? "#9CA3AF" : "#2563EB",
               cursor: !canGenerate || generating ? "not-allowed" : "pointer",
-              opacity: !canGenerate && !generating ? 0.55 : 1,
+              display: "flex", alignItems: "center", gap: 6, transition: "all 150ms ease",
             }}
           >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
             {generating ? "Generating…" : "Generate"}
           </button>
 
           <button
             onClick={() => setShowLayoutModal(true)}
-            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-80 flex items-center gap-1.5"
-            style={{ height: 32, fontSize: 13, background: "transparent", border: `1px solid ${theme.border}`, color: theme.mutedText, cursor: "pointer", borderRadius: 8 }}
+            style={{ height: 30, padding: "0 14px", borderRadius: 7, fontSize: 13, fontWeight: 400, border: "1px solid rgba(0,0,0,0.1)", background: "transparent", color: "#6B7280", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 150ms ease" }}
           >
-            <span style={{ fontSize: 14 }}>⊞</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
             Templates
           </button>
 
-          {uploadsPending > 0 && (
-            <span style={{ fontSize: 12, color: "#d97706", flexShrink: 0 }}>Uploading image…</span>
-          )}
-          {uploadsPending === 0 && saveStatus === "saving" && (
-            <span style={{ fontSize: 12, color: theme.mutedText, flexShrink: 0 }}>Saving...</span>
-          )}
-          {uploadsPending === 0 && saveStatus === "saved" && (
-            <span style={{ fontSize: 12, color: theme.mutedText, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,6 5,9 10,3" /></svg>
-              All changes saved
-            </span>
-          )}
-          {saveStatus === "failed" && (
-            <span style={{ fontSize: 12, color: "#b45309", flexShrink: 0 }}>
-              {saveErrorMsg || "Save failed — retrying"}
-            </span>
-          )}
-
-          <div style={{ width: 1, height: 20, background: theme.border, margin: "0 2px", flexShrink: 0, alignSelf: "center" }} />
-
-          <button
-            onClick={publish}
-            disabled={publishing}
-            className="px-3.5 rounded-lg font-medium transition-all duration-150 hover:opacity-90"
-            style={{ height: 32, fontSize: 13, background: "#2563EB", color: "#fff", border: "none", opacity: publishing ? 0.7 : 1, cursor: "pointer" }}
-          >
-            {publishPhase === "saving" ? "Saving…" : publishPhase === "publishing" ? "Publishing…" : "Publish"}
-          </button>
-
-          {publishedUrl && (
-            <a
-              href={publishedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 rounded-lg font-medium transition-all duration-150 flex items-center gap-1 hover:opacity-70"
-              style={{ height: 32, fontSize: 13, border: "none", background: "transparent", color: theme.accent }}
-            >
-              View ↗
-            </a>
-          )}
+          <div style={{ width: 1, height: 20, background: "#E5E7EB", margin: "0 4px", flexShrink: 0 }} />
 
           <button
             onClick={() => setAiEditMode((v) => !v)}
             title={aiEditMode ? "AI Edit Mode ON — chat edits your site directly" : "Turn on AI Edit Mode"}
-            className="px-3 rounded-lg font-medium transition-all duration-150 flex items-center gap-1.5 hover:opacity-70"
             style={{
-              height: 32,
-              fontSize: 13,
-              border: "none",
-              background: aiEditMode ? `${theme.accent}12` : "transparent",
-              color: aiEditMode ? theme.accent : theme.mutedText,
-              cursor: "pointer",
+              height: 30, padding: "0 12px", borderRadius: 7, fontSize: 13, fontWeight: aiEditMode ? 500 : 400,
+              border: "1px solid rgba(0,0,0,0.1)",
+              background: aiEditMode ? "rgba(37,99,235,0.08)" : "transparent",
+              color: aiEditMode ? "#2563EB" : "#6B7280",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 150ms ease",
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-            </svg>
-            {aiEditMode ? "AI Edit: ON" : "AI Edit"}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
+            AI Edit {aiEditMode ? "ON" : "OFF"}
           </button>
+        </div>
+
+        {/* Right: save status + view + export + publish */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+          {uploadsPending > 0 && <span style={{ fontSize: 12, color: "#D97706" }}>Uploading…</span>}
+          {uploadsPending === 0 && saveStatus === "saving" && <span style={{ fontSize: 12, color: "#9CA3AF" }}>Saving…</span>}
+          {uploadsPending === 0 && saveStatus === "saved" && (
+            <span style={{ fontSize: 12, color: "#9CA3AF", display: "flex", alignItems: "center", gap: 4 }}>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,6 5,9 10,3" /></svg>
+              Saved
+            </span>
+          )}
+          {saveStatus === "failed" && <span style={{ fontSize: 12, color: "#B45309" }}>{saveErrorMsg || "Save failed"}</span>}
+
+          {publishedUrl && (
+            <a href={publishedUrl} target="_blank" rel="noopener noreferrer"
+              style={{ height: 30, padding: "0 12px", borderRadius: 7, fontSize: 13, border: "1px solid rgba(0,0,0,0.1)", background: "transparent", color: "#6B7280", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, textDecoration: "none", transition: "all 150ms ease" }}
+            >View ↗</a>
+          )}
 
           <button
             onClick={exportJson}
-            className="px-3 rounded-lg font-medium hover:opacity-70 transition-all duration-150"
-            style={{ height: 32, fontSize: 13, border: "none", background: "transparent", color: theme.mutedText, cursor: "pointer" }}
+            style={{ height: 30, padding: "0 12px", borderRadius: 7, fontSize: 13, border: "1px solid rgba(0,0,0,0.1)", background: "transparent", color: "#6B7280", cursor: "pointer", transition: "all 150ms ease" }}
+          >Export</button>
+
+          <button
+            onClick={publish}
+            disabled={publishing}
+            style={{ height: 32, padding: "0 16px", background: publishing ? "#93C5FD" : "#2563EB", color: "white", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer", transition: "all 150ms ease", boxShadow: "0 1px 3px rgba(37,99,235,0.35)", whiteSpace: "nowrap" }}
+            onMouseEnter={e => { if (!publishing) (e.currentTarget as HTMLElement).style.background = "#1D4ED8"; }}
+            onMouseLeave={e => { if (!publishing) (e.currentTarget as HTMLElement).style.background = "#2563EB"; }}
           >
-            Export
+            {publishPhase === "saving" ? "Saving…" : publishPhase === "publishing" ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>
 
       {/* Workspace */}
-      <div className="grid grid-cols-12 flex-1 min-h-0">
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
         {/* Left: chat */}
-        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#F7F6F3", borderRight: "1px solid rgba(0,0,0,0.07)" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
+        <aside style={{ width: 300, flexShrink: 0, height: "calc(100vh - 52px)", background: "#F7F6F3", borderRight: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto", scrollbarWidth: "thin" as const }}>
+          <div style={{ padding: "14px 16px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: theme.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ width: 32, height: 32, background: "#2563EB", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
               </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", margin: 0, lineHeight: 1.3 }}>Your Mentor</p>
-                <p style={{ fontSize: 12, color: "#888", margin: 0, lineHeight: 1.3 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
+                <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>
                   {aiEditMode ? "AI Edit: editing your site live" : "Ready to help you build"}
-                </p>
+                </div>
               </div>
               {site && (
                 <button
                   onClick={() => setAiEditMode((v) => !v)}
-                  className="px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors duration-150 flex-shrink-0"
                   style={{
-                    borderColor: aiEditMode ? theme.accent : theme.border,
-                    background: aiEditMode ? `${theme.accent}12` : "transparent",
-                    color: aiEditMode ? theme.accent : theme.mutedText,
+                    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    border: "none", cursor: "pointer", flexShrink: 0,
+                    background: aiEditMode ? "#2563EB" : "#EFEFEF",
+                    color: aiEditMode ? "white" : "#6B7280",
+                    transition: "all 150ms ease",
                   }}
-                >
-                  {aiEditMode ? "ON" : "OFF"}
-                </button>
+                >{aiEditMode ? "ON" : "OFF"}</button>
               )}
             </div>
           </div>
 
           {/* Business stage tracker */}
-          <div className="border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
+          <div style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
             <StageTracker
               activeIndex={computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount)}
               accent={theme.accent}
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto space-y-4" style={{ padding: "20px 18px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, scrollbarWidth: "thin" as const }}>
             {messages.map((m, i) => (
               <div key={i} className="animate-fadeIn" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: 8 }}>
                 {m.role === "assistant" && (
@@ -1457,17 +1550,17 @@ export default function Home() {
                   </div>
                 )}
                 {m.role === "assistant" ? (
-                  <div style={{ flex: 1, fontSize: 15, fontWeight: 500, lineHeight: 1.7, color: "#1A1A1A", whiteSpace: "pre-line" }}>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 400, lineHeight: 1.65, color: "#1A1A1A", whiteSpace: "pre-line" }}>
                     {m.content}
                   </div>
                 ) : (
                   <div style={{
                     maxWidth: "88%",
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: 400,
-                    lineHeight: 1.65,
-                    color: "#1A1A1A",
-                    background: "#F0F0F0",
+                    lineHeight: 1.6,
+                    color: "#374151",
+                    background: "rgba(0,0,0,0.05)",
                     padding: "8px 12px",
                     borderRadius: "12px 12px 2px 12px",
                     whiteSpace: "pre-line",
@@ -1494,7 +1587,7 @@ export default function Home() {
             <div ref={chatEndRef} />
           </div>
 
-          <div style={{ padding: "10px 16px 14px", borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(0,0,0,0.06)", flexShrink: 0, background: "#F7F6F3" }}>
             {/* Suggestion chips */}
             {!aiEditMode && (() => {
               const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
@@ -1591,107 +1684,174 @@ export default function Home() {
                 onClick={() => sendMessage()}
                 disabled={loadingChat}
                 style={{
-                  height: 44,
-                  padding: "0 16px",
-                  borderRadius: 8,
+                  width: 38, height: 38,
+                  borderRadius: 9,
                   border: "none",
-                  fontSize: 14,
-                  fontWeight: 500,
                   background: loadingChat ? "#E5E7EB" : "#2563EB",
                   color: loadingChat ? "#9CA3AF" : "#fff",
                   flexShrink: 0,
                   cursor: loadingChat ? "default" : "pointer",
-                  transition: "opacity 0.15s",
+                  transition: "all 150ms ease",
                   alignSelf: "flex-end",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: loadingChat ? "none" : "0 1px 3px rgba(37,99,235,0.3)",
                 }}
               >
-                Send
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
               </button>
             </div>
           </div>
         </aside>
 
         {/* Center: preview */}
-        <section
-          className="col-span-12 md:col-span-6 min-h-0 overflow-y-auto"
-          style={{ background: "#F0EFE9", position: "relative" }}
-          onClick={() => setSelectedTextBoxId(null)}
-        >
-          {!site ? (
-            <EmptyPreview theme={theme} />
-          ) : (
-            <div className="store-preview" style={{ background: "#FFFFFF", minHeight: "100%", position: "relative" }}>
-              {/* Preview banner */}
-              {previewLayout && (
-                <div style={{
-                  position: "sticky", top: 0, zIndex: 50,
-                  background: "#1E40AF", color: "#fff",
-                  padding: "8px 16px",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  fontSize: 13, fontWeight: 500,
-                }}>
-                  <span>Previewing: <strong>{LAYOUT_NAMES[previewLayout]}</strong> layout</span>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => {
-                        setSite(prev => prev ? { ...prev, activeLayout: previewLayout } : prev);
-                        setPreviewLayout(null);
-                        setShowLayoutModal(false);
-                      }}
-                      style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "#fff", color: "#1E40AF", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                    >Use This Layout</button>
-                    <button
-                      onClick={() => setPreviewLayout(null)}
-                      style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", fontSize: 12, cursor: "pointer" }}
-                    >Cancel</button>
-                  </div>
-                </div>
-              )}
-              {/* Layout or default preview */}
-              {(previewLayout || site.activeLayout) ? (
-                <StoreLayout
-                  layoutId={(previewLayout || site.activeLayout)!}
-                  site={site}
-                  activePageId={activePageId || site.pages[0]?.id}
-                  onSelectPage={setActivePageId}
-                  onAddToCart={() => {}}
-                  cartCount={0}
-                  onOpenCart={() => {}}
+        <main style={{ flex: 1, minHeight: 0, background: "#EDECE8", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+          {/* Preview toolbar */}
+          <div style={{ height: 40, background: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", padding: "0 14px", gap: 8, flexShrink: 0 }}>
+            {site ? (
+              <>
+                <div style={{ width: 18, height: 18, background: site.theme.accent, borderRadius: 4, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A", flexShrink: 0, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site.brandName}</span>
+                {site.tagline && <span style={{ fontSize: 12, color: "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site.tagline}</span>}
+              </>
+            ) : (
+              <>
+                <div style={{ width: 18, height: 18, background: "#E5E7EB", borderRadius: 4, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: "#9CA3AF" }}>Your store preview</span>
+              </>
+            )}
+            {site && !site.generatedHtml && (
+              <div style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
+                {site.pages.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setActivePageId(p.id)}
+                    style={{
+                      padding: "3px 9px", borderRadius: 5, fontSize: 12, border: "none", cursor: "pointer",
+                      background: (activePageId || site.pages[0]?.id) === p.id ? "rgba(37,99,235,0.08)" : "transparent",
+                      color: (activePageId || site.pages[0]?.id) === p.id ? "#2563EB" : "#6B7280",
+                      fontWeight: (activePageId || site.pages[0]?.id) === p.id ? 500 : 400,
+                      transition: "all 150ms ease",
+                    }}
+                  >{p.name}</button>
+                ))}
+              </div>
+            )}
+            {site?.generatedHtml && <span style={{ marginLeft: "auto", fontSize: 11, color: "#9CA3AF", background: "rgba(0,0,0,0.05)", padding: "2px 8px", borderRadius: 4 }}>AI-generated</span>}
+          </div>
+
+          {/* Preview area */}
+          <div style={{ flex: 1, overflow: "hidden", padding: 14 }} onClick={() => setSelectedTextBoxId(null)}>
+            {generating ? (
+              <GeneratingState />
+            ) : !site ? (
+              <EmptyPreview theme={theme} />
+            ) : site.generatedHtml && !previewLayout ? (
+              <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <iframe
+                  srcDoc={site.generatedHtml}
+                  style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                  title="Store Preview"
+                  sandbox="allow-same-origin allow-scripts"
                 />
-              ) : (
-                <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} onTextClick={openTextPanel} />
-              )}
-              <DraggableTextLayer
-                boxes={pageElements[activePageId || site.pages[0]?.id] ?? []}
-                selectedId={selectedTextBoxId}
-                onSelect={setSelectedTextBoxId}
-                onChange={(newBoxes) => {
-                  const pid = activePageId || site.pages[0]?.id;
-                  setPageElements((prev) => ({ ...prev, [pid]: newBoxes }));
-                }}
-                isBlankPage={!!(site && site.pages.find(p => p.id === (activePageId || site.pages[0]?.id)) && !["home","products","about","contact"].includes(site.pages.find(p => p.id === (activePageId || site.pages[0]?.id))?.key ?? "home"))}
-                onAddElement={addElement}
-                onReplaceImage={(id) => {
-                  canvasImageReplaceTargetRef.current = id;
-                  canvasImagePickerRef.current?.click();
-                }}
-              />
-            </div>
+              </div>
+            ) : (
+              <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "auto", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)", position: "relative", scrollbarWidth: "thin" as const }}>
+                <div className="store-preview" style={{ position: "relative" }}>
+                  {/* Preview banner */}
+                  {previewLayout && (
+                    <div style={{
+                      position: "sticky", top: 0, zIndex: 50,
+                      background: "#1E40AF", color: "#fff",
+                      padding: "8px 16px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      fontSize: 13, fontWeight: 500,
+                    }}>
+                      <span>Previewing: <strong>{LAYOUT_NAMES[previewLayout]}</strong> layout</span>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() => {
+                            setSite(prev => prev ? { ...prev, activeLayout: previewLayout } : prev);
+                            setPreviewLayout(null);
+                            setShowLayoutModal(false);
+                          }}
+                          style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "#fff", color: "#1E40AF", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        >Use This Layout</button>
+                        <button
+                          onClick={() => setPreviewLayout(null)}
+                          style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", fontSize: 12, cursor: "pointer" }}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Layout or default preview */}
+                  {(previewLayout || site.activeLayout) ? (
+                    <StoreLayout
+                      layoutId={(previewLayout || site.activeLayout)!}
+                      site={site}
+                      activePageId={activePageId || site.pages[0]?.id}
+                      onSelectPage={setActivePageId}
+                      onAddToCart={() => {}}
+                      cartCount={0}
+                      onOpenCart={() => {}}
+                    />
+                  ) : (
+                    <SitePreview site={site} activePageId={activePageId || site.pages[0]?.id} onSelectPage={setActivePageId} onTextClick={openTextPanel} />
+                  )}
+                  <DraggableTextLayer
+                    boxes={pageElements[activePageId || site.pages[0]?.id] ?? []}
+                    selectedId={selectedTextBoxId}
+                    onSelect={setSelectedTextBoxId}
+                    onChange={(newBoxes) => {
+                      const pid = activePageId || site.pages[0]?.id;
+                      setPageElements((prev) => ({ ...prev, [pid]: newBoxes }));
+                    }}
+                    isBlankPage={!!(site && site.pages.find(p => p.id === (activePageId || site.pages[0]?.id)) && !["home","products","about","contact"].includes(site.pages.find(p => p.id === (activePageId || site.pages[0]?.id))?.key ?? "home"))}
+                    onAddElement={addElement}
+                    onReplaceImage={(id) => {
+                      canvasImageReplaceTargetRef.current = id;
+                      canvasImagePickerRef.current?.click();
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Generate loading overlay (disables chat interaction) */}
+          {generating && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.5)", pointerEvents: "all" }} />
           )}
-        </section>
+        </main>
 
         {/* Right: builder */}
-        <aside className="col-span-12 md:col-span-3 flex flex-col min-h-0" style={{ background: "#F7F6F3", borderLeft: "1px solid rgba(0,0,0,0.07)" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: theme.text, marginBottom: 10 }}>Customize</div>
-            <div className="flex flex-wrap gap-1">
+        <aside style={{ width: 280, flexShrink: 0, height: "calc(100vh - 52px)", background: "#F7F6F3", borderLeft: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto", scrollbarWidth: "thin" as const }}>
+          <div style={{ padding: "12px 14px 0", borderBottom: "1px solid rgba(0,0,0,0.06)", position: "sticky", top: 0, background: "#F7F6F3", zIndex: 10, flexShrink: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A", marginBottom: 10 }}>Customize</div>
+            <div style={{ display: "flex", gap: 2, overflowX: "auto", scrollbarWidth: "none" as const }}>
               {(["quick", "sections", "design", "content", "products", "pages"] as const).map((tab) => (
-                <Tab key={tab} label={tab.charAt(0).toUpperCase() + tab.slice(1)} active={rightTab === tab} theme={theme} onClick={() => setRightTab(tab)} />
+                <button
+                  key={tab}
+                  onClick={() => setRightTab(tab)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 12,
+                    fontWeight: rightTab === tab ? 500 : 400,
+                    border: "none",
+                    borderRadius: "6px 6px 0 0",
+                    cursor: "pointer",
+                    background: rightTab === tab ? "white" : "transparent",
+                    color: rightTab === tab ? "#1A1A1A" : "#6B7280",
+                    borderBottom: rightTab === tab ? "2px solid #2563EB" : "2px solid transparent",
+                    transition: "all 150ms ease",
+                    whiteSpace: "nowrap" as const,
+                    flexShrink: 0,
+                  }}
+                >{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
               ))}
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+          <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 14, scrollbarWidth: "thin" as const }}>
             {!site ? (
               <LockedControlsPreview theme={theme} />
             ) : (
@@ -2014,7 +2174,7 @@ export default function Home() {
                         )}
                         <Field theme={theme} label="Name" value={p.name} onChange={(v) => updateProduct(p.id, { name: v })} />
                         <div className="h-2" />
-                        <Field theme={theme} label="Price" value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
+                        <PriceInput theme={theme} value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
                         <div className="h-2" />
                         <div className="text-xs font-medium mb-1.5" style={{ color: theme.mutedText }}>Product Type</div>
                         <div className="grid grid-cols-2 gap-1 mb-2">
@@ -2044,6 +2204,23 @@ export default function Home() {
                             );
                           })}
                         </div>
+                        {p.product_type === "service" && (
+                          <div className="mb-2">
+                            <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>Booking Method</div>
+                            <select
+                              value={p.booking_method || "email"}
+                              onChange={(e) => updateProduct(p.id, { booking_method: e.target.value as Product["booking_method"] })}
+                              style={{ width: "100%", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: `1px solid ${theme.border}`, background: "white", color: theme.text, marginBottom: 6 }}
+                            >
+                              <option value="email">Contact via email</option>
+                              <option value="calendly">Calendly link</option>
+                              <option value="custom">Custom URL</option>
+                            </select>
+                            {(p.booking_method === "calendly" || p.booking_method === "custom") && (
+                              <Field theme={theme} label="Booking URL" value={p.booking_url || ""} onChange={(v) => updateProduct(p.id, { booking_url: v })} />
+                            )}
+                          </div>
+                        )}
                         <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>Image</div>
                         <input
                           type="file"
@@ -2116,24 +2293,6 @@ export default function Home() {
           </div>
         </aside>
       </div>
-
-      {/* Generate loading overlay */}
-      {generating && (
-        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]" style={{ background: "rgba(255,255,255,0.65)" }}>
-          <div className="rounded-2xl border bg-white p-6 w-72 shadow-xl animate-slideUp" style={{ borderColor: theme.border }}>
-            <div className="flex items-center gap-3.5">
-              <Spinner color={theme.accent} />
-              <div>
-                <div className="font-semibold text-sm" style={{ color: theme.text }}>Generating your site…</div>
-                <div className="text-xs mt-0.5" style={{ color: theme.mutedText }}>This takes a few seconds</div>
-              </div>
-            </div>
-            <div className="mt-4 h-1 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.06)" }}>
-              <div className="h-full rounded-full animate-pulse" style={{ width: "65%", background: theme.accent }} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Phase 3: Paywall modal */}
       {showPaywall && (
@@ -3014,6 +3173,87 @@ function DraggableTextLayer({
 
 /* ─── UI helpers ──────────────────────────────────────────────────── */
 
+function GeneratingState() {
+  const [step, setStep] = useState(0);
+
+  const steps = [
+    { label: "Analyzing your business", sub: "Understanding your niche and brand personality" },
+    { label: "Designing your identity", sub: "Choosing colors, typography, and layout" },
+    { label: "Writing your copy", sub: "Crafting headlines and descriptions for your brand" },
+    { label: "Building your store", sub: "Generating your unique storefront" },
+    { label: "Adding finishing touches", sub: "Polishing details and animations" },
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((s) => Math.min(s + 1, steps.length - 1));
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      gap: "32px",
+      background: "#FAFAF8",
+    }}>
+      <div style={{
+        width: "48px",
+        height: "48px",
+        background: "#2563EB",
+        borderRadius: "12px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        animation: "generatingPulse 2s ease-in-out infinite",
+      }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+      </div>
+
+      <div style={{ textAlign: "center", maxWidth: "320px" }}>
+        <p style={{ fontSize: "17px", fontWeight: "600", color: "#1A1A1A", margin: "0 0 8px" }}>
+          {steps[step].label}
+        </p>
+        <p style={{ fontSize: "14px", color: "#9CA3AF", margin: 0 }}>
+          {steps[step].sub}
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: "6px" }}>
+        {steps.map((_, i) => (
+          <div key={i} style={{
+            width: i === step ? "20px" : "6px",
+            height: "6px",
+            borderRadius: "3px",
+            background: i <= step ? "#2563EB" : "#E5E7EB",
+            transition: "all 300ms ease",
+          }} />
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes generatingPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.85; }
+        }
+        /* Thin scrollbars */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+        /* Builder workspace */
+        .builder-workspace { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      `}</style>
+    </div>
+  );
+}
+
 function EmptyPreview({ theme }: { theme: Theme }) {
   return (
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 32px", background: "#F0EFE9" }}>
@@ -3128,19 +3368,34 @@ function Tab({ label, active, theme, onClick }: { label: string; active: boolean
   );
 }
 
-function ActionButton({ theme, children, onClick }: { theme: Theme; children: React.ReactNode; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
+function ActionButton({ theme: _theme, onClick, children }: { theme: Theme; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="w-full px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 active:scale-[0.98]"
       style={{
-        background: "#fff",
-        border: `1px solid ${hovered ? theme.accent : "#E0E0E0"}`,
-        color: hovered ? theme.accent : "#374151",
+        width: "100%",
+        padding: "8px 12px",
+        background: "white",
+        border: "1px solid rgba(0,0,0,0.09)",
         borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 400,
+        color: "#374151",
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "all 150ms ease",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        display: "block",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = "#2563EB";
+        (e.currentTarget as HTMLButtonElement).style.color = "#2563EB";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 1px 4px rgba(37,99,235,0.12)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,0,0,0.09)";
+        (e.currentTarget as HTMLButtonElement).style.color = "#374151";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
       }}
     >
       {children}

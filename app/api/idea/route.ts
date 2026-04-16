@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
@@ -205,24 +205,26 @@ TONE:
 Warm, energized, and genuinely excited about what this person is building. Like the most inspiring mentor you've ever met — someone who's done this before, gives a damn, and makes you feel like your idea is worth fighting for. Honest always, harsh never. Leave every person feeling more capable and fired up than when they started.
 `;
 
-    // Sanitize messages to only pass role/content (OpenAI-compatible)
+    // Sanitize messages to only pass role/content
     const safeMessages = (messages as Array<{ role: string; content: string }>)
       .filter((m) => m && typeof m.role === "string" && typeof m.content === "string")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    const resp = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [{ role: "system", content: systemPrompt }, ...safeMessages],
+    const resp = await anthropic.messages.create({
+      model: "claude-sonnet-4-5-20251001",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: safeMessages,
       temperature: 0.85,
     });
 
-    const text = (resp.output_text || "").trim();
+    const text = (resp.content[0]?.type === "text" ? resp.content[0].text : "").trim();
 
     if (!text) {
       return NextResponse.json(
         {
           error:
-            "OpenAI returned an empty response. Try again (or check Vercel env var OPENAI_API_KEY).",
+            "Anthropic returned an empty response. Try again (or check Vercel env var ANTHROPIC_API_KEY).",
         },
         { status: 500 }
       );
