@@ -49,6 +49,8 @@ type Product = {
   imageDataUrl?: string;
   imageUrl?: string;
   product_type?: string;
+  booking_method?: "email" | "calendly" | "custom";
+  booking_url?: string;
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -90,6 +92,7 @@ type SiteSpec = {
   value1?: string;
   value2?: string;
   value3?: string;
+  generatedHtml?: string;
 };
 
 type CartItem = {
@@ -146,7 +149,34 @@ function parsePriceDollars(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function IframeStore({ html, title }: { html: string; title: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const iframe = ref.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+  }, [html]);
+  return (
+    <iframe
+      ref={ref}
+      title={title}
+      style={{ position: "fixed", inset: 0, width: "100vw", height: "100vh", border: "none", display: "block" }}
+    />
+  );
+}
+
 export default function PublishedClient({ site }: { site: SiteSpec }) {
+  if (site.generatedHtml) {
+    return <IframeStore html={site.generatedHtml} title={site.brandName || "Store"} />;
+  }
+  return <FullStoreTemplate site={site} />;
+}
+
+function FullStoreTemplate({ site }: { site: SiteSpec }) {
   const [activeKey, setActiveKey]         = useState<PageKey>("home");
   const [cartOpen, setCartOpen]           = useState(false);
   const [checkingOut, setCheckingOut]     = useState(false);
@@ -1005,13 +1035,29 @@ function ProductsPage({ site, onAdd, productsTopRef }: {
                 <div className="p-4">
                   <div className="font-medium text-sm" style={{ color: t.text }}>{p.name}</div>
                   <div className="text-sm font-semibold mt-0.5" style={{ color: t.accent }}>{p.price}</div>
-                  <button
-                    onClick={() => onAdd(p)}
-                    className="mt-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: t.accent, color: "#fff" }}
-                  >
-                    Add to cart
-                  </button>
+                  {p.product_type === "service" ? (
+                    <button
+                      onClick={() => {
+                        if (p.booking_method === "email" || !p.booking_method) {
+                          window.location.href = `mailto:${site.contactEmail || ""}`;
+                        } else if (p.booking_url) {
+                          window.open(p.booking_url, "_blank", "noopener,noreferrer");
+                        }
+                      }}
+                      className="mt-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                      style={{ background: t.accent, color: "#fff" }}
+                    >
+                      Book Now
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onAdd(p)}
+                      className="mt-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                      style={{ background: t.accent, color: "#fff" }}
+                    >
+                      Add to cart
+                    </button>
+                  )}
                 </div>
               </div>
             );

@@ -3,6 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
+type PrintfulStatus = {
+  connected: boolean;
+  store_name?: string;
+  store_id?: string;
+  connected_at?: string;
+};
+
 type ConnectStatus = {
   connected: boolean;
   connected_account_id: string | null;
@@ -120,6 +127,8 @@ export default function ConnectClient() {
   const searchParams = useSearchParams();
   const isConnected = searchParams.get("connected") === "1";
   const isRefresh = searchParams.get("refresh") === "1";
+  const siteId = searchParams.get("siteId") || "";
+  const printfulParam = searchParams.get("printful");
 
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +137,10 @@ export default function ConnectClient() {
   const [error, setError] = useState<string | null>(null);
   const [ordersData, setOrdersData] = useState<OrdersData | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [printfulStatus, setPrintfulStatus] = useState<PrintfulStatus | null>(null);
+  const [loadingPrintful, setLoadingPrintful] = useState(true);
+  const [showPrintfulBanner, setShowPrintfulBanner] = useState(false);
+  const [printfulError, setPrintfulError] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -161,14 +174,43 @@ export default function ConnectClient() {
     }
   }, []);
 
+  const fetchPrintfulStatus = useCallback(async () => {
+    setLoadingPrintful(true);
+    try {
+      const url = siteId
+        ? `/api/printful/status?siteId=${encodeURIComponent(siteId)}`
+        : "/api/printful/status";
+      const res = await fetch(url);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) setPrintfulStatus(data);
+    } catch {
+      // silently ignore
+    } finally {
+      setLoadingPrintful(false);
+    }
+  }, [siteId]);
+
   useEffect(() => {
     fetchStatus();
+    fetchPrintfulStatus();
     fetch("/api/orders")
       .then((r) => r.json())
       .then((d) => setOrdersData(d))
       .catch(() => {})
       .finally(() => setLoadingOrders(false));
-  }, [fetchStatus]);
+  }, [fetchStatus, fetchPrintfulStatus]);
+
+  useEffect(() => {
+    if (printfulParam === "connected") {
+      setShowPrintfulBanner(true);
+      const t = setTimeout(() => setShowPrintfulBanner(false), 6000);
+      fetchPrintfulStatus();
+      return () => clearTimeout(t);
+    }
+    if (printfulParam === "error") {
+      setPrintfulError(true);
+    }
+  }, [printfulParam, fetchPrintfulStatus]);
 
   useEffect(() => {
     if (isConnected) {
@@ -342,6 +384,91 @@ export default function ConnectClient() {
           </div>
         </div>
       )}
+
+      {/* ── Printful Card ── */}
+      {showPrintfulBanner && (
+        <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          Printful account connected!
+        </div>
+      )}
+      {printfulError && (
+        <div style={{ ...CARD, background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          Failed to connect Printful. Please try again.
+        </div>
+      )}
+
+      <div style={CARD}>
+        {loadingPrintful ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#AAA", fontSize: 13 }}>
+            <SpinIcon /> Loading Printful status…
+          </div>
+        ) : printfulStatus?.connected ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Printful Connected</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{printfulStatus.store_name || "Store connected"}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { label: "Store", value: printfulStatus.store_name || "—" },
+                { label: "Store ID", value: printfulStatus.store_id || "—", mono: true },
+                { label: "Fulfillment", value: "Active", green: true },
+              ].map((row) => (
+                <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, background: "#FAFAF8", border: "1px solid #EEEDE9" }}>
+                  <span style={{ fontSize: 13, color: "#555" }}>{row.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, fontFamily: row.mono ? "monospace" : "inherit", color: row.green ? "#16a34a" : "#1A1A1A" }}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <a
+              href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
+            >
+              Reconnect Printful
+            </a>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Printful</div>
+              <div style={{ fontSize: 13, color: "#888" }}>Sell custom printed products with no inventory. T-shirts, hoodies, mugs &amp; more.</div>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 6, background: "#EEEDE9", width: "fit-content" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#AAA" }} />
+              <span style={{ fontSize: 12, color: "#888" }}>Not connected</span>
+            </div>
+            <a
+              href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
+            >
+              Connect Printful Account
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </a>
+          </div>
+        )}
+      </div>
 
       {/* ── Stats Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
