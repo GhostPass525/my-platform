@@ -35,6 +35,13 @@ export default async function DashboardPage() {
 
   const orderList = orders ?? [];
   const totalRevenue = orderList.reduce((s, o) => s + Number(o.total), 0);
+  const now = new Date();
+  const monthRevenue = orderList
+    .filter((o) => {
+      const d = new Date(o.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    })
+    .reduce((s, o) => s + Number(o.total), 0);
   const siteJson = siteRow?.site_json as Record<string, unknown> | null;
   const brandName =
     (siteJson?.brandName as string | undefined) || (projects?.[0]?.name ?? "");
@@ -48,6 +55,8 @@ export default async function DashboardPage() {
       userId={user.id}
       initialOrdersCount={orderList.length}
       initialRevenue={totalRevenue}
+      initialMonthRevenue={monthRevenue}
+      userEmail={user.email ?? ""}
       brandName={brandName}
       niche={niche}
     />

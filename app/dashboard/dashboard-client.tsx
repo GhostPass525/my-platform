@@ -8,11 +8,30 @@ import FirstSaleWidget from "@/app/components/FirstSaleWidget";
 import MentorChat from "@/app/components/MentorChat";
 import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
 
-const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
 const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
 const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-type DashMsg = { role: "user" | "assistant"; content: string };
+const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
+const STAGE_EMOJIS = ["💡", "🏗️", "🚀", "💰", "📈"];
+const STAGE_DESCS  = ["Define your business", "Build your store", "Go live", "Get paid", "Scale up"];
+
+const QUOTES = [
+  { text: "The people who are crazy enough to think they can change the world are the ones who do.", author: "Steve Jobs" },
+  { text: "Your time is limited, don't waste it living someone else's life.", author: "Steve Jobs" },
+  { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+  { text: "Chase the vision, not the money. The money will end up following you.", author: "Tony Hsieh, Zappos" },
+  { text: "It's not about ideas. It's about making ideas happen.", author: "Scott Belsky, Behance" },
+  { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+  { text: "Done is better than perfect.", author: "Sheryl Sandberg, Facebook" },
+  { text: "Your most unhappy customers are your greatest source of learning.", author: "Bill Gates" },
+  { text: "If you're not embarrassed by the first version of your product, you've launched too late.", author: "Reid Hoffman, LinkedIn" },
+  { text: "The best time to start was yesterday. The next best time is now.", author: "Unknown" },
+  { text: "An entrepreneur is someone who jumps off a cliff and builds a plane on the way down.", author: "Reid Hoffman, LinkedIn" },
+  { text: "You don't have to be great to start, but you have to start to be great.", author: "Zig Ziglar" },
+  { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
+  { text: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
+  { text: "I have not failed. I've just found 10,000 ways that won't work.", author: "Thomas Edison" },
+];
 
 const DASH_PROMPTS: Record<string, string[]> = {
   noProjects:  ["Help me find my business idea", "What sells well online?", "How do I start?"],
@@ -20,13 +39,7 @@ const DASH_PROMPTS: Record<string, string[]> = {
   hasSales:    ["How do I scale?", "What should I focus on?", "Help me with content"],
 };
 
-const STAGE_CONTEXT = [
-  "Create your first project to get started.",
-  "Open the builder and generate your store to move to Launch.",
-  "Publish your store to go live.",
-  "You're live! Share your store to get your first sale.",
-  "You're growing! Keep building momentum.",
-];
+type DashMsg = { role: "user" | "assistant"; content: string };
 
 type Project = {
   id: string;
@@ -50,8 +63,7 @@ function timeAgo(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function nameToHue(name: string): number {
@@ -62,29 +74,83 @@ function nameToHue(name: string): number {
 
 function ProjectCardHeader({ name }: { name: string }) {
   const hue = nameToHue(name);
-  const letter = name.trim()[0]?.toUpperCase() ?? "?";
   return (
-    <div
-      style={{
-        height: 120,
-        background: `linear-gradient(135deg, hsl(${hue},38%,86%) 0%, hsl(${(hue + 30) % 360},32%,80%) 100%)`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 48,
-          fontWeight: 700,
-          color: `hsl(${hue},45%,32%)`,
-          lineHeight: 1,
-          userSelect: "none",
-        }}
-      >
-        {letter}
+    <div style={{ height: 120, background: `linear-gradient(135deg, hsl(${hue},38%,86%) 0%, hsl(${(hue + 30) % 360},32%,80%) 100%)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <span style={{ fontSize: 48, fontWeight: 700, color: `hsl(${hue},45%,32%)`, lineHeight: 1, userSelect: "none" }}>
+        {name.trim()[0]?.toUpperCase() ?? "?"}
       </span>
+    </div>
+  );
+}
+
+function RotatingQuote() {
+  const [current, setCurrent] = useState(() => Math.floor(Math.random() * QUOTES.length));
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setCurrent(c => (c + 1) % QUOTES.length);
+        setVisible(true);
+      }, 400);
+    }, 7000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 20, padding: "20px 24px", background: "linear-gradient(135deg, #1A1A2E 0%, #16213E 100%)", borderRadius: 14, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 8, left: 16, fontSize: 64, color: "rgba(255,255,255,0.06)", fontFamily: "Georgia, serif", lineHeight: 1, userSelect: "none" }}>
+        "
+      </div>
+      <div style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(6px)", transition: "all 400ms ease" }}>
+        <p style={{ fontSize: 14, fontStyle: "italic", color: "rgba(255,255,255,0.9)", lineHeight: 1.6, marginBottom: 10, paddingLeft: 8 }}>
+          "{QUOTES[current].text}"
+        </p>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 500, paddingLeft: 8 }}>
+          — {QUOTES[current].author}
+        </p>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginTop: 12, paddingLeft: 8 }}>
+        {QUOTES.slice(0, 8).map((_, i) => (
+          <div key={i} style={{ width: i === current % 8 ? 16 : 4, height: 4, borderRadius: 2, background: i === current % 8 ? "#2563EB" : "rgba(255,255,255,0.2)", transition: "all 400ms ease" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JourneyProgress({ stageIndex }: { stageIndex: number }) {
+  const next = STAGE_LABELS[stageIndex + 1];
+  return (
+    <div style={{ marginBottom: 20, padding: "20px 24px", background: "white", borderRadius: 14, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>YOUR JOURNEY</p>
+          <p style={{ fontSize: 13, color: "#6B7280" }}>
+            {STAGE_DESCS[stageIndex]}{next ? ` — next: ${next}` : " — you made it!"}
+          </p>
+        </div>
+        <span style={{ padding: "4px 12px", background: "#EFF6FF", color: "#2563EB", borderRadius: 999, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+          Stage {stageIndex + 1} of {STAGE_LABELS.length}
+        </span>
+      </div>
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <div style={{ position: "absolute", left: 16, right: 16, height: 2, background: "#E5E7EB", zIndex: 0 }} />
+        <div style={{ position: "absolute", left: 16, width: `calc(${(stageIndex / (STAGE_LABELS.length - 1)) * 100}% - 8px)`, height: 2, background: "#2563EB", zIndex: 1, transition: "width 600ms ease" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", position: "relative", zIndex: 2 }}>
+          {STAGE_LABELS.map((label, i) => (
+            <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: i <= stageIndex ? "#2563EB" : "white", border: i <= stageIndex ? "2px solid #2563EB" : "2px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, boxShadow: i === stageIndex ? "0 0 0 4px rgba(37,99,235,0.15)" : "none", transition: "all 300ms ease" }}>
+                {i < stageIndex ? "✓" : STAGE_EMOJIS[i]}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: i === stageIndex ? 600 : 400, color: i === stageIndex ? "#2563EB" : i < stageIndex ? "#1A1A1A" : "#9CA3AF", whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -94,15 +160,19 @@ export default function DashboardClient({
   userId,
   initialOrdersCount,
   initialRevenue,
+  initialMonthRevenue,
   brandName,
   niche,
+  userEmail,
 }: {
   initialProjects: Project[];
   userId: string;
   initialOrdersCount: number;
   initialRevenue: number;
+  initialMonthRevenue: number;
   brandName: string;
   niche?: string;
+  userEmail: string;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -117,25 +187,34 @@ export default function DashboardClient({
   const [mentorMessage, setMentorMessage] = useState<string | null>(null);
   const [hasPublished, setHasPublished] = useState(false);
 
-  // ── Dashboard Mentor Panel ────────────────────────────────────
   const [dashMessages, setDashMessages] = useState<DashMsg[]>([]);
   const [dashInput, setDashInput] = useState("");
   const [dashLoading, setDashLoading] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const dashBottomRef = useRef<HTMLDivElement>(null);
 
+  // Derive firstName from email
+  const firstName = useMemo(() => {
+    const raw = (userEmail || "").split("@")[0].replace(/[._-]/g, " ").split(" ")[0];
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : "there";
+  }, [userEmail]);
+
+  const timeOfDay = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return "morning";
+    if (h < 17) return "afternoon";
+    return "evening";
+  }, []);
+
   useEffect(() => {
     try {
       const ids = new Set<string>();
       for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("launched_")) {
-          const id = key.replace("launched_", "");
-          ids.add(id);
-        }
+        if (key.startsWith("launched_")) ids.add(key.replace("launched_", ""));
       }
       setPublishedIds(ids);
 
-      const launchedKey = Object.keys(localStorage).find((k) => k.startsWith("launched_"));
+      const launchedKey = Object.keys(localStorage).find(k => k.startsWith("launched_"));
       if (!launchedKey) return;
       setHasPublished(true);
 
@@ -144,46 +223,26 @@ export default function DashboardClient({
 
       const lastNudgeAt = parseInt(localStorage.getItem(`nudge_at_${userId}`) ?? "0", 10);
       const now = Date.now();
-      const timeSincePublish = now - publishedAt;
-      const timeSinceNudge = now - lastNudgeAt;
-
-      if (
-        timeSincePublish >= NUDGE_DELAY_MS &&
-        timeSinceNudge >= NUDGE_COOLDOWN_MS &&
-        initialOrdersCount === 0
-      ) {
+      if (now - publishedAt >= NUDGE_DELAY_MS && now - lastNudgeAt >= NUDGE_COOLDOWN_MS && initialOrdersCount === 0) {
         const delay = setTimeout(() => {
           localStorage.setItem(`nudge_at_${userId}`, String(Date.now()));
-          setMentorMessage(
-            `It's been a few hours since you launched${brandName ? ` ${brandName}` : ""}. No sale yet — that's completely normal. Want to talk through what's working and what to try next?`
-          );
+          setMentorMessage(`It's been a few hours since you launched${brandName ? ` ${brandName}` : ""}. No sale yet — that's completely normal. Want to talk through what's working and what to try next?`);
         }, 2000);
         return () => clearTimeout(delay);
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showFirstSaleWidget = hasPublished && ordersCount === 0 && projects.length > 0;
 
-  const stageIndex = computeStageIndex(
-    projects.length > 0,
-    true,
-    hasPublished,
-    ordersCount
-  );
+  const stageIndex = computeStageIndex(projects.length > 0, true, hasPublished, ordersCount);
   const currentStage = STAGE_LABELS[stageIndex];
 
-  // ── Dashboard Mentor: compute opening message & load history ──
   useEffect(() => {
-    // Compute opening message based on user state
     let openingMsg = "";
     try {
-      const liveCount = initialProjects.filter(p => {
-        try { return !!localStorage.getItem(`launched_${p.id}`); } catch { return false; }
-      }).length;
+      const liveCount = initialProjects.filter(p => { try { return !!localStorage.getItem(`launched_${p.id}`); } catch { return false; } }).length;
       const lastVisitKey = `last_dash_visit_${userId}`;
       const lastVisit = parseInt(localStorage.getItem(lastVisitKey) ?? "0", 10);
       const daysSince = lastVisit ? Math.floor((Date.now() - lastVisit) / (1000 * 60 * 60 * 24)) : 0;
@@ -204,7 +263,6 @@ export default function DashboardClient({
       openingMsg = "What are you working on today? I'm here to help.";
     }
 
-    // Load saved chat history from Supabase, fall back to opening message
     const supabase = createClient();
     (async () => {
       try {
@@ -215,11 +273,7 @@ export default function DashboardClient({
           .is("project_id", null)
           .order("created_at", { ascending: true })
           .limit(50);
-        if (data && data.length > 0) {
-          setDashMessages(data as DashMsg[]);
-        } else {
-          setDashMessages([{ role: "assistant", content: openingMsg }]);
-        }
+        setDashMessages(data && data.length > 0 ? (data as DashMsg[]) : [{ role: "assistant", content: openingMsg }]);
       } catch {
         setDashMessages([{ role: "assistant", content: openingMsg }]);
       }
@@ -227,7 +281,6 @@ export default function DashboardClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll dash mentor to bottom
   useEffect(() => {
     dashBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [dashMessages, dashLoading]);
@@ -238,8 +291,8 @@ export default function DashboardClient({
     return DASH_PROMPTS.noProjects;
   }, [initialProjects.length, initialOrdersCount]);
 
-  const sendDashMentor = async () => {
-    const text = dashInput.trim();
+  const sendDashMentor = async (overrideText?: string) => {
+    const text = (overrideText ?? dashInput).trim();
     if (!text || dashLoading) return;
 
     const userMsg: DashMsg = { role: "user", content: text };
@@ -255,14 +308,7 @@ export default function DashboardClient({
       const res = await fetch("/api/idea", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: updated,
-          mentorContext: {
-            brandName: brandName || undefined,
-            stage: currentStage,
-            niche: niche || undefined,
-          },
-        }),
+        body: JSON.stringify({ messages: updated, mentorContext: { brandName: brandName || undefined, stage: currentStage, niche: niche || undefined } }),
       });
       const data = await res.json().catch(() => ({}));
       const reply = data?.result || "Something went wrong. Try again.";
@@ -279,48 +325,24 @@ export default function DashboardClient({
     const supabase = createClient();
     const channel = supabase
       .channel("dashboard-orders")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "orders",
-          filter: `user_id=eq.${userId}`,
-        },
-        async (payload) => {
-          const newOrder = payload.new as Order;
-          const { data: items } = await supabase
-            .from("order_items")
-            .select("product_name")
-            .eq("order_id", newOrder.id);
-          const enriched: Order = { ...newOrder, order_items: items ?? [] };
-
-          if (!hadFirstSaleRef.current) {
-            hadFirstSaleRef.current = true;
-            setFirstSaleOrder(enriched);
-          }
-          setOrdersCount((c) => c + 1);
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders", filter: `user_id=eq.${userId}` }, async (payload) => {
+        const newOrder = payload.new as Order;
+        const { data: items } = await supabase.from("order_items").select("product_name").eq("order_id", newOrder.id);
+        const enriched: Order = { ...newOrder, order_items: items ?? [] };
+        if (!hadFirstSaleRef.current) { hadFirstSaleRef.current = true; setFirstSaleOrder(enriched); }
+        setOrdersCount(c => c + 1);
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
-
     setLoading(true);
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
+      const res = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
       const data = await res.json();
       if (data?.id) router.push(`/builder?project=${data.id}`);
     } finally {
@@ -332,507 +354,303 @@ export default function DashboardClient({
     if (!window.confirm("Delete this project? This cannot be undone.")) return;
     const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) { alert("Failed to delete project. Please try again."); return; }
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setProjects(prev => prev.filter(p => p.id !== id));
   };
 
   const handleFirstSaleMentor = () => {
     setFirstSaleOrder(null);
-    setMentorMessage(
-      `You just made your first sale — that's a real milestone. Let's talk about how to turn this into your next 10 sales for ${brandName || "your store"}. What channel did that first customer come from?`
-    );
+    setMentorMessage(`You just made your first sale — that's a real milestone. Let's talk about how to turn this into your next 10 sales for ${brandName || "your store"}. What channel did that first customer come from?`);
   };
 
-  const liveCount = projects.filter((p) => publishedIds.has(p.id)).length;
+  const liveCount = projects.filter(p => publishedIds.has(p.id)).length;
+  const totalSalesDollars = (initialRevenue / 100).toFixed(2);
+  const monthSalesDollars = (initialMonthRevenue / 100).toFixed(2);
+  const monthName = new Date().toLocaleString("default", { month: "long" });
+
+  const STATS = [
+    { label: "BUSINESSES", value: String(projects.length), sub: projects.length === 1 ? "project" : "projects" },
+    { label: "LIVE STORES", value: String(liveCount), sub: "published" },
+    { label: "TOTAL SALES", value: `$${totalSalesDollars}`, sub: "all time" },
+    { label: "THIS MONTH", value: `$${monthSalesDollars}`, sub: monthName },
+  ];
 
   return (
     <>
       <style>{`
         div:hover .delete-btn { opacity: 1 !important; }
-        .dash-mentor-panel { display: flex; }
-        .dash-mentor-fab { display: none; }
+        .dash-mentor-panel { display: flex !important; }
+        .dash-mentor-fab   { display: none !important; }
         @media (max-width: 900px) {
           .dash-mentor-panel { display: none !important; }
-          .dash-mentor-fab { display: flex !important; }
+          .dash-mentor-fab   { display: flex !important; }
+          .dash-main-content { margin-left: 0 !important; }
         }
-        @keyframes dashFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes dashDotPulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+        @keyframes dashFadeIn    { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dashDotPulse  { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
       `}</style>
 
-      {/* Main content — right margin reserves space for fixed mentor panel */}
-      <div style={{ marginRight: 380 }}>
+      {/* ── Fixed Left Mentor Panel ── */}
+      <div
+        className="dash-mentor-panel"
+        style={{ position: "fixed", top: 60, left: 0, bottom: 0, width: 320, borderRight: "1px solid rgba(0,0,0,0.08)", background: "#F7F6F3", flexDirection: "column", overflow: "hidden", zIndex: 20 }}
+      >
+        {/* Header */}
+        <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #E8E8E4", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
+              <div style={{ fontSize: 12, color: "#AAA", lineHeight: 1.3, marginTop: 1 }}>Ready to help you build</div>
+            </div>
+          </div>
+        </div>
 
-        {/* ── Main content ── */}
-        <div style={{ minWidth: 0, padding: "0", overflowX: "hidden" }}>
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+          {dashMessages.map((m, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "dashFadeIn 0.15s ease-out both" }}>
+              <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: "#334155", background: m.role === "user" ? "#ffffff" : "#F0EFE9", border: m.role === "user" ? "1px solid #E8E8E4" : "none", whiteSpace: "pre-line" }}>
+                {m.content}
+              </div>
+            </div>
+          ))}
 
-          {/* Stage Progress Bar */}
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              {/* Track line */}
-              <div style={{ position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)", height: 2, background: "#E8E8E4", zIndex: 0 }} />
-              {/* Filled track */}
-              <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 2, background: "#2563EB", zIndex: 0, width: `${(stageIndex / (STAGE_LABELS.length - 1)) * 100}%`, transition: "width 0.4s ease" }} />
-              {STAGE_LABELS.map((label, i) => {
-                const done = i < stageIndex;
-                const active = i === stageIndex;
+          {/* Suggested prompts */}
+          {dashMessages.filter(m => m.role === "user").length === 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+              {dashPromptSet.map(prompt => (
+                <button
+                  key={prompt}
+                  onClick={() => sendDashMentor(prompt)}
+                  style={{ padding: "6px 14px", borderRadius: 999, border: "1px solid #D0CFC9", background: "#ffffff", color: "#555", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; e.currentTarget.style.background = "#EFF6FF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#D0CFC9"; e.currentTarget.style.color = "#555"; e.currentTarget.style.background = "#ffffff"; }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {dashLoading && (
+            <div style={{ display: "flex", gap: 4, padding: "4px 4px" }}>
+              {[0, 1, 2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#CBD5E1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}
+            </div>
+          )}
+          <div ref={dashBottomRef} />
+        </div>
+
+        {/* Input */}
+        <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0, background: "#F7F6F3" }}>
+          <input
+            value={dashInput}
+            onChange={e => setDashInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
+            placeholder="Ask your mentor anything..."
+            style={{ flex: 1, height: 44, padding: "0 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s", boxSizing: "border-box" }}
+            onFocus={e => (e.target.style.borderColor = "#2563EB")}
+            onBlur={e => (e.target.style.borderColor = "#E8E8E4")}
+          />
+          <button
+            onClick={() => sendDashMentor()}
+            disabled={dashLoading || !dashInput.trim()}
+            style={{ height: 44, padding: "0 16px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#E2E8F0" : "#2563EB", color: dashLoading || !dashInput.trim() ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
+          >
+            Send
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div
+        className="dash-main-content"
+        style={{ marginLeft: 320 }}
+      >
+        {/* Greeting */}
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A1A", marginBottom: 4, letterSpacing: "-0.02em" }}>
+            Good {timeOfDay}, {firstName} 👋
+          </h1>
+          <p style={{ fontSize: 15, color: "#6B7280" }}>
+            Here's where your business stands today.
+          </p>
+        </div>
+
+        {/* Rotating Quote */}
+        <RotatingQuote />
+
+        {/* Journey Progress */}
+        <JourneyProgress stageIndex={stageIndex} />
+
+        {/* Stats Row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+          {STATS.map(stat => (
+            <div key={stat.label} style={{ padding: 20, background: "white", borderRadius: 12, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{stat.label}</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: "#1A1A1A", lineHeight: 1, marginBottom: 4 }}>{stat.value}</p>
+              <p style={{ fontSize: 12, color: "#9CA3AF" }}>{stat.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Your Businesses */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A1A", marginBottom: 2 }}>Your Businesses</h2>
+              <p style={{ fontSize: 13, color: "#9CA3AF" }}>
+                {projects.length} {projects.length === 1 ? "business" : "businesses"}{liveCount > 0 ? ` · ${liveCount} live` : ""}
+              </p>
+            </div>
+
+            {creating ? (
+              <form onSubmit={createProject} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Business name"
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #D0CFC9", fontSize: 14, outline: "none", width: 176, background: "#fff", color: "#1A1A1A" }}
+                  onFocus={e => { e.currentTarget.style.borderColor = "#2563EB"; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "#D0CFC9"; }}
+                />
+                <button type="submit" disabled={loading || !newName.trim()} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: loading || !newName.trim() ? "not-allowed" : "pointer", opacity: loading || !newName.trim() ? 0.6 : 1 }}>
+                  {loading ? "Creating…" : "Create"}
+                </button>
+                <button type="button" onClick={() => { setCreating(false); setNewName(""); }} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, background: "transparent", border: "1px solid #D0CFC9", color: "#555", cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={() => setCreating(true)}
+                style={{ padding: "8px 16px", background: "#2563EB", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "opacity 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                + New Business
+              </button>
+            )}
+          </div>
+
+          {projects.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "80px 0" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 56, width: 56, borderRadius: 16, background: "#EEEDE9", marginBottom: 20 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="3" /><path d="M12 8v8M8 12h8" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 16, fontWeight: 500, color: "#333", margin: "0 0 6px" }}>No businesses yet</p>
+              <p style={{ fontSize: 14, color: "#999", margin: "0 0 24px", maxWidth: 280, marginLeft: "auto", marginRight: "auto" }}>Start building your first store with Volcity.</p>
+              <button onClick={() => setCreating(true)} style={{ padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: "pointer" }}>
+                Create your first business
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+              {projects.map(project => {
+                const isLive = publishedIds.has(project.id);
                 return (
-                  <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 1 }}>
-                    <div style={{
-                      width: active ? 18 : 14,
-                      height: active ? 18 : 14,
-                      borderRadius: "50%",
-                      background: done ? "#2563EB" : active ? "#2563EB" : "#E8E8E4",
-                      border: active ? "3px solid #2563EB" : done ? "none" : "2px solid #D0CFC9",
-                      boxShadow: active ? "0 0 0 4px rgba(37,99,235,0.15)" : "none",
-                      transition: "all 0.3s ease",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {done && (
-                        <svg width="7" height="7" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+                  <div
+                    key={project.id}
+                    style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E8E8E4", overflow: "hidden", minHeight: 240, display: "flex", flexDirection: "column", transition: "box-shadow 0.18s, border-color 0.18s", position: "relative" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; (e.currentTarget as HTMLDivElement).style.borderColor = "#D0CFC9"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.borderColor = "#E8E8E4"; }}
+                  >
+                    <ProjectCardHeader name={project.name} />
+                    <button
+                      onClick={() => deleteProject(project.id)}
+                      title="Delete project"
+                      className="delete-btn"
+                      style={{ position: "absolute", top: 10, right: 10, width: 26, height: 26, borderRadius: 6, background: "rgba(255,255,255,0.85)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s", color: "#999" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#ef4444"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "#999"; }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                    <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{project.name}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#22c55e" : "#CBD5E1" }} />
+                            <span style={{ fontSize: 12, color: isLive ? "#16a34a" : "#94a3b8", fontWeight: 500 }}>{isLive ? "Live" : "Draft"}</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, color: "#AAA" }}>Saved {timeAgo(project.updated_at)}</div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/builder?project=${project.id}`)}
+                        style={{ marginTop: "auto", width: "100%", padding: "9px 0", borderRadius: 8, fontSize: 14, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                      >
+                        Open
+                      </button>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: active ? 600 : 400, color: active ? "#1A1A1A" : done ? "#2563EB" : "#AAA", whiteSpace: "nowrap" }}>{label}</span>
                   </div>
                 );
               })}
+
+              {!creating && (
+                <button
+                  onClick={() => setCreating(true)}
+                  style={{ minHeight: 240, borderRadius: 12, border: "2px dashed #D0CFC9", background: "transparent", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer", transition: "border-color 0.15s, background 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.background = "#EFF6FF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#D0CFC9"; e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                  <span style={{ fontSize: 14, color: "#999" }}>New business</span>
+                </button>
+              )}
             </div>
-            <p style={{ fontSize: 12, color: "#888", marginTop: 10, textAlign: "center" }}>{STAGE_CONTEXT[stageIndex]}</p>
-          </div>
-
-          {/* Quick Stats Row */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 32 }}>
-            {[
-              { label: "Projects", value: projects.length },
-              { label: "Live Stores", value: liveCount },
-              { label: "Total Sales", value: ordersCount },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ background: "#fff", borderRadius: 10, border: "1px solid #E8E8E4", padding: "14px 16px" }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", lineHeight: 1.1 }}>{value}</div>
-                <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-
-      {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>
-            Projects
-          </h1>
-          <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>
-            {projects.length} {projects.length === 1 ? "business" : "businesses"}
-            {liveCount > 0 ? ` · ${liveCount} live` : ""}
-          </p>
+          )}
         </div>
 
-        {creating ? (
-          <form onSubmit={createProject} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Project name"
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid #D0CFC9",
-                fontSize: 14,
-                outline: "none",
-                width: 176,
-                background: "#fff",
-                color: "#1A1A1A",
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = "#2563EB"; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "#D0CFC9"; }}
+        {/* First Sale Widget */}
+        {showFirstSaleWidget && (
+          <div style={{ marginBottom: 40 }}>
+            <FirstSaleWidget
+              brandName={brandName}
+              totalRevenue={initialRevenue}
+              userId={userId}
+              onStepClick={msg => setMentorMessage(msg)}
             />
-            <button
-              type="submit"
-              disabled={loading || !newName.trim()}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 500,
-                background: "#2563EB",
-                color: "#fff",
-                border: "none",
-                cursor: loading || !newName.trim() ? "not-allowed" : "pointer",
-                opacity: loading || !newName.trim() ? 0.6 : 1,
-              }}
-            >
-              {loading ? "Creating…" : "Create"}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setCreating(false); setNewName(""); }}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 8,
-                fontSize: 13,
-                background: "transparent",
-                border: "1px solid #D0CFC9",
-                color: "#555",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </form>
-        ) : (
-          <button
-            onClick={() => setCreating(true)}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 500,
-              background: "transparent",
-              border: "1.5px solid #2563EB",
-              color: "#2563EB",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#EFF6FF"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            New project
-          </button>
+          </div>
         )}
       </div>
 
-      {projects.length === 0 ? (
-        /* Empty state */
-        <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: 56,
-              width: 56,
-              borderRadius: 16,
-              background: "#EEEDE9",
-              marginBottom: 20,
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <path d="M12 8v8M8 12h8" />
-            </svg>
-          </div>
-          <p style={{ fontSize: 16, fontWeight: 500, color: "#333", margin: "0 0 6px" }}>No projects yet</p>
-          <p style={{ fontSize: 14, color: "#999", margin: "0 0 24px", maxWidth: 280, marginLeft: "auto", marginRight: "auto" }}>
-            Start building your first store with Volcity.
-          </p>
-          <button
-            onClick={() => setCreating(true)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 500,
-              background: "#2563EB",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Create your first project
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-          {projects.map((project) => {
-            const isLive = publishedIds.has(project.id);
-            return (
-              <div
-                key={project.id}
-                style={{
-                  background: "#FFFFFF",
-                  borderRadius: 12,
-                  border: "1px solid #E8E8E4",
-                  overflow: "hidden",
-                  minHeight: 240,
-                  display: "flex",
-                  flexDirection: "column",
-                  transition: "box-shadow 0.18s, border-color 0.18s",
-                  position: "relative",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)";
-                  (e.currentTarget as HTMLDivElement).style.borderColor = "#D0CFC9";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-                  (e.currentTarget as HTMLDivElement).style.borderColor = "#E8E8E4";
-                }}
-              >
-                {/* Visual header */}
-                <ProjectCardHeader name={project.name} />
-
-                {/* Delete button */}
-                <button
-                  onClick={() => deleteProject(project.id)}
-                  title="Delete project"
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 10,
-                    width: 26,
-                    height: 26,
-                    borderRadius: 6,
-                    background: "rgba(255,255,255,0.85)",
-                    border: "none",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: 0,
-                    transition: "opacity 0.15s",
-                    color: "#999",
-                  }}
-                  className="delete-btn"
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "#999"; }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-
-                {/* Card body */}
-                <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                      <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {project.name}
-                      </div>
-                      {/* Status badge */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#22c55e" : "#CBD5E1" }} />
-                        <span style={{ fontSize: 12, color: isLive ? "#16a34a" : "#94a3b8", fontWeight: 500 }}>
-                          {isLive ? "Live" : "Draft"}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 13, color: "#AAA" }}>
-                      Saved {timeAgo(project.updated_at)}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => router.push(`/builder?project=${project.id}`)}
-                    style={{
-                      marginTop: "auto",
-                      width: "100%",
-                      padding: "9px 0",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 500,
-                      background: "#2563EB",
-                      color: "#fff",
-                      border: "none",
-                      cursor: "pointer",
-                      transition: "opacity 0.15s",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.88"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
-                  >
-                    Open
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* New project card */}
-          {!creating && (
-            <button
-              onClick={() => setCreating(true)}
-              style={{
-                minHeight: 240,
-                borderRadius: 12,
-                border: "2px dashed #D0CFC9",
-                background: "transparent",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-                cursor: "pointer",
-                transition: "border-color 0.15s, background 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#2563EB";
-                e.currentTarget.style.background = "#EFF6FF";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#D0CFC9";
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "#EEEDE9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 14, color: "#999" }}>New project</span>
-            </button>
-          )}
-        </div>
-      )}
-
-
-          {/* First Sale Funnel Widget — below projects */}
-          {showFirstSaleWidget && (
-            <div style={{ marginTop: 28 }}>
-              <FirstSaleWidget
-                brandName={brandName}
-                totalRevenue={initialRevenue}
-                userId={userId}
-                onStepClick={(msg) => setMentorMessage(msg)}
-              />
-            </div>
-          )}
-
-        </div>{/* end main content */}
-
-      </div>{/* end margin wrapper */}
-
-        {/* ── Right: Mentor Panel (desktop, fixed) ── */}
-        <div
-          className="dash-mentor-panel"
-          style={{
-            position: "fixed",
-            top: 60,
-            right: 0,
-            bottom: 0,
-            width: 380,
-            borderLeft: "1px solid #E8E8E4",
-            background: "#F7F6F3",
-            flexDirection: "column",
-            overflow: "hidden",
-            zIndex: 20,
-          }}
-        >
-          {/* Panel header */}
-          <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #E8E8E4", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
-                <div style={{ fontSize: 12, color: "#AAA", lineHeight: 1.3, marginTop: 1 }}>Ready to help you build</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-            {dashMessages.map((m, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "dashFadeIn 0.15s ease-out both" }}>
-                <div style={{
-                  maxWidth: "88%",
-                  padding: "9px 12px",
-                  borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
-                  fontSize: 13,
-                  lineHeight: 1.55,
-                  color: m.role === "user" ? "#334155" : "#334155",
-                  background: m.role === "user" ? "#ffffff" : "#F0EFE9",
-                  border: m.role === "user" ? "1px solid #E8E8E4" : "none",
-                  whiteSpace: "pre-line",
-                }}>
-                  {m.content}
-                </div>
-              </div>
-            ))}
-
-            {/* Suggested prompts — pill-shaped, shown until first user message */}
-            {dashMessages.filter(m => m.role === "user").length === 0 && dashPromptSet.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-                {dashPromptSet.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => { setDashInput(""); const userMsg: DashMsg = { role: "user", content: prompt }; const updated = [...dashMessages, userMsg]; setDashMessages(updated); setDashLoading(true); const supabase = createClient(); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "user", content: prompt }).then(() => {}); fetch("/api/idea", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated, mentorContext: { brandName: brandName || undefined, stage: currentStage, niche: niche || undefined } }) }).then(r => r.json().catch(() => ({}))).then(data => { const reply = data?.result || "Something went wrong."; setDashMessages(prev => [...prev, { role: "assistant", content: reply }]); supabase.from("mentor_messages").insert({ user_id: userId, project_id: null, role: "assistant", content: reply }).then(() => {}); }).catch(() => { setDashMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]); }).finally(() => setDashLoading(false)); }}
-                    style={{ padding: "6px 14px", borderRadius: 999, border: "1px solid #D0CFC9", background: "#ffffff", color: "#555", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s", whiteSpace: "nowrap" }}
-                    onMouseEnter={e => { (e.currentTarget).style.borderColor = "#2563eb"; (e.currentTarget).style.color = "#2563eb"; (e.currentTarget).style.background = "#EFF6FF"; }}
-                    onMouseLeave={e => { (e.currentTarget).style.borderColor = "#D0CFC9"; (e.currentTarget).style.color = "#555"; (e.currentTarget).style.background = "#ffffff"; }}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {dashLoading && (
-              <div style={{ display: "flex", gap: 4, padding: "4px 4px" }}>
-                {[0, 1, 2].map(d => (
-                  <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#cbd5e1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />
-                ))}
-              </div>
-            )}
-            <div ref={dashBottomRef} />
-          </div>
-
-          {/* Input */}
-          <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0, background: "#F7F6F3" }}>
-            <input
-              value={dashInput}
-              onChange={e => setDashInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
-              placeholder="Ask your mentor anything..."
-              style={{ flex: 1, height: 44, padding: "0 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s", boxSizing: "border-box" }}
-              onFocus={e => (e.target.style.borderColor = "#2563eb")}
-              onBlur={e => (e.target.style.borderColor = "#E8E8E4")}
-            />
-            <button
-              onClick={sendDashMentor}
-              disabled={dashLoading || !dashInput.trim()}
-              style={{ height: 44, padding: "0 16px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
-            >
-              Send
-            </button>
-          </div>
-        </div>
-
-      {/* Mobile: floating mentor chat button */}
+      {/* ── Mobile: floating mentor button ── */}
       <button
         className="dash-mentor-fab"
         onClick={() => setShowMobileChat(true)}
-        style={{ position: "fixed", bottom: 24, right: 24, width: 52, height: 52, borderRadius: "50%", background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", boxShadow: "0 4px 16px rgba(37,99,235,0.35)", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+        style={{ position: "fixed", bottom: 24, right: 24, width: 52, height: 52, borderRadius: "50%", background: "#2563EB", border: "none", color: "#fff", cursor: "pointer", boxShadow: "0 4px 16px rgba(37,99,235,0.35)", alignItems: "center", justifyContent: "center", zIndex: 50 }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
         </svg>
       </button>
 
-      {/* Mobile: mentor chat modal */}
+      {/* ── Mobile: mentor chat modal ── */}
       {showMobileChat && (
         <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: "0 16px 80px" }}>
           <div style={{ position: "fixed", inset: 0, background: "rgba(2,6,23,0.35)", backdropFilter: "blur(4px)" }} onClick={() => setShowMobileChat(false)} />
           <div style={{ position: "relative", width: "100%", maxWidth: 380, background: "#F7F6F3", borderRadius: 20, boxShadow: "0 24px 48px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "75vh" }}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid #E8E8E4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
               </div>
               <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Your Mentor</div>
@@ -841,40 +659,27 @@ export default function DashboardClient({
             <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               {dashMessages.map((m, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: m.role === "user" ? "#1e40af" : "#334155", background: m.role === "user" ? "#eff6ff" : "#ffffff", border: m.role === "user" ? "1px solid #bfdbfe" : "1px solid #E8E8E4", whiteSpace: "pre-line" }}>
+                  <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: "#334155", background: m.role === "user" ? "#EFF6FF" : "#ffffff", border: "1px solid #E8E8E4", whiteSpace: "pre-line" }}>
                     {m.content}
                   </div>
                 </div>
               ))}
-              {dashLoading && <div style={{ display: "flex", gap: 4 }}>{[0,1,2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#cbd5e1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}</div>}
+              {dashLoading && <div style={{ display: "flex", gap: 4 }}>{[0,1,2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#CBD5E1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}</div>}
             </div>
             <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0 }}>
               <input value={dashInput} onChange={e => setDashInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }} placeholder="Ask your mentor anything..." style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a" }} />
-              <button onClick={sendDashMentor} disabled={dashLoading || !dashInput.trim()} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#e2e8f0" : "#2563eb", color: dashLoading || !dashInput.trim() ? "#94a3b8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Send</button>
+              <button onClick={() => sendDashMentor()} disabled={dashLoading || !dashInput.trim()} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#E2E8F0" : "#2563EB", color: dashLoading || !dashInput.trim() ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Send</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* First Sale Celebration */}
+      {/* Celebrations / modals */}
       {firstSaleOrder && (
-        <FirstSaleCelebration
-          order={firstSaleOrder}
-          brandName={brandName}
-          onTalkToMentor={handleFirstSaleMentor}
-          onClose={() => setFirstSaleOrder(null)}
-        />
+        <FirstSaleCelebration order={firstSaleOrder} brandName={brandName} onTalkToMentor={handleFirstSaleMentor} onClose={() => setFirstSaleOrder(null)} />
       )}
-
-      {/* Mentor Chat modal (nudge-triggered) */}
       {mentorMessage && (
-        <MentorChat
-          openingMessage={mentorMessage}
-          brandName={brandName}
-          stage={currentStage}
-          niche={niche}
-          onClose={() => setMentorMessage(null)}
-        />
+        <MentorChat openingMessage={mentorMessage} brandName={brandName} stage={currentStage} niche={niche} onClose={() => setMentorMessage(null)} />
       )}
     </>
   );
