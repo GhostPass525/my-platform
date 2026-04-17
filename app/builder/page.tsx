@@ -460,7 +460,7 @@ export default function Home() {
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [showLaunchMoment, setShowLaunchMoment] = useState(false);
   const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
-  const [aiEditMode, setAiEditMode] = useState(false);
+  const [isUpdatingStore, setIsUpdatingStore] = useState(false);
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const [ordersCount, setOrdersCount] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
@@ -893,18 +893,37 @@ export default function Home() {
   const isCustomizationIntent = (text: string): boolean => {
     if (!site?.generatedHtml) return false;
     const lower = text.toLowerCase();
-    return [
-      "change", "update", "make", "turn", "set", "switch", "swap",
-      "color", "colour", "font", "style", "design", "look",
-      "bigger", "smaller", "larger", "bold", "italic", "uppercase",
-      "header", "footer", "button", "nav", "navigation", "menu",
-      "headline", "heading", "title", "subtitle", "copy",
-      "background", "hero", "section", "layout", "spacing",
-      "darker", "lighter", "brighter", "bolder",
-      "add a", "remove the", "delete the", "hide the",
-      "move", "center", "align", "padding", "margin",
-      "logo", "banner", "price", "product", "card", "grid",
-    ].some((kw) => lower.includes(kw));
+
+    const changeVerbs = [
+      "change", "make", "update", "modify", "edit", "fix", "adjust",
+      "add", "remove", "delete", "replace", "swap", "move",
+      "increase", "decrease", "make it", "set", "use", "apply",
+      "turn", "switch", "convert", "transform", "hide", "show",
+    ];
+    const visualElements = [
+      "color", "colour", "background", "font", "text", "heading", "title",
+      "button", "nav", "navigation", "footer", "header", "hero", "section",
+      "product", "price", "image", "logo", "layout", "spacing", "padding",
+      "border", "shadow", "size", "bigger", "smaller", "larger", "darker",
+      "lighter", "brighter", "bolder", "thinner", "wider", "narrower",
+      "banner", "card", "grid", "copy", "tagline", "headline", "subtitle",
+      "menu", "link", "style", "design", "look", "bold", "italic",
+      "uppercase", "center", "align", "margin",
+    ];
+    const styleDescriptors = [
+      "darker", "lighter", "minimal", "bold", "clean", "modern", "elegant",
+      "professional", "luxury", "more", "less", "different", "new",
+      "black", "white", "blue", "red", "green", "dark", "light",
+      "navy", "cream", "gold", "silver", "purple", "pink", "orange",
+      "bigger", "smaller", "larger", "brighter",
+    ];
+
+    const hasChangeVerb = changeVerbs.some(v => lower.includes(v));
+    const hasVisualElement = visualElements.some(v => lower.includes(v));
+    const hasStyleDescriptor = styleDescriptors.some(v => lower.includes(v));
+
+    return (hasChangeVerb && (hasVisualElement || hasStyleDescriptor)) ||
+           (hasVisualElement && hasStyleDescriptor);
   };
 
   // ── Chat ──────────────────────────────────────────────────────
@@ -925,6 +944,7 @@ export default function Home() {
     try {
       // Route 1: Mentor-driven HTML editing — when store exists and message looks like a customization request
       if (site?.generatedHtml && isCustomizationIntent(text)) {
+        setIsUpdatingStore(true);
         const res = await fetch("/api/mentor-edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -936,35 +956,7 @@ export default function Home() {
         if (data?.html) {
           setSite((prev) => prev ? { ...prev, generatedHtml: data.html } : prev);
         }
-      } else if (aiEditMode && site) {
-        // AI Edit Mode: call /api/ai-edit and apply siteUpdate if present
-        const res = await fetch("/api/ai-edit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: updatedMessages, site }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setMessages((prev) => [...prev, { role: "assistant", content: data?.error || "Server issue. Try again." }]);
-          return;
-        }
-        const reply = data?.result || "No reply. Try again.";
-        setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-        if (data?.siteUpdate && typeof data.siteUpdate === "object" && Object.keys(data.siteUpdate).length > 0) {
-          setSite((prev) => {
-            if (!prev) return prev;
-            const update = data.siteUpdate as Record<string, unknown>;
-            const merged: SiteSpec = { ...prev };
-            for (const [key, value] of Object.entries(update)) {
-              if (key === "theme" && typeof value === "object" && value !== null) {
-                merged.theme = { ...prev.theme, ...(value as Partial<Theme>) };
-              } else {
-                (merged as Record<string, unknown>)[key] = value;
-              }
-            }
-            return merged;
-          });
-        }
+        setIsUpdatingStore(false);
       } else {
         // Normal mode: call /api/idea with mentor context
         const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
@@ -1502,22 +1494,6 @@ export default function Home() {
             Templates
           </button>
 
-          <div style={{ width: 1, height: 20, background: "#E5E7EB", margin: "0 4px", flexShrink: 0 }} />
-
-          <button
-            onClick={() => setAiEditMode((v) => !v)}
-            title={aiEditMode ? "AI Edit Mode ON — chat edits your site directly" : "Turn on AI Edit Mode"}
-            style={{
-              height: 30, padding: "0 12px", borderRadius: 7, fontSize: 13, fontWeight: aiEditMode ? 500 : 400,
-              border: "1px solid rgba(0,0,0,0.1)",
-              background: aiEditMode ? "rgba(37,99,235,0.08)" : "transparent",
-              color: aiEditMode ? "#2563EB" : "#6B7280",
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 150ms ease",
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
-            AI Edit {aiEditMode ? "ON" : "OFF"}
-          </button>
         </div>
 
         {/* Right: save status + view + export + publish */}
@@ -1569,21 +1545,9 @@ export default function Home() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
                 <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>
-                  {aiEditMode ? "AI Edit: editing your site live" : "Ready to help you build"}
+                  Ready to help you build
                 </div>
               </div>
-              {site && (
-                <button
-                  onClick={() => setAiEditMode((v) => !v)}
-                  style={{
-                    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                    border: "none", cursor: "pointer", flexShrink: 0,
-                    background: aiEditMode ? "#2563EB" : "#EFEFEF",
-                    color: aiEditMode ? "white" : "#6B7280",
-                    transition: "all 150ms ease",
-                  }}
-                >{aiEditMode ? "ON" : "OFF"}</button>
-              )}
             </div>
           </div>
 
@@ -1652,7 +1616,7 @@ export default function Home() {
 
           <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(0,0,0,0.06)", flexShrink: 0, background: "#F7F6F3" }}>
             {/* Suggestion chips */}
-            {!aiEditMode && (() => {
+            {(() => {
               const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
               const chips = getSuggestions(stageIdx);
               return (
@@ -1773,16 +1737,12 @@ export default function Home() {
                     sendMessage();
                   }
                 }}
-                placeholder={
-                  aiEditMode
-                    ? 'e.g. "Change tagline to…"'
-                    : (() => {
-                        const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
-                        if (stageIdx <= 1) return "What are you building?";
-                        if (stageIdx === 2) return "How's the launch going?";
-                        return "What's your biggest challenge right now?";
-                      })()
-                }
+                placeholder={(() => {
+                  const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+                  if (stageIdx <= 1) return "What are you building?";
+                  if (stageIdx === 2) return "How's the launch going?";
+                  return "Tell me what to change, or ask for advice...";
+                })()}
                 rows={1}
                 style={{
                   flex: 1,
@@ -1790,10 +1750,10 @@ export default function Home() {
                   maxHeight: 120,
                   padding: "10px 14px",
                   borderRadius: 8,
-                  border: `1px solid ${aiEditMode ? theme.accent + "35" : "#D0CFC9"}`,
+                  border: "1px solid #D0CFC9",
                   fontSize: 14,
                   outline: "none",
-                  background: aiEditMode ? `${theme.accent}06` : "#FFFFFF",
+                  background: "#FFFFFF",
                   color: theme.text,
                   resize: "none",
                   lineHeight: 1.5,
@@ -1807,7 +1767,7 @@ export default function Home() {
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.boxShadow = "none";
-                  e.currentTarget.style.borderColor = aiEditMode ? theme.accent + "35" : "#D0CFC9";
+                  e.currentTarget.style.borderColor = "#D0CFC9";
                 }}
               />
               <button
@@ -1876,7 +1836,13 @@ export default function Home() {
             ) : !site ? (
               <EmptyPreview theme={theme} />
             ) : site.generatedHtml && !previewLayout ? (
-              <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)" }}>
+              <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)", position: "relative" }}>
+                {isUpdatingStore && (
+                  <div style={{ position: "absolute", top: 10, right: 10, padding: "5px 12px", background: "rgba(37,99,235,0.92)", color: "white", borderRadius: 6, fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, zIndex: 10, backdropFilter: "blur(4px)" }}>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "white", animation: "dotPulse 1s ease-in-out infinite" }} />
+                    Updating your store...
+                  </div>
+                )}
                 <iframe
                   ref={iframeRef}
                   style={{ width: "100%", height: "100%", border: "none", display: "block" }}

@@ -13,7 +13,7 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/auth/login");
 
-  const [{ data: projects }, { data: orders }, { data: siteRow }] =
+  const [{ data: projects }, { data: orders }, { data: siteRow }, { data: profile }] =
     await Promise.all([
       supabase
         .from("projects")
@@ -30,6 +30,11 @@ export default async function DashboardPage() {
         .select("site_json")
         .eq("user_id", user.id)
         .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("first_name")
+        .eq("id", user.id)
         .maybeSingle(),
     ]);
 
@@ -49,6 +54,13 @@ export default async function DashboardPage() {
     .filter(Boolean)
     .join(", ") || undefined;
 
+  // Derive display name: saved first_name > email username > fallback
+  const profileFirstName = (profile as { first_name?: string } | null)?.first_name;
+  const firstName = profileFirstName?.trim() ||
+    (user.email ? user.email.split("@")[0].replace(/[._-]/g, " ").split(" ")[0] : "") ||
+    "there";
+  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+
   return (
     <DashboardClient
       initialProjects={projects ?? []}
@@ -56,7 +68,7 @@ export default async function DashboardPage() {
       initialOrdersCount={orderList.length}
       initialRevenue={totalRevenue}
       initialMonthRevenue={monthRevenue}
-      userEmail={user.email ?? ""}
+      firstName={displayName}
       brandName={brandName}
       niche={niche}
     />

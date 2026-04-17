@@ -181,6 +181,65 @@ async function handleCheckoutComplete(
 
   console.log("[webhook] Order inserted successfully for session:", session.id);
 
+  // Auto-fulfill with Printful if the site has a connected Printful account
+  if (publishId && shippingAddress) {
+    try {
+      const { data: printfulConnection } = await supabaseAdmin
+        .from("printful_connections")
+        .select("access_token")
+        .eq("site_id", publishId)
+        .maybeSingle();
+
+      if (printfulConnection) {
+        const printfulVariantId = session.metadata?.printful_variant_id || null;
+        if (printfulVariantId) {
+          const fulfillRes = await fetch("https://api.printful.com/orders", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${printfulConnection.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              recipient: {
+                name: customerData.fullName || customerEmail,
+                address1: shippingAddress.line1,
+                address2: shippingAddress.line2 || undefined,
+                city: shippingAddress.city,
+                state_code: shippingAddress.state,
+                zip: shippingAddress.zip,
+                country_code: shippingAddress.country,
+                email: customerData.email || customerEmail,
+                phone: customerData.phone || undefined,
+              },
+              items: [
+                {
+                  sync_variant_id: printfulVariantId,
+                  quantity: 1,
+                },
+              ],
+            }),
+          });
+
+          if (fulfillRes.ok) {
+            await supabaseAdmin
+              .from("orders")
+              .update({ fulfillment_status: "fulfilled", fulfillment_notes: "Auto-fulfilled via Printful" })
+              .eq("stripe_session_id", session.id);
+            console.log("[webhook] Printful order created for session:", session.id);
+          } else {
+            const errData = await fulfillRes.json().catch(() => ({}));
+            console.error("[webhook] Printful order creation failed:", errData);
+          }
+        } else {
+          console.log("[webhook] Printful connected but no printful_variant_id in metadata — skipping auto-fulfill");
+        }
+      }
+    } catch (fulfillErr) {
+      // Log but don't fail — order is already saved
+      console.error("[webhook] Printful fulfillment error (non-fatal):", fulfillErr);
+    }
+  }
+
   // Clean up the temporary checkout data from Redis
   if (checkoutDataKey) {
     await redis.del(`checkout-data:${checkoutDataKey}`).catch(() => {});

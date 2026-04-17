@@ -20,6 +20,7 @@ const inputStyle: React.CSSProperties = {
 
 export default function SignupForm() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [confirm,  setConfirm]  = useState("");
@@ -34,8 +35,11 @@ export default function SignupForm() {
     if (password !== confirm) { setError("Passwords don't match."); return; }
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
+    if (data.user) {
+      await supabase.from('profiles').upsert({ id: data.user?.id, first_name: firstName.trim(), updated_at: new Date().toISOString() });
+    }
     setDone(true);
   };
 
@@ -65,6 +69,16 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>First name</label>
+        <input
+          type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
+          placeholder="Your first name" style={inputStyle}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.1)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "#E0E0E0"; e.currentTarget.style.boxShadow = "none"; }}
+        />
+      </div>
+
       <div>
         <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>Email address</label>
         <input

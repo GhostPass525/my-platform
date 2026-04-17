@@ -12,8 +12,20 @@ const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
 const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
-const STAGE_EMOJIS = ["💡", "🏗️", "🚀", "💰", "📈"];
 const STAGE_DESCS  = ["Define your business", "Build your store", "Go live", "Get paid", "Scale up"];
+
+const STAGE_ICONS = [
+  // Idea: circle with center dot
+  <svg key="idea" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>,
+  // Setup: square outline
+  <svg key="setup" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>,
+  // Launch: upward arrow
+  <svg key="launch" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>,
+  // First Sale: dollar sign
+  <svg key="sale" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  // Growing: trending line
+  <svg key="grow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+];
 
 const QUOTES = [
   { text: "The people who are crazy enough to think they can change the world are the ones who do.", author: "Steve Jobs" },
@@ -99,21 +111,21 @@ function RotatingQuote() {
   }, []);
 
   return (
-    <div style={{ marginBottom: 20, padding: "20px 24px", background: "linear-gradient(135deg, #1A1A2E 0%, #16213E 100%)", borderRadius: 14, position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 8, left: 16, fontSize: 64, color: "rgba(255,255,255,0.06)", fontFamily: "Georgia, serif", lineHeight: 1, userSelect: "none" }}>
+    <div style={{ marginBottom: 20, padding: "20px 24px", background: "#F0EFE9", borderRadius: 12, borderLeft: "3px solid #2563EB", position: "relative" }}>
+      <div style={{ position: "absolute", top: 10, left: 20, fontSize: 48, color: "rgba(37,99,235,0.12)", fontFamily: "Georgia, serif", lineHeight: 1, userSelect: "none" }}>
         "
       </div>
-      <div style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(6px)", transition: "all 400ms ease" }}>
-        <p style={{ fontSize: 14, fontStyle: "italic", color: "rgba(255,255,255,0.9)", lineHeight: 1.6, marginBottom: 10, paddingLeft: 8 }}>
+      <div style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(4px)", transition: "all 400ms ease", paddingLeft: 8 }}>
+        <p style={{ fontSize: 14, fontStyle: "italic", color: "#374151", lineHeight: 1.7, marginBottom: 8 }}>
           "{QUOTES[current].text}"
         </p>
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 500, paddingLeft: 8 }}>
+        <p style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>
           — {QUOTES[current].author}
         </p>
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 12, paddingLeft: 8 }}>
-        {QUOTES.slice(0, 8).map((_, i) => (
-          <div key={i} style={{ width: i === current % 8 ? 16 : 4, height: 4, borderRadius: 2, background: i === current % 8 ? "#2563EB" : "rgba(255,255,255,0.2)", transition: "all 400ms ease" }} />
+      <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+        {[0,1,2,3,4,5,6,7].map(i => (
+          <div key={i} style={{ width: i === current % 8 ? 14 : 4, height: 3, borderRadius: 2, background: i === current % 8 ? "#2563EB" : "#D1D5DB", transition: "all 400ms ease" }} />
         ))}
       </div>
     </div>
@@ -141,8 +153,10 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", position: "relative", zIndex: 2 }}>
           {STAGE_LABELS.map((label, i) => (
             <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: i <= stageIndex ? "#2563EB" : "white", border: i <= stageIndex ? "2px solid #2563EB" : "2px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, boxShadow: i === stageIndex ? "0 0 0 4px rgba(37,99,235,0.15)" : "none", transition: "all 300ms ease" }}>
-                {i < stageIndex ? "✓" : STAGE_EMOJIS[i]}
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: i <= stageIndex ? "#2563EB" : "white", border: i <= stageIndex ? "2px solid #2563EB" : "2px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: i === stageIndex ? "0 0 0 4px rgba(37,99,235,0.15)" : "none", transition: "all 300ms ease", color: i <= stageIndex ? "white" : "#D1D5DB" }}>
+                {i < stageIndex ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                ) : STAGE_ICONS[i]}
               </div>
               <span style={{ fontSize: 11, fontWeight: i === stageIndex ? 600 : 400, color: i === stageIndex ? "#2563EB" : i < stageIndex ? "#1A1A1A" : "#9CA3AF", whiteSpace: "nowrap" }}>
                 {label}
@@ -163,7 +177,7 @@ export default function DashboardClient({
   initialMonthRevenue,
   brandName,
   niche,
-  userEmail,
+  firstName,
 }: {
   initialProjects: Project[];
   userId: string;
@@ -172,7 +186,7 @@ export default function DashboardClient({
   initialMonthRevenue: number;
   brandName: string;
   niche?: string;
-  userEmail: string;
+  firstName: string;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -192,12 +206,6 @@ export default function DashboardClient({
   const [dashLoading, setDashLoading] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const dashBottomRef = useRef<HTMLDivElement>(null);
-
-  // Derive firstName from email
-  const firstName = useMemo(() => {
-    const raw = (userEmail || "").split("@")[0].replace(/[._-]/g, " ").split(" ")[0];
-    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : "there";
-  }, [userEmail]);
 
   const timeOfDay = useMemo(() => {
     const h = new Date().getHours();
@@ -473,7 +481,7 @@ export default function DashboardClient({
         {/* Greeting */}
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A1A", marginBottom: 4, letterSpacing: "-0.02em" }}>
-            Good {timeOfDay}, {firstName} 👋
+            Good {timeOfDay}, {firstName}
           </h1>
           <p style={{ fontSize: 15, color: "#6B7280" }}>
             Here's where your business stands today.
