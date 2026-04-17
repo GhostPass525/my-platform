@@ -111,8 +111,15 @@ TECHNICAL REQUIREMENTS:
 - Embedded CSS in a <style> tag with Google Fonts via @import
 - CSS custom properties for easy customization: --primary, --secondary, --accent, --bg, --surface, --text, --text-muted, --border
 - Sections: nav, hero, features/benefits (3 cards), products grid, about/story, social proof, footer
-- Each section: <section data-section="hero">, <section data-section="products">, etc.
+- IMPORTANT — every section MUST have both data-section and id attributes:
+  - Hero: <section data-section="hero" id="home">
+  - Products/Collection: <section data-section="products" id="collection">
+  - About/Story/Philosophy: <section data-section="about" id="about">
+  - Contact/Footer area: <section data-section="contact" id="contact">
+- Navigation links MUST use these exact anchor hrefs: <a href="#collection">, <a href="#about">, <a href="#contact">
+- Add html { scroll-behavior: smooth; } in the CSS
 - Product cards: <div data-product-id="1" class="product-card">
+- Each product card MUST have the product name in an <h3> tag
 - Stripe checkout button on each product: <button class="add-to-cart" data-price="49">Add to Cart — $49</button>
 - Navigation: logo left, links center, CTA button right
 - Hero: Full viewport height, compelling headline, subheading, primary CTA

@@ -1847,7 +1847,7 @@ export default function Home() {
                   ref={iframeRef}
                   style={{ width: "100%", height: "100%", border: "none", display: "block" }}
                   title="Store Preview"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
                 />
               </div>
             ) : (
