@@ -210,11 +210,36 @@ Warm, energized, and genuinely excited about what this person is building. Like 
       .filter((m) => m && typeof m.role === "string" && typeof m.content === "string")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
+    // If images are attached, convert last user message to multi-modal content
+    const attachedImages = body?.attachedImages as Array<{ data: string; mediaType: string }> | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let finalMessages: any[] = safeMessages;
+    if (attachedImages?.length && safeMessages.length > 0) {
+      const lastMsg = safeMessages[safeMessages.length - 1];
+      if (lastMsg.role === "user") {
+        const imageBlocks = attachedImages.map((img) => ({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: img.mediaType,
+            data: img.data,
+          },
+        }));
+        finalMessages = [
+          ...safeMessages.slice(0, -1),
+          {
+            role: "user",
+            content: [...imageBlocks, { type: "text", text: lastMsg.content }],
+          },
+        ];
+      }
+    }
+
     const resp = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 1024,
       system: systemPrompt,
-      messages: safeMessages,
+      messages: finalMessages,
       temperature: 0.85,
     });
 

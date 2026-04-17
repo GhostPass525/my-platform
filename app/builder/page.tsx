@@ -468,6 +468,9 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const openingShownRef = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const imagePickerRef = useRef<HTMLInputElement | null>(null);
+  const [attachedImages, setAttachedImages] = useState<{ data: string; mediaType: string; name: string }[]>([]);
 
   // Free-floating draggable text boxes
   const [pageElements, setPageElements] = useState<Record<string, TextBoxItem[]>>({});
@@ -610,6 +613,18 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyboard);
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [undo, redo]);
+
+  // Inject generated HTML into iframe via document.write to contain all navigation inside the iframe
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !site?.generatedHtml) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(site.generatedHtml);
+    doc.close();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site?.generatedHtml]);
 
   // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
   useEffect(() => {
@@ -874,6 +889,24 @@ export default function Home() {
     }
   };
 
+  // ── Mentor-driven HTML customization ─────────────────────────
+  const isCustomizationIntent = (text: string): boolean => {
+    if (!site?.generatedHtml) return false;
+    const lower = text.toLowerCase();
+    return [
+      "change", "update", "make", "turn", "set", "switch", "swap",
+      "color", "colour", "font", "style", "design", "look",
+      "bigger", "smaller", "larger", "bold", "italic", "uppercase",
+      "header", "footer", "button", "nav", "navigation", "menu",
+      "headline", "heading", "title", "subtitle", "copy",
+      "background", "hero", "section", "layout", "spacing",
+      "darker", "lighter", "brighter", "bolder",
+      "add a", "remove the", "delete the", "hide the",
+      "move", "center", "align", "padding", "margin",
+      "logo", "banner", "price", "product", "card", "grid",
+    ].some((kw) => lower.includes(kw));
+  };
+
   // ── Chat ──────────────────────────────────────────────────────
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
@@ -885,8 +918,25 @@ export default function Home() {
     setInput("");
     setLoadingChat(true);
 
+    // Clear attached images after sending
+    const imagesToSend = [...attachedImages];
+    setAttachedImages([]);
+
     try {
-      if (aiEditMode && site) {
+      // Route 1: Mentor-driven HTML editing — when store exists and message looks like a customization request
+      if (site?.generatedHtml && isCustomizationIntent(text)) {
+        const res = await fetch("/api/mentor-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html: site.generatedHtml, instruction: text }),
+        });
+        const data = await res.json().catch(() => ({}));
+        const reply = data?.reply || (res.ok ? "Done! What else would you like to change?" : data?.error || "Something went wrong. Try again.");
+        setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+        if (data?.html) {
+          setSite((prev) => prev ? { ...prev, generatedHtml: data.html } : prev);
+        }
+      } else if (aiEditMode && site) {
         // AI Edit Mode: call /api/ai-edit and apply siteUpdate if present
         const res = await fetch("/api/ai-edit", {
           method: "POST",
@@ -900,7 +950,6 @@ export default function Home() {
         }
         const reply = data?.result || "No reply. Try again.";
         setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-        // Apply site updates if present
         if (data?.siteUpdate && typeof data.siteUpdate === "object" && Object.keys(data.siteUpdate).length > 0) {
           setSite((prev) => {
             if (!prev) return prev;
@@ -936,7 +985,11 @@ export default function Home() {
         const res = await fetch("/api/idea", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: updatedMessages, mentorContext }),
+          body: JSON.stringify({
+            messages: updatedMessages,
+            mentorContext,
+            attachedImages: imagesToSend.length > 0 ? imagesToSend : undefined,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -1636,7 +1689,74 @@ export default function Home() {
                 </div>
               );
             })()}
+            {/* Hidden image picker */}
+            <input
+              ref={imagePickerRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={async (e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                for (const file of files.slice(0, 4)) {
+                  const dataUrl = await fileToDataUrl(file);
+                  const base64 = dataUrl.split(",")[1];
+                  const mediaType = file.type || "image/jpeg";
+                  setAttachedImages((prev) => [...prev.slice(-3), { data: base64, mediaType, name: file.name }]);
+                }
+              }}
+            />
+
+            {/* Attached image thumbnails */}
+            {attachedImages.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {attachedImages.map((img, i) => (
+                  <div key={i} style={{ position: "relative", flexShrink: 0 }}>
+                    <img
+                      src={`data:${img.mediaType};base64,${img.data}`}
+                      alt={img.name}
+                      style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, border: "1px solid #E5E7EB", display: "block" }}
+                    />
+                    <button
+                      onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+                      style={{
+                        position: "absolute", top: -6, right: -6,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: "#374151", color: "#fff",
+                        border: "none", cursor: "pointer", fontSize: 11, lineHeight: 1,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+              {/* Attach image button */}
+              <button
+                onClick={() => imagePickerRef.current?.click()}
+                title="Attach image"
+                style={{
+                  width: 38, height: 38,
+                  borderRadius: 9,
+                  border: "1px solid #E5E7EB",
+                  background: "#FAFAFA",
+                  color: "#9CA3AF",
+                  flexShrink: 0,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  alignSelf: "flex-end",
+                  transition: "all 150ms ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#BFDBFE"; e.currentTarget.style.color = "#2563EB"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#9CA3AF"; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </button>
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1758,10 +1878,10 @@ export default function Home() {
             ) : site.generatedHtml && !previewLayout ? (
               <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)" }}>
                 <iframe
-                  srcDoc={site.generatedHtml}
+                  ref={iframeRef}
                   style={{ width: "100%", height: "100%", border: "none", display: "block" }}
                   title="Store Preview"
-                  sandbox="allow-same-origin allow-scripts"
+                  sandbox="allow-same-origin allow-scripts allow-forms"
                 />
               </div>
             ) : (
@@ -1833,475 +1953,6 @@ export default function Home() {
           )}
         </main>
 
-        {/* Right: builder */}
-        <aside style={{ width: 280, flexShrink: 0, height: "calc(100vh - 52px)", background: "#F7F6F3", borderLeft: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto", scrollbarWidth: "thin" as const }}>
-          <div style={{ padding: "12px 14px 0", borderBottom: "1px solid rgba(0,0,0,0.06)", position: "sticky", top: 0, background: "#F7F6F3", zIndex: 10, flexShrink: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A", marginBottom: 10 }}>Customize</div>
-            <div style={{ display: "flex", gap: 2, overflowX: "auto", scrollbarWidth: "none" as const }}>
-              {(["quick", "sections", "design", "content", "products", "pages"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setRightTab(tab)}
-                  style={{
-                    padding: "5px 10px",
-                    fontSize: 12,
-                    fontWeight: rightTab === tab ? 500 : 400,
-                    border: "none",
-                    borderRadius: "6px 6px 0 0",
-                    cursor: "pointer",
-                    background: rightTab === tab ? "white" : "transparent",
-                    color: rightTab === tab ? "#1A1A1A" : "#6B7280",
-                    borderBottom: rightTab === tab ? "2px solid #2563EB" : "2px solid transparent",
-                    transition: "all 150ms ease",
-                    whiteSpace: "nowrap" as const,
-                    flexShrink: 0,
-                  }}
-                >{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 14, scrollbarWidth: "thin" as const }}>
-            {!site ? (
-              <LockedControlsPreview theme={theme} />
-            ) : (
-              <>
-                <input ref={logoPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setLogoFromFile(e.target.files?.[0])} />
-                <input ref={heroPickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => setHeroImageFromFile(e.target.files?.[0])} />
-                <input ref={canvasImagePickerRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { await handleCanvasImageFile(e.target.files?.[0]); e.target.value = ""; }} />
-
-                {/* ── Quick tab ── */}
-                {rightTab === "quick" && (
-                  <div className="space-y-3">
-                    <Card theme={theme} title="Start here">
-                      <div className="text-sm" style={{ color: theme.mutedText }}>These make your site feel real fast.</div>
-                      <div className="mt-3 space-y-2">
-                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>Upload Hero Image</ActionButton>
-                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>Upload Logo</ActionButton>
-                        <ActionButton theme={theme} onClick={() => addProduct()}>+ Add Product</ActionButton>
-                        <ActionButton theme={theme} onClick={() => addElement()}>+ Add Text Box</ActionButton>
-                        <ActionButton theme={theme} onClick={() => addElement({ content: "Your Heading Here", fontSize: 32, fontWeight: "700", width: 400, height: 56 })}>+ Add Heading</ActionButton>
-                        <ActionButton theme={theme} onClick={() => canvasImagePickerRef.current?.click()}>+ Add Image</ActionButton>
-                      </div>
-                    </Card>
-
-                    <Card theme={theme} title="Color palette">
-                      <div className="grid grid-cols-5 gap-2">
-                        {THEME_PRESETS.map((p) => {
-                          const isActive = site.theme.accent === p.theme.accent && site.theme.bg === p.theme.bg;
-                          return (
-                            <button
-                              key={p.name}
-                              title={p.name}
-                              onClick={() => setSite({ ...site, theme: { ...p.theme } })}
-                              className="flex items-center justify-center group"
-                              style={{ padding: 4 }}
-                            >
-                              <div
-                                className="h-9 w-9 rounded-full transition-all duration-150 group-hover:scale-110"
-                                style={{
-                                  background: p.accent,
-                                  boxShadow: isActive
-                                    ? "0 0 0 2px #fff, 0 0 0 4px #2563EB"
-                                    : "0 1px 3px rgba(0,0,0,0.18)",
-                                }}
-                              />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Card>
-
-                  </div>
-                )}
-
-                {/* ── Sections tab (Phase 1: drag-and-drop) ── */}
-                {rightTab === "sections" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="font-semibold text-sm">Sections</div>
-                      <button
-                        onClick={addSection}
-                        className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-90 transition"
-                        style={{ borderColor: theme.border, color: theme.accent }}
-                      >
-                        + Add
-                      </button>
-                    </div>
-                    <div className="text-xs mb-2" style={{ color: theme.mutedText }}>Drag ⠿ to reorder sections.</div>
-
-                    {site.sections.map((sec, idx) => (
-                      <div
-                        key={idx}
-                        draggable
-                        onDragStart={() => setDragSec(idx)}
-                        onDragOver={(e) => { e.preventDefault(); setHoverSec(idx); }}
-                        onDrop={() => dropSection(idx)}
-                        onDragEnd={() => { setDragSec(null); setHoverSec(null); }}
-                        className="rounded-xl border p-3 transition-all duration-150"
-                        style={{
-                          borderColor: hoverSec === idx && dragSec !== idx ? theme.accent : theme.border,
-                          background: dragSec === idx ? `${theme.accent}08` : "#fff",
-                          opacity: dragSec === idx ? 0.5 : 1,
-                          boxShadow: hoverSec === idx && dragSec !== idx ? `0 0 0 2px ${theme.accent}40` : undefined,
-                        }}
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          {/* drag handle */}
-                          <span
-                            className="cursor-grab text-lg select-none flex-shrink-0"
-                            style={{ color: theme.mutedText }}
-                            title="Drag to reorder"
-                          >
-                            ⠿
-                          </span>
-                          <input
-                            className="flex-1 px-2 py-1.5 rounded-lg text-sm font-semibold outline-none border transition"
-                            style={{ borderColor: theme.border, background: "rgba(2,6,23,0.02)", color: theme.text }}
-                            value={sec.title}
-                            onChange={(e) => updateSection(idx, { title: e.target.value })}
-                            placeholder="Section title"
-                          />
-                          <button
-                            onClick={() => removeSection(idx)}
-                            className="h-7 w-7 rounded-lg border flex items-center justify-center text-sm hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition flex-shrink-0"
-                            style={{ borderColor: theme.border, color: theme.mutedText }}
-                            title="Remove section"
-                          >
-                            ×
-                          </button>
-                        </div>
-
-                        {/* Bullets */}
-                        <div className="space-y-1.5 ml-6">
-                          {sec.bullets.map((b, bi) => (
-                            <div key={bi} className="flex gap-1.5 items-center">
-                              <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: theme.accent }} />
-                              <input
-                                className="flex-1 px-2 py-1 rounded-lg text-xs outline-none border transition"
-                                style={{ borderColor: theme.border, background: "rgba(2,6,23,0.02)", color: theme.text }}
-                                value={b}
-                                onChange={(e) => updateBullet(idx, bi, e.target.value)}
-                                placeholder="Bullet point"
-                              />
-                              <button
-                                onClick={() => removeBullet(idx, bi)}
-                                className="text-slate-300 hover:text-red-400 transition text-xs flex-shrink-0"
-                                title="Remove bullet"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => addBullet(idx)}
-                            className="text-xs mt-1 hover:opacity-80 transition"
-                            style={{ color: theme.accent }}
-                          >
-                            + bullet
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {site.sections.length === 0 && (
-                      <div className="text-sm py-4 text-center" style={{ color: theme.mutedText }}>No sections yet. Click + Add.</div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Design tab (Phase 2: visual color UI) ── */}
-                {rightTab === "design" && (
-                  <div className="space-y-3">
-                    {/* Palette categories */}
-                    <Card theme={theme} title="Theme palette">
-                      <div className="space-y-3">
-                        {PALETTE_CATEGORIES.map((cat) => {
-                          const presets = cat.names.map((n) => THEME_PRESETS.find((p) => p.name === n)!).filter(Boolean);
-                          return (
-                            <div key={cat.label}>
-                              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.mutedText, marginBottom: 6 }}>{cat.label}</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {presets.map((p) => {
-                                  const isActive = site.theme.accent === p.theme.accent && site.theme.bg === p.theme.bg;
-                                  return (
-                                    <button
-                                      key={p.name}
-                                      title={p.name}
-                                      onClick={() => setSite({ ...site, theme: { ...p.theme } })}
-                                      className="group flex flex-col items-center gap-1"
-                                      style={{ padding: "2px 4px" }}
-                                    >
-                                      <div
-                                        className="relative h-8 w-8 rounded-full transition-all duration-150 group-hover:scale-110 overflow-hidden"
-                                        style={{
-                                          boxShadow: isActive
-                                            ? "0 0 0 2px #fff, 0 0 0 4px #2563EB"
-                                            : "0 1px 3px rgba(0,0,0,0.18)",
-                                        }}
-                                      >
-                                        <div className="absolute inset-0" style={{ background: p.bg }} />
-                                        <div className="absolute bottom-0 left-0 right-0 h-4" style={{ background: p.accent }} />
-                                      </div>
-                                      <span style={{ fontSize: 9, color: isActive ? "#2563EB" : theme.mutedText, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>{p.name}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </Card>
-
-                    {/* Custom colors */}
-                    <Card theme={theme} title="Custom colors">
-                      <div className="space-y-3">
-                        <ColorField theme={theme} label="Primary / Accent" value={site.theme.accent} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent: v } })} />
-                        <ColorField theme={theme} label="Secondary Accent" value={site.theme.accent2} onChange={(v) => setSite({ ...site, theme: { ...site.theme, accent2: v } })} />
-                        <ColorField theme={theme} label="Background" value={site.theme.bg} onChange={(v) => setSite({ ...site, theme: { ...site.theme, bg: v } })} />
-                        <ColorField theme={theme} label="Text" value={site.theme.text} onChange={(v) => setSite({ ...site, theme: { ...site.theme, text: v } })} />
-                        <ColorField theme={theme} label="Muted Text" value={site.theme.mutedText} onChange={(v) => setSite({ ...site, theme: { ...site.theme, mutedText: v } })} />
-                      </div>
-                    </Card>
-
-                    {/* Font — categorized */}
-                    <Card theme={theme} title="Font">
-                      <div className="space-y-3">
-                        {FONT_CATEGORIES.map((cat) => (
-                          <div key={cat.label}>
-                            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.mutedText, marginBottom: 6 }}>{cat.label}</div>
-                            <div className="grid grid-cols-1 gap-1">
-                              {cat.fonts.map((f) => {
-                                const active = site.font === f;
-                                return (
-                                  <button
-                                    key={f}
-                                    onClick={() => setSite({ ...site, font: f })}
-                                    className="px-3 py-2 rounded-xl text-sm text-left border transition-all duration-150 flex items-center justify-between"
-                                    style={{
-                                      borderColor: active ? "#2563EB" : theme.border,
-                                      background: active ? "#2563EB10" : "#fff",
-                                      color: active ? "#2563EB" : theme.text,
-                                    }}
-                                  >
-                                    <span style={{ fontFamily: fontStack(f), fontWeight: active ? 600 : 400, fontSize: 14 }}>{f}</span>
-                                    <span style={{ fontFamily: fontStack(f), fontSize: 15, color: active ? "#2563EB99" : "#9CA3AF", fontWeight: 400 }}>Aa</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  </div>
-                )}
-
-                {/* ── Content tab ── */}
-                {rightTab === "content" && (
-                  <div className="space-y-3">
-                    <Field theme={theme} label="Brand Name" value={site.brandName} onChange={(v) => setSite({ ...site, brandName: v })} />
-                    <Field theme={theme} label="Tagline" value={site.tagline} onChange={(v) => setSite({ ...site, tagline: v })} />
-                    <Field theme={theme} label="Hero Headline" value={site.heroHeadline} onChange={(v) => setSite({ ...site, heroHeadline: v })} />
-                    <TextField theme={theme} label="Hero Subheadline" value={site.heroSubheadline} onChange={(v) => setSite({ ...site, heroSubheadline: v })} />
-                    <Field theme={theme} label="Primary CTA" value={site.primaryCTA} onChange={(v) => setSite({ ...site, primaryCTA: v })} />
-                    <Field theme={theme} label="Audience" value={site.audience} onChange={(v) => setSite({ ...site, audience: v })} />
-                    <Field theme={theme} label="Offer" value={site.offer} onChange={(v) => setSite({ ...site, offer: v })} />
-
-                    <Card theme={theme} title="Images">
-                      <div className="space-y-2">
-                        {site.heroImageDataUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={site.heroImageDataUrl} alt="Hero" className="w-full h-24 object-cover rounded-xl mb-1" />
-                        )}
-                        <ActionButton theme={theme} onClick={() => heroPickerRef.current?.click()}>
-                          {site.heroImageDataUrl ? "Replace Hero Image" : "Upload Hero Image"}
-                        </ActionButton>
-                        {site.logoDataUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={site.logoDataUrl} alt="Logo" className="h-10 object-contain rounded-lg mb-1" />
-                        )}
-                        <ActionButton theme={theme} onClick={() => logoPickerRef.current?.click()}>
-                          {site.logoDataUrl ? "Replace Logo" : "Upload Logo"}
-                        </ActionButton>
-                      </div>
-                    </Card>
-
-                    {/* Contact page fields */}
-                    {(() => {
-                      const pid = activePageId || site.pages[0]?.id;
-                      const pg = site.pages.find((p) => p.id === pid);
-                      return pg?.key === "contact" ? (
-                        <Card theme={theme} title="Contact Info">
-                          <div className="space-y-3">
-                            <Field theme={theme} label="Business Email" value={site.contactEmail ?? ""} onChange={(v) => setSite({ ...site, contactEmail: v })} />
-                            <Field theme={theme} label="Phone Number" value={site.contactPhone ?? ""} onChange={(v) => setSite({ ...site, contactPhone: v })} />
-                            <Field theme={theme} label="Address / City" value={site.contactAddress ?? ""} onChange={(v) => setSite({ ...site, contactAddress: v })} />
-                          </div>
-                        </Card>
-                      ) : null;
-                    })()}
-
-                    {/* About page fields */}
-                    {(() => {
-                      const pid = activePageId || site.pages[0]?.id;
-                      const pg = site.pages.find((p) => p.id === pid);
-                      return pg?.key === "about" ? (
-                        <Card theme={theme} title="About Page">
-                          <div className="space-y-3">
-                            <TextField theme={theme} label="Brand Story" value={site.aboutStory ?? ""} onChange={(v) => setSite({ ...site, aboutStory: v })} />
-                            <Field theme={theme} label="Founder Name" value={site.founderName ?? ""} onChange={(v) => setSite({ ...site, founderName: v })} />
-                            <Field theme={theme} label="Founder Title" value={site.founderTitle ?? ""} onChange={(v) => setSite({ ...site, founderTitle: v })} />
-                            <TextField theme={theme} label="Mission Statement" value={site.missionStatement ?? ""} onChange={(v) => setSite({ ...site, missionStatement: v })} />
-                            <Field theme={theme} label="Year Founded" value={site.yearFounded ?? ""} onChange={(v) => setSite({ ...site, yearFounded: v })} />
-                            <div className="text-xs font-semibold uppercase tracking-wide mt-2" style={{ color: theme.mutedText }}>Core Values</div>
-                            <Field theme={theme} label="Value 1" value={site.value1 ?? ""} onChange={(v) => setSite({ ...site, value1: v })} />
-                            <Field theme={theme} label="Value 2" value={site.value2 ?? ""} onChange={(v) => setSite({ ...site, value2: v })} />
-                            <Field theme={theme} label="Value 3" value={site.value3 ?? ""} onChange={(v) => setSite({ ...site, value3: v })} />
-                          </div>
-                        </Card>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-
-                {/* ── Products tab ── */}
-                {rightTab === "products" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-sm">Catalog</div>
-                      <button className="text-xs px-2 py-1 rounded-lg border hover:opacity-90" style={{ borderColor: theme.border, color: theme.accent }} onClick={addProduct}>
-                        + Add
-                      </button>
-                    </div>
-
-                    {site.products.map((p) => (
-                      <Card key={p.id} theme={theme} title={p.name || "Product"}>
-                        {p.imageDataUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.imageDataUrl} alt={p.name} className="w-full h-24 object-cover rounded-xl mb-2" />
-                        )}
-                        <Field theme={theme} label="Name" value={p.name} onChange={(v) => updateProduct(p.id, { name: v })} />
-                        <div className="h-2" />
-                        <PriceInput theme={theme} value={p.price} onChange={(v) => updateProduct(p.id, { price: v })} />
-                        <div className="h-2" />
-                        <div className="text-xs font-medium mb-1.5" style={{ color: theme.mutedText }}>Product Type</div>
-                        <div className="grid grid-cols-2 gap-1 mb-2">
-                          {(["physical", "digital", "service", "consultation"] as const).map((type) => {
-                            const active = (p.product_type || "physical") === type;
-                            return (
-                              <label
-                                key={type}
-                                className="flex items-center gap-1.5 cursor-pointer px-2 py-1.5 rounded-lg border text-xs transition-all"
-                                style={{
-                                  borderColor: active ? theme.accent : theme.border,
-                                  background: active ? `${theme.accent}14` : "transparent",
-                                  color: active ? theme.accent : theme.mutedText,
-                                  fontWeight: active ? 600 : 400,
-                                }}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`ptype_${p.id}`}
-                                  value={type}
-                                  checked={active}
-                                  onChange={() => updateProduct(p.id, { product_type: type })}
-                                  className="sr-only"
-                                />
-                                {type === "physical" ? "Physical" : type === "digital" ? "Digital" : type === "service" ? "Service" : "Consult"}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {p.product_type === "service" && (
-                          <div className="mb-2">
-                            <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>Booking Method</div>
-                            <select
-                              value={p.booking_method || "email"}
-                              onChange={(e) => updateProduct(p.id, { booking_method: e.target.value as Product["booking_method"] })}
-                              style={{ width: "100%", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: `1px solid ${theme.border}`, background: "white", color: theme.text, marginBottom: 6 }}
-                            >
-                              <option value="email">Contact via email</option>
-                              <option value="calendly">Calendly link</option>
-                              <option value="custom">Custom URL</option>
-                            </select>
-                            {(p.booking_method === "calendly" || p.booking_method === "custom") && (
-                              <Field theme={theme} label="Booking URL" value={p.booking_url || ""} onChange={(v) => updateProduct(p.id, { booking_url: v })} />
-                            )}
-                          </div>
-                        )}
-                        <div className="text-xs font-medium mb-1" style={{ color: theme.mutedText }}>Image</div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="text-xs w-full"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setUploadsPending((n) => n + 1);
-                            try {
-                              const url = await uploadSiteImage(file, `product-${p.id}`);
-                              updateProduct(p.id, { imageDataUrl: url });
-                            } catch (err: unknown) {
-                              alert((err as Error)?.message || "Image upload failed. Please try again.");
-                            } finally {
-                              setUploadsPending((n) => n - 1);
-                            }
-                          }}
-                        />
-                        <div className="h-2" />
-                        <button className="text-xs px-2 py-1 rounded-lg border hover:text-red-500 hover:border-red-200 transition" style={{ borderColor: theme.border }} onClick={() => removeProduct(p.id)}>
-                          Remove
-                        </button>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {/* ── Pages tab ── */}
-                {rightTab === "pages" && (
-                  <Card theme={theme} title="Pages">
-                    <div className="mt-0 space-y-2">
-                      {site.pages.map((p) => {
-                        const isActive = p.id === (activePageId || site.pages[0]?.id);
-                        return (
-                        <div key={p.id} className="flex gap-2 items-center">
-                          <button
-                            onClick={() => setActivePageId(p.id)}
-                            className="flex-1 px-3 py-2 rounded-xl text-sm text-left font-medium transition-all duration-150 border"
-                            style={{
-                              borderColor: isActive ? theme.accent : theme.border,
-                              background: isActive ? `${theme.accent}10` : "#fff",
-                              color: isActive ? theme.accent : theme.text,
-                            }}
-                          >
-                            {p.name}
-                          </button>
-                          <button
-                            className="px-2 py-2 rounded-lg border text-xs hover:text-red-500 hover:border-red-200 transition"
-                            style={{ borderColor: theme.border }}
-                            onClick={() => removePage(p.id)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3">
-                      <ActionButton theme={theme} onClick={addPage}>+ Add Page</ActionButton>
-                    </div>
-                  </Card>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="px-4 py-2.5 border-t text-[10px] text-center" style={{ borderColor: theme.border, color: theme.mutedText }}>
-            Volcity Builder
-          </div>
-        </aside>
       </div>
 
       {/* Phase 3: Paywall modal */}
