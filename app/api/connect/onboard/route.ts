@@ -25,7 +25,11 @@ async function stripePost(path: string, params: Record<string, string>) {
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data?.error?.message || `Stripe error: ${res.status}`);
+    const err = new Error(data?.error?.message || `Stripe error: ${res.status}`) as any;
+    err.stripeCode = data?.error?.code;
+    err.stripeType = data?.error?.type;
+    err.stripeParam = data?.error?.param;
+    throw err;
   }
   return data;
 }
@@ -42,6 +46,9 @@ export async function POST(req: Request) {
     }
 
     const serviceSupabase = getServiceSupabase();
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://volcity.to";
+    const refreshUrl = `${origin}/dashboard/connect?refresh=1`;
+    const returnUrl = `${origin}/dashboard/connect?connected=1`;
 
     // Check if user already has a connected account
     const { data: existingConnect } = await serviceSupabase
@@ -52,48 +59,88 @@ export async function POST(req: Request) {
 
     let accountId = existingConnect?.connected_account_id ?? null;
 
-    // Create a new Express account if none exists
-    if (!accountId) {
-      const account = await stripePost("accounts", {
-        type: "express",
-        "metadata[userId]": user.id,
-      });
-      accountId = account.id;
-
-      const { error: upsertError } = await serviceSupabase
-        .from("stripe_connect")
-        .upsert(
-          {
-            user_id: user.id,
-            connected_account_id: accountId,
-            charges_enabled: false,
-            payouts_enabled: false,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
+    // If we have an existing account ID, try to generate an onboarding link.
+    // If Stripe rejects it (stale/test-mode ID), fall through to create a fresh one.
+    if (accountId) {
+      try {
+        const accountLink = await stripePost("account_links", {
+          account: accountId,
+          refresh_url: refreshUrl,
+          return_url: returnUrl,
+          type: "account_onboarding",
+        });
+        console.log("[connect/onboard] resumed onboarding for existing account:", accountId);
+        return NextResponse.json({ url: accountLink.url });
+      } catch (linkErr: any) {
+        // Stale or wrong-mode account — wipe it and create a new one below
+        console.warn(
+          `[connect/onboard] existing account ${accountId} rejected (code=${linkErr.stripeCode}, type=${linkErr.stripeType}): ${linkErr.message} — will create fresh account`
         );
-
-      if (upsertError) {
-        console.error("Failed to save connected account:", upsertError);
-        return NextResponse.json(
-          { error: "Failed to save connected account" },
-          { status: 500 }
-        );
+        await serviceSupabase
+          .from("stripe_connect")
+          .delete()
+          .eq("user_id", user.id);
+        accountId = null;
       }
     }
 
-    // Generate an account onboarding link
-    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://volcity.to";
+    // Create a new Express account
+    const createParams: Record<string, string> = {
+      type: "express",
+      "capabilities[card_payments][requested]": "true",
+      "capabilities[transfers][requested]": "true",
+      "metadata[userId]": user.id,
+    };
+    if (user.email) {
+      createParams.email = user.email;
+    }
+
+    let account: any;
+    try {
+      account = await stripePost("accounts", createParams);
+    } catch (createErr: any) {
+      console.error(
+        `[connect/onboard] accounts.create failed — code=${createErr.stripeCode} type=${createErr.stripeType} param=${createErr.stripeParam}: ${createErr.message}`
+      );
+      // Return the Stripe message directly so the client can show it
+      return NextResponse.json({ error: createErr.message }, { status: 400 });
+    }
+
+    accountId = account.id;
+    console.log("[connect/onboard] created new Stripe Express account:", accountId);
+
+    const { error: upsertError } = await serviceSupabase
+      .from("stripe_connect")
+      .upsert(
+        {
+          user_id: user.id,
+          connected_account_id: accountId,
+          charges_enabled: false,
+          payouts_enabled: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (upsertError) {
+      console.error("[connect/onboard] DB upsert failed:", upsertError);
+      return NextResponse.json({ error: "Failed to save account" }, { status: 500 });
+    }
+
+    // Generate onboarding link for the new account
     const accountLink = await stripePost("account_links", {
       account: accountId,
-      refresh_url: `${origin}/dashboard/connect?refresh=1`,
-      return_url: `${origin}/dashboard/connect?connected=1`,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
       type: "account_onboarding",
     });
 
     return NextResponse.json({ url: accountLink.url });
   } catch (e: any) {
-    console.error("CONNECT ONBOARD ERROR:", e);
+    console.error(
+      `CONNECT ONBOARD ERROR: code=${e?.stripeCode} type=${e?.stripeType}: ${e?.message}`,
+      e
+    );
     return NextResponse.json(
       { error: e?.message || "Failed to start onboarding" },
       { status: 500 }

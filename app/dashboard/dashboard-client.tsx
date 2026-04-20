@@ -57,7 +57,8 @@ type Project = {
   id: string;
   name: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string | null;
+  status?: string | null;
 };
 
 type Order = {
@@ -169,6 +170,51 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
   );
 }
 
+function SetupBanner() {
+  const [status, setStatus] = useState<{ stripe: { connected: boolean; onboarded: boolean } } | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup/status")
+      .then((r) => r.json())
+      .then((d) => { if (d?.stripe) setStatus(d); })
+      .catch(() => {});
+  }, []);
+
+  if (!status || dismissed || status.stripe.onboarded) return null;
+
+  return (
+    <div style={{ marginBottom: 20, padding: "14px 18px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 14 }}>
+      <div style={{ width: 34, height: 34, borderRadius: 8, background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#92400E", marginBottom: 3 }}>Finish setting up to go live</div>
+        <p style={{ fontSize: 13, color: "#B45309", margin: "0 0 10px", lineHeight: 1.55 }}>
+          {!status.stripe.connected
+            ? "Connect Stripe to start accepting payments on your store."
+            : "Your Stripe account needs a few more details before it can accept payments."}
+        </p>
+        <a
+          href="/dashboard/connect"
+          style={{ fontSize: 13, fontWeight: 600, color: "#92400E", textDecoration: "underline" }}
+        >
+          {!status.stripe.connected ? "Connect Stripe →" : "Finish Stripe setup →"}
+        </a>
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#B45309", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 export default function DashboardClient({
   initialProjects,
   userId,
@@ -250,7 +296,7 @@ export default function DashboardClient({
   useEffect(() => {
     let openingMsg = "";
     try {
-      const liveCount = initialProjects.filter(p => { try { return !!localStorage.getItem(`launched_${p.id}`); } catch { return false; } }).length;
+      const liveCount = initialProjects.filter(p => { try { return p.status === 'live' || !!localStorage.getItem(`launched_${p.id}`); } catch { return false; } }).length;
       const lastVisitKey = `last_dash_visit_${userId}`;
       const lastVisit = parseInt(localStorage.getItem(lastVisitKey) ?? "0", 10);
       const daysSince = lastVisit ? Math.floor((Date.now() - lastVisit) / (1000 * 60 * 60 * 24)) : 0;
@@ -370,7 +416,7 @@ export default function DashboardClient({
     setMentorMessage(`You just made your first sale — that's a real milestone. Let's talk about how to turn this into your next 10 sales for ${brandName || "your store"}. What channel did that first customer come from?`);
   };
 
-  const liveCount = projects.filter(p => publishedIds.has(p.id)).length;
+  const liveCount = projects.filter(p => p.status === 'live' || publishedIds.has(p.id)).length;
   const totalSalesDollars = (initialRevenue / 100).toFixed(2);
   const monthSalesDollars = (initialMonthRevenue / 100).toFixed(2);
   const monthName = new Date().toLocaleString("default", { month: "long" });
@@ -505,6 +551,9 @@ export default function DashboardClient({
           ))}
         </div>
 
+        {/* Setup Banner */}
+        <SetupBanner />
+
         {/* Your Businesses */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -564,7 +613,7 @@ export default function DashboardClient({
           ) : (
             <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
               {projects.map(project => {
-                const isLive = publishedIds.has(project.id);
+                const isLive = project.status === 'live' || publishedIds.has(project.id);
                 return (
                   <div
                     key={project.id}
@@ -594,7 +643,7 @@ export default function DashboardClient({
                             <span style={{ fontSize: 12, color: isLive ? "#16a34a" : "#94a3b8", fontWeight: 500 }}>{isLive ? "Live" : "Draft"}</span>
                           </div>
                         </div>
-                        <div style={{ fontSize: 13, color: "#AAA" }}>Saved {timeAgo(project.updated_at)}</div>
+                        <div style={{ fontSize: 13, color: "#AAA" }}>Created {timeAgo(project.updated_at ?? project.created_at)}</div>
                       </div>
                       <button
                         onClick={() => router.push(`/builder?project=${project.id}`)}
@@ -609,21 +658,6 @@ export default function DashboardClient({
                 );
               })}
 
-              {!creating && (
-                <button
-                  onClick={() => setCreating(true)}
-                  style={{ minHeight: 240, borderRadius: 12, border: "2px dashed #D0CFC9", background: "transparent", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer", transition: "border-color 0.15s, background 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.background = "#EFF6FF"; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#D0CFC9"; e.currentTarget.style.background = "transparent"; }}
-                >
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                  </div>
-                  <span style={{ fontSize: 14, color: "#999" }}>New business</span>
-                </button>
-              )}
             </div>
           )}
         </div>

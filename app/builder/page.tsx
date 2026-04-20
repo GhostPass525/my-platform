@@ -6,7 +6,6 @@ import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 import FloatingPanel from "@/app/components/FloatingPanel";
-import TemplateModal from "@/app/components/TemplateModal";
 import LayoutPickerModal from "@/app/components/LayoutPickerModal";
 import StoreLayout, { type LayoutId } from "@/app/components/LayoutTemplates";
 import Moveable from "react-moveable";
@@ -140,6 +139,96 @@ async function fileToDataUrl(file: File): Promise<string> {
     reader.onload = () => resolve(String(reader.result));
     reader.readAsDataURL(file);
   });
+}
+
+// Inline editor injected into builder preview iframe (NOT the published store)
+function injectInlineEditor(html: string): string {
+  const editorCode = `<!-- VOLCITY_EDITOR_START -->
+<style>
+[data-vc-edit]:hover{outline:2px solid rgba(37,99,235,.4)!important;outline-offset:2px!important;cursor:text!important;border-radius:2px!important;}
+[data-vc-edit].vc-editing{outline:2px solid #2563EB!important;outline-offset:2px!important;background:rgba(37,99,235,.04)!important;border-radius:2px!important;}
+#vc-edit-hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1A1A1A;color:#fff;padding:7px 14px;border-radius:8px;font-size:12px;font-family:system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity .2s ease;z-index:99999;white-space:nowrap;}
+#vc-edit-hint.visible{opacity:1;}
+</style>
+<script>
+(function(){
+  var hintShown=false;
+  var hint=document.createElement('div');
+  hint.id='vc-edit-hint';
+  hint.textContent='Double-click any text to edit';
+  document.body&&document.body.appendChild(hint)||document.addEventListener('DOMContentLoaded',function(){document.body.appendChild(hint);});
+
+  function makeEditable(){
+    var sel=['h1','h2','h3','h4','h5','h6','p','li','span','a','button','label','td','th','caption','figcaption'].join(',');
+    document.querySelectorAll(sel).forEach(function(el){
+      if(el.querySelector('h1,h2,h3,h4,h5,h6,p')||!el.textContent.trim()||['SCRIPT','STYLE','NOSCRIPT'].includes(el.tagName))return;
+      el.setAttribute('data-vc-edit','1');
+      el.setAttribute('data-vc-orig',el.innerHTML);
+    });
+    if(!document.getElementById('vc-edit-hint'))document.body.appendChild(hint);
+  }
+
+  document.addEventListener('mouseover',function(e){
+    if(!hintShown&&e.target.closest&&e.target.closest('[data-vc-edit]')){
+      hint.classList.add('visible');
+      hintShown=true;
+      setTimeout(function(){hint.classList.remove('visible');},2200);
+    }
+  });
+
+  document.addEventListener('dblclick',function(e){
+    var el=e.target&&e.target.closest&&e.target.closest('[data-vc-edit]');
+    if(!el)return;
+    e.preventDefault();e.stopPropagation();
+    el.contentEditable='true';
+    el.classList.add('vc-editing');
+    setTimeout(function(){
+      try{
+        el.focus();
+        var r=document.createRange();r.selectNodeContents(el);
+        var s=window.getSelection();if(s){s.removeAllRanges();s.addRange(r);}
+      }catch(err){}
+    },0);
+  });
+
+  document.addEventListener('blur',function(e){
+    var el=e.target;
+    if(!el||!el.hasAttribute||!el.hasAttribute('data-vc-edit'))return;
+    el.contentEditable='false';
+    el.classList.remove('vc-editing');
+    if(el.innerHTML!==el.getAttribute('data-vc-orig')){
+      el.setAttribute('data-vc-orig',el.innerHTML);
+      // Sync data-product-price if this is a price element
+      var text=(el.innerText||el.textContent||'').trim();
+      var priceMatch=text.match(/\$?([\d,.]+)/);
+      if(priceMatch){
+        var cls=(el.className||'').toLowerCase();
+        var isPrice=cls.includes('price')||!!el.closest('[class*="price"]');
+        if(isPrice){
+          var cents=Math.round(parseFloat(priceMatch[1].replace(/,/g,''))*100);
+          var card=el.closest('[data-product-card],.product-card')||el.closest('[class*="product"]');
+          if(card){var addBtn=card.querySelector('[data-add-to-cart],[data-product-price]');if(addBtn){addBtn.setAttribute('data-product-price',String(cents));}}
+        }
+      }
+      window.parent.postMessage({type:'VOLCITY_CONTENT_EDIT',html:document.documentElement.outerHTML},'*');
+    }
+  },true);
+
+  document.addEventListener('keydown',function(e){
+    var el=document.activeElement;
+    if(!el||!el.hasAttribute||!el.hasAttribute('data-vc-edit'))return;
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();el.blur();}
+    if(e.key==='Escape'){e.preventDefault();el.innerHTML=el.getAttribute('data-vc-orig')||el.innerHTML;el.contentEditable='false';el.classList.remove('vc-editing');}
+  });
+
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',makeEditable);}else{makeEditable();}
+})();
+</script>
+<!-- VOLCITY_EDITOR_END -->`;
+
+  return html.includes("</body>")
+    ? html.replace("</body>", editorCode + "</body>")
+    : html + editorCode;
 }
 
 // Strip any base64/blob strings that may have slipped into site data before saving.
@@ -454,6 +543,7 @@ export default function Home() {
   const [projectName, setProjectName] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showStripeModal, setShowStripeModal] = useState(false);
   const [autoPublishPending, setAutoPublishPending] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishPhase, setPublishPhase] = useState<"saving" | "publishing" | null>(null);
@@ -469,6 +559,7 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const openingShownRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const inlineEditFromIframeRef = useRef(false);
   const imagePickerRef = useRef<HTMLInputElement | null>(null);
   const [attachedImages, setAttachedImages] = useState<{ data: string; mediaType: string; name: string }[]>([]);
 
@@ -482,9 +573,6 @@ export default function Home() {
 
   // Inline text editing panels
   const [openPanels, setOpenPanels] = useState<{ id: string; field: string; label: string; value: string }[]>([]);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showLayoutModal, setShowLayoutModal] = useState(false);
-  const [previewLayout, setPreviewLayout] = useState<LayoutId | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -554,6 +642,9 @@ export default function Home() {
     if (!pid) { setChatLoaded(true); return; }
 
     // Load project and history in parallel
+    // Always set projectId from URL param — don't wait for site data
+    setProjectId(pid);
+
     Promise.all([
       fetch(`/api/projects/${pid}`).then((r) => r.json()).catch(() => ({})),
       supabase
@@ -563,11 +654,12 @@ export default function Home() {
         .order("created_at", { ascending: true })
         .then(({ data }) => data ?? []),
     ]).then(([projectData, historyRows]) => {
-      if (projectData?.site) {
-        setSite(projectData.site as SiteSpec);
-        setProjectId(pid);
+      if (projectData?.name) {
         setProjectName(projectData.name ?? "");
         setProjectCreatedAt(projectData.createdAt ?? null);
+      }
+      if (projectData?.site) {
+        setSite(projectData.site as SiteSpec);
         setActivePageId(projectData.site.pages?.[0]?.id ?? "");
         setRightTab("quick");
       }
@@ -618,13 +710,31 @@ export default function Home() {
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !site?.generatedHtml) return;
+    // Skip re-write when the change came from the iframe itself (inline edit)
+    if (inlineEditFromIframeRef.current) { inlineEditFromIframeRef.current = false; return; }
     const doc = iframe.contentDocument;
     if (!doc) return;
+    // Replace __PROJECT_ID__ so cart.js can initialise in the preview
+    const previewHtml = site.generatedHtml.replace(/__PROJECT_ID__/g, projectId ?? '__PROJECT_ID__');
     doc.open();
-    doc.write(site.generatedHtml);
+    doc.write(injectInlineEditor(previewHtml));
     doc.close();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [site?.generatedHtml]);
+  }, [site?.generatedHtml, projectId]);
+
+  // Listen for inline edits posted from the iframe
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type !== "VOLCITY_CONTENT_EDIT") return;
+      const rawHtml: string = event.data.html ?? "";
+      // Strip the injected editor before storing so published stores don't get it
+      const cleanHtml = rawHtml.replace(/<!-- VOLCITY_EDITOR_START -->[\s\S]*?<!-- VOLCITY_EDITOR_END -->/g, "");
+      inlineEditFromIframeRef.current = true;
+      setSite((prev) => prev ? { ...prev, generatedHtml: cleanHtml } : prev);
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
   useEffect(() => {
@@ -929,9 +1039,9 @@ export default function Home() {
   // ── Chat ──────────────────────────────────────────────────────
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
-    if (!text || loadingChat) return;
+    if ((!text && attachedImages.length === 0) || loadingChat) return;
 
-    const userMessage: Message = { role: "user", content: text };
+    const userMessage: Message = { role: "user", content: text || "What should I do with this image?" };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
@@ -948,13 +1058,27 @@ export default function Home() {
         const res = await fetch("/api/mentor-edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ html: site.generatedHtml, instruction: text }),
+          body: JSON.stringify({
+            html: site.generatedHtml,
+            instruction: text,
+            images: imagesToSend.length > 0 ? imagesToSend : undefined,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         const reply = data?.reply || (res.ok ? "Done! What else would you like to change?" : data?.error || "Something went wrong. Try again.");
         setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
         if (data?.html) {
-          setSite((prev) => prev ? { ...prev, generatedHtml: data.html } : prev);
+          const updatedSite = site ? { ...site, generatedHtml: data.html } : site;
+          setSite(updatedSite ? { ...updatedSite } : updatedSite);
+          // Auto-save to Supabase so changes persist on refresh
+          if (projectId && updatedSite) {
+            const sanitized = sanitizeSiteJson(updatedSite);
+            fetch(`/api/projects/${projectId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ site: sanitized }),
+            }).catch((e) => console.warn("[mentor-edit] auto-save failed:", e));
+          }
         }
         setIsUpdatingStore(false);
       } else {
@@ -1095,6 +1219,18 @@ export default function Home() {
       return;
     }
 
+    // ── Step 0: Stripe Connect gate ────────────────────────────
+    try {
+      const setupRes = await fetch("/api/setup/status");
+      const setup = await setupRes.json().catch(() => ({}));
+      if (!setup?.stripe?.onboarded) {
+        setShowStripeModal(true);
+        return;
+      }
+    } catch {
+      // If status check fails, let publish continue (don't block on network error)
+    }
+
     setPublishing(true);
     setPublishPhase("saving");
     try {
@@ -1132,34 +1268,34 @@ export default function Home() {
         return;
       }
 
-      // ── Step 2: Save current state FIRST (blocking) ────────────
+      // ── Step 2: Force-save current state FIRST (always, blocking) ─
+      console.log("[publish] generatedHtml present:", !!site.generatedHtml);
+      console.log("[publish] generatedHtml length:", site.generatedHtml?.length ?? 0);
+      console.log("[publish] generatedHtml preview:", site.generatedHtml?.slice(0, 200) ?? "MISSING");
       console.log("[publish] saving before publish…");
       if (projectId) {
         const sanitized = sanitizeSiteJson(site);
-        const siteJson = JSON.stringify(sanitized);
-        if (siteJson !== lastSavedSiteJsonRef.current) {
-          setSaveStatus("saving");
-          const saveRes = await fetch(`/api/projects/${projectId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ site: sanitized }),
-          });
-          if (!saveRes.ok) {
-            const body = await saveRes.json().catch(() => ({}));
-            let errMsg = body?.error || `Save failed (${saveRes.status}) — please try again.`;
-            if (saveRes.status === 401) errMsg = "Session expired — please refresh the page.";
-            if (saveRes.status === 413) errMsg = "Site data is too large — remove any large images and try again.";
-            setSaveStatus("failed");
-            setSaveErrorMsg(errMsg);
-            alert(`Failed to save your changes. Please try again.\n\n${errMsg}`);
-            return;
-          }
-          lastSavedSiteJsonRef.current = siteJson;
-          setSaveStatus("saved");
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
-          console.log("[publish] save complete");
+        setSaveStatus("saving");
+        const saveRes = await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ site: sanitized }),
+        });
+        if (!saveRes.ok) {
+          const body = await saveRes.json().catch(() => ({}));
+          let errMsg = body?.error || `Save failed (${saveRes.status}) — please try again.`;
+          if (saveRes.status === 401) errMsg = "Session expired — please refresh the page.";
+          if (saveRes.status === 413) errMsg = "Site data is too large — remove any large images and try again.";
+          setSaveStatus("failed");
+          setSaveErrorMsg(errMsg);
+          alert(`Failed to save your changes. Please try again.\n\n${errMsg}`);
+          return;
         }
+        lastSavedSiteJsonRef.current = JSON.stringify(sanitized);
+        setSaveStatus("saved");
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
+        console.log("[publish] save complete");
       }
 
       // ── Step 3: Publish ────────────────────────────────────────
@@ -1181,7 +1317,7 @@ export default function Home() {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site: siteToPublish }),
+        body: JSON.stringify({ site: siteToPublish, projectId }),
       });
       const data = await res.json().catch(() => ({}));
       console.log("[publish] /api/publish response:", res.status, data);
@@ -1486,14 +1622,6 @@ export default function Home() {
             {generating ? "Generating…" : "Generate"}
           </button>
 
-          <button
-            onClick={() => setShowLayoutModal(true)}
-            style={{ height: 30, padding: "0 14px", borderRadius: 7, fontSize: 13, fontWeight: 400, border: "1px solid rgba(0,0,0,0.1)", background: "transparent", color: "#6B7280", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 150ms ease" }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
-            Templates
-          </button>
-
         </div>
 
         {/* Right: save status + view + export + publish */}
@@ -1664,9 +1792,27 @@ export default function Home() {
                 const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
                 for (const file of files.slice(0, 4)) {
-                  const dataUrl = await fileToDataUrl(file);
-                  const base64 = dataUrl.split(",")[1];
-                  const mediaType = file.type || "image/jpeg";
+                  // Compress large images client-side to reduce API payload and avoid timeouts
+                  let blob: Blob = file;
+                  if (file.size > 400_000) {
+                    try {
+                      const bmp = await createImageBitmap(file);
+                      const scale = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+                      const canvas = new OffscreenCanvas(Math.round(bmp.width * scale), Math.round(bmp.height * scale));
+                      const ctx = canvas.getContext("2d")!;
+                      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+                      blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+                    } catch {
+                      // compression failed — fall back to original
+                    }
+                  }
+                  const base64 = await new Promise<string>((res, rej) => {
+                    const reader = new FileReader();
+                    reader.onerror = rej;
+                    reader.onload = () => res((reader.result as string).split(",")[1]);
+                    reader.readAsDataURL(blob);
+                  });
+                  const mediaType = blob.type || "image/jpeg";
                   setAttachedImages((prev) => [...prev.slice(-3), { data: base64, mediaType, name: file.name }]);
                 }
               }}
@@ -1797,18 +1943,18 @@ export default function Home() {
         <main style={{ flex: 1, minHeight: 0, background: "#EDECE8", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
           {/* Preview toolbar */}
           <div style={{ height: 40, background: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", padding: "0 14px", gap: 8, flexShrink: 0 }}>
-            {site ? (
+            {site && !site.generatedHtml ? (
               <>
                 <div style={{ width: 18, height: 18, background: site.theme.accent, borderRadius: 4, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 500, color: "#1A1A1A", flexShrink: 0, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site.brandName}</span>
                 {site.tagline && <span style={{ fontSize: 12, color: "#9CA3AF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site.tagline}</span>}
               </>
-            ) : (
+            ) : !site ? (
               <>
                 <div style={{ width: 18, height: 18, background: "#E5E7EB", borderRadius: 4, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: "#9CA3AF" }}>Your store preview</span>
               </>
-            )}
+            ) : null}
             {site && !site.generatedHtml && (
               <div style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
                 {site.pages.map((p) => (
@@ -1835,7 +1981,7 @@ export default function Home() {
               <GeneratingState />
             ) : !site ? (
               <EmptyPreview theme={theme} />
-            ) : site.generatedHtml && !previewLayout ? (
+            ) : site.generatedHtml ? (
               <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)", position: "relative" }}>
                 {isUpdatingStore && (
                   <div style={{ position: "absolute", top: 10, right: 10, padding: "5px 12px", background: "rgba(37,99,235,0.92)", color: "white", borderRadius: 6, fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, zIndex: 10, backdropFilter: "blur(4px)" }}>
@@ -1849,40 +1995,17 @@ export default function Home() {
                   title="Store Preview"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
                 />
+                <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", padding: "6px 14px", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", color: "white", borderRadius: 999, fontSize: 12, fontWeight: 400, pointerEvents: "none", whiteSpace: "nowrap", zIndex: 5 }}>
+                  Double-click any text to edit · Ask your mentor to change anything else
+                </div>
               </div>
             ) : (
               <div style={{ width: "100%", height: "100%", background: "white", borderRadius: 10, overflow: "auto", boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.06)", position: "relative", scrollbarWidth: "thin" as const }}>
                 <div className="store-preview" style={{ position: "relative" }}>
-                  {/* Preview banner */}
-                  {previewLayout && (
-                    <div style={{
-                      position: "sticky", top: 0, zIndex: 50,
-                      background: "#1E40AF", color: "#fff",
-                      padding: "8px 16px",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      fontSize: 13, fontWeight: 500,
-                    }}>
-                      <span>Previewing: <strong>{LAYOUT_NAMES[previewLayout]}</strong> layout</span>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => {
-                            setSite(prev => prev ? { ...prev, activeLayout: previewLayout } : prev);
-                            setPreviewLayout(null);
-                            setShowLayoutModal(false);
-                          }}
-                          style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "#fff", color: "#1E40AF", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                        >Use This Layout</button>
-                        <button
-                          onClick={() => setPreviewLayout(null)}
-                          style={{ height: 28, padding: "0 12px", borderRadius: 6, background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", fontSize: 12, cursor: "pointer" }}
-                        >Cancel</button>
-                      </div>
-                    </div>
-                  )}
-                  {/* Layout or default preview */}
-                  {(previewLayout || site.activeLayout) ? (
+                  {/* Default preview */}
+                  {site.activeLayout ? (
                     <StoreLayout
-                      layoutId={(previewLayout || site.activeLayout)!}
+                      layoutId={site.activeLayout}
                       site={site}
                       activePageId={activePageId || site.pages[0]?.id}
                       onSelectPage={setActivePageId}
@@ -1920,6 +2043,51 @@ export default function Home() {
         </main>
 
       </div>
+
+      {/* Stripe Connect required modal */}
+      {showStripeModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+          <div style={{ maxWidth: 440, width: "calc(100% - 32px)", borderRadius: 20, background: "white", padding: "36px 32px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#0F172A", margin: "0 0 8px", letterSpacing: "-0.01em" }}>Connect Stripe to publish</h2>
+            <p style={{ fontSize: 14, color: "#64748B", margin: "0 0 24px", lineHeight: 1.65 }}>
+              Your store needs Stripe to accept payments. Takes about 3 minutes — we'll walk you through it.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+              {[
+                "Verify your identity",
+                "Add a bank account for payouts",
+                "Start accepting payments",
+              ].map((step, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#2563EB" }}>{i + 1}</span>
+                  </div>
+                  <span style={{ fontSize: 14, color: "#374151" }}>{step}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowStripeModal(false)}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1px solid #E2E8F0", background: "transparent", color: "#64748B", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+              >
+                Not now
+              </button>
+              <a
+                href="/dashboard/connect"
+                style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "#2563EB", color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                Connect Stripe →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Phase 3: Paywall modal */}
       {showPaywall && (
@@ -1959,34 +2127,6 @@ export default function Home() {
         </FloatingPanel>
       ))}
 
-      {/* Template picker modal */}
-      {showTemplateModal && (
-        <TemplateModal
-          onApply={(newTheme, newFont) => {
-            setSite((prev) => (prev ? { ...prev, theme: newTheme, font: newFont } : prev));
-            setShowTemplateModal(false);
-            trackAction("Applied template");
-          }}
-          onClose={() => setShowTemplateModal(false)}
-        />
-      )}
-
-      {/* Layout picker modal */}
-      {showLayoutModal && (
-        <LayoutPickerModal
-          activeLayout={site?.activeLayout}
-          onPreview={(id) => setPreviewLayout(id)}
-          onApply={(id) => {
-            setSite(prev => prev ? { ...prev, activeLayout: id } : prev);
-            setPreviewLayout(null);
-            setShowLayoutModal(false);
-          }}
-          onClose={() => {
-            setPreviewLayout(null);
-            setShowLayoutModal(false);
-          }}
-        />
-      )}
     </main>
   );
 }
@@ -2800,81 +2940,107 @@ function DraggableTextLayer({
 
 /* ─── UI helpers ──────────────────────────────────────────────────── */
 
+const GEN_STEPS = [
+  'Understanding your business',
+  'Picking brand direction',
+  'Designing your storefront',
+  'Writing product copy',
+  'Building product pages',
+  'Setting up payments',
+  'Adding finishing touches',
+];
+
 function GeneratingState() {
   const [step, setStep] = useState(0);
-
-  const steps = [
-    { label: "Analyzing your business", sub: "Understanding your niche and brand personality" },
-    { label: "Designing your identity", sub: "Choosing colors, typography, and layout" },
-    { label: "Writing your copy", sub: "Crafting headlines and descriptions for your brand" },
-    { label: "Building your store", sub: "Generating your unique storefront" },
-    { label: "Adding finishing touches", sub: "Polishing details and animations" },
-  ];
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStep((s) => Math.min(s + 1, steps.length - 1));
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [steps.length]);
+    const stepInterval = setInterval(() => {
+      setStep((i) => Math.min(i + 1, GEN_STEPS.length - 1));
+    }, 12000);
+    const timeInterval = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => { clearInterval(stepInterval); clearInterval(timeInterval); };
+  }, []);
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-      gap: "32px",
-      background: "#FAFAF8",
-    }}>
-      <div style={{
-        width: "48px",
-        height: "48px",
-        background: "#2563EB",
-        borderRadius: "12px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        animation: "generatingPulse 2s ease-in-out infinite",
-      }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-        </svg>
+    <div style={{ position: "relative", display: "flex", height: "100%", width: "100%", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#f8fafc", borderRadius: 10 }}>
+      {/* Animated gradient blobs */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        <div className="vc-blob-1" style={{ position: "absolute", top: "-5rem", left: "-5rem", width: "24rem", height: "24rem", borderRadius: "50%", background: "rgba(96,165,250,0.35)", filter: "blur(64px)" }} />
+        <div className="vc-blob-2" style={{ position: "absolute", top: "33%", right: "-5rem", width: "24rem", height: "24rem", borderRadius: "50%", background: "rgba(99,102,241,0.35)", filter: "blur(64px)" }} />
+        <div className="vc-blob-3" style={{ position: "absolute", bottom: "-5rem", left: "33%", width: "24rem", height: "24rem", borderRadius: "50%", background: "rgba(51,65,85,0.2)", filter: "blur(64px)" }} />
       </div>
 
-      <div style={{ textAlign: "center", maxWidth: "320px" }}>
-        <p style={{ fontSize: "17px", fontWeight: "600", color: "#1A1A1A", margin: "0 0 8px" }}>
-          {steps[step].label}
-        </p>
-        <p style={{ fontSize: "14px", color: "#9CA3AF", margin: 0 }}>
-          {steps[step].sub}
-        </p>
-      </div>
+      {/* Drifting grid overlay */}
+      <div className="vc-grid-drift" style={{ position: "absolute", inset: 0, opacity: 0.04, backgroundImage: "linear-gradient(#0f172a 1px, transparent 1px), linear-gradient(to right, #0f172a 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
 
-      <div style={{ display: "flex", gap: "6px" }}>
-        {steps.map((_, i) => (
-          <div key={i} style={{
-            width: i === step ? "20px" : "6px",
-            height: "6px",
-            borderRadius: "3px",
-            background: i <= step ? "#2563EB" : "#E5E7EB",
-            transition: "all 300ms ease",
-          }} />
-        ))}
+      {/* Content */}
+      <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: "2rem", padding: "0 1.5rem" }}>
+        {/* Logo with orbit rings */}
+        <div style={{ position: "relative" }}>
+          <div className="vc-spin-slow" style={{ position: "absolute", inset: "-2rem", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.4)" }} />
+          <div className="vc-spin-slower" style={{ position: "absolute", inset: "-3.5rem", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.25)" }} />
+          <div className="vc-float-logo" style={{ position: "relative", width: 80, height: 80, borderRadius: 20, background: "linear-gradient(135deg, #2563eb, #4338ca)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 25px 50px rgba(37,99,235,0.35)" }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style={{ color: "white" }}>
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ width: 320, maxWidth: "100%" }}>
+          <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 500, color: "#64748b", fontFamily: "system-ui,sans-serif" }}>
+            <span>Step {step + 1} of {GEN_STEPS.length}</span>
+            <span>{elapsed}s</span>
+          </div>
+          <div style={{ height: 6, width: "100%", overflow: "hidden", borderRadius: 9999, background: "#e2e8f0" }}>
+            <div style={{ height: "100%", borderRadius: 9999, background: "linear-gradient(to right, #2563eb, #4338ca)", transition: "width 1s ease-out", width: `${((step + 1) / GEN_STEPS.length) * 100}%` }} />
+          </div>
+        </div>
+
+        {/* Cycling status */}
+        <div style={{ height: 28, textAlign: "center" }}>
+          <p className="vc-fade-in-up" key={step} style={{ fontSize: 18, fontWeight: 600, color: "#0f172a", margin: 0, fontFamily: "system-ui,sans-serif", letterSpacing: "-0.02em" }}>
+            {GEN_STEPS[step]}
+          </p>
+        </div>
+
+        {/* Bouncing dots */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="vc-bounce-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#0f172a", animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </div>
+
+        <p style={{ maxWidth: 340, textAlign: "center", fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.6, fontFamily: "system-ui,sans-serif" }}>
+          Generating takes 1–2 minutes. We&apos;re building every page, writing every word, and wiring up payments — all at once.
+        </p>
       </div>
 
       <style>{`
-        @keyframes generatingPulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.05); opacity: 0.85; }
-        }
+        .vc-blob-1 { animation: vcBlob1 10s ease-in-out infinite; }
+        .vc-blob-2 { animation: vcBlob2 12s ease-in-out infinite; }
+        .vc-blob-3 { animation: vcBlob3 14s ease-in-out infinite; }
+        .vc-grid-drift { animation: vcGridDrift 20s linear infinite; }
+        .vc-spin-slow { animation: vcSpinSlow 8s linear infinite; }
+        .vc-spin-slower { animation: vcSpinSlower 12s linear infinite; }
+        .vc-float-logo { animation: vcFloatLogo 3s ease-in-out infinite; }
+        .vc-fade-in-up { animation: vcFadeInUp 0.4s ease-out; }
+        .vc-bounce-dot { animation: vcBounceDot 1.2s ease-in-out infinite; }
+        @keyframes vcBlob1 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(60px,40px) scale(1.15);} }
+        @keyframes vcBlob2 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(-50px,60px) scale(1.1);} }
+        @keyframes vcBlob3 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(40px,-40px) scale(1.2);} }
+        @keyframes vcGridDrift { 0%{background-position:0 0;} 100%{background-position:40px 40px;} }
+        @keyframes vcSpinSlow { to{transform:rotate(360deg);} }
+        @keyframes vcSpinSlower { to{transform:rotate(-360deg);} }
+        @keyframes vcFloatLogo { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+        @keyframes vcFadeInUp { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes vcBounceDot { 0%,80%,100%{transform:translateY(0);opacity:0.4;} 40%{transform:translateY(-8px);opacity:1;} }
         /* Thin scrollbars */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
-        /* Builder workspace */
         .builder-workspace { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       `}</style>
     </div>
