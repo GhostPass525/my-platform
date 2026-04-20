@@ -1219,18 +1219,6 @@ export default function Home() {
       return;
     }
 
-    // ── Step 0: Stripe Connect gate ────────────────────────────
-    try {
-      const setupRes = await fetch("/api/setup/status");
-      const setup = await setupRes.json().catch(() => ({}));
-      if (!setup?.stripe?.onboarded) {
-        setShowStripeModal(true);
-        return;
-      }
-    } catch {
-      // If status check fails, let publish continue (don't block on network error)
-    }
-
     setPublishing(true);
     setPublishPhase("saving");
     try {
@@ -1268,7 +1256,20 @@ export default function Home() {
         return;
       }
 
-      // ── Step 2: Force-save current state FIRST (always, blocking) ─
+      // ── Step 2: Stripe Connect gate (after subscription confirmed) ─
+      try {
+        const setupRes = await fetch("/api/setup/status");
+        const setup = await setupRes.json().catch(() => ({}));
+        if (!setup?.stripe?.onboarded) {
+          console.log("[publish] stripe not onboarded — showing connect modal");
+          setShowStripeModal(true);
+          return;
+        }
+      } catch {
+        // If status check fails, allow publish through (don't block on network error)
+      }
+
+      // ── Step 4: Force-save current state FIRST (always, blocking) ─
       console.log("[publish] generatedHtml present:", !!site.generatedHtml);
       console.log("[publish] generatedHtml length:", site.generatedHtml?.length ?? 0);
       console.log("[publish] generatedHtml preview:", site.generatedHtml?.slice(0, 200) ?? "MISSING");
@@ -1298,7 +1299,7 @@ export default function Home() {
         console.log("[publish] save complete");
       }
 
-      // ── Step 3: Publish ────────────────────────────────────────
+      // ── Step 5: Publish ────────────────────────────────────────
       setPublishPhase("publishing");
       console.log("[publish] proceeding to publish");
 
