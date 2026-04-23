@@ -22,23 +22,6 @@ const STAGE_ICONS = [
   <svg key="grow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
 ];
 
-const QUOTES = [
-  { text: "The people who are crazy enough to think they can change the world are the ones who do.", author: "Steve Jobs" },
-  { text: "Your time is limited, don't waste it living someone else's life.", author: "Steve Jobs" },
-  { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
-  { text: "Chase the vision, not the money. The money will end up following you.", author: "Tony Hsieh, Zappos" },
-  { text: "It's not about ideas. It's about making ideas happen.", author: "Scott Belsky, Behance" },
-  { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-  { text: "Done is better than perfect.", author: "Sheryl Sandberg, Facebook" },
-  { text: "Your most unhappy customers are your greatest source of learning.", author: "Bill Gates" },
-  { text: "If you're not embarrassed by the first version of your product, you've launched too late.", author: "Reid Hoffman, LinkedIn" },
-  { text: "The best time to start was yesterday. The next best time is now.", author: "Unknown" },
-  { text: "An entrepreneur is someone who jumps off a cliff and builds a plane on the way down.", author: "Reid Hoffman, LinkedIn" },
-  { text: "You don't have to be great to start, but you have to start to be great.", author: "Zig Ziglar" },
-  { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
-  { text: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-  { text: "I have not failed. I've just found 10,000 ways that won't work.", author: "Thomas Edison" },
-];
 
 const DASH_PROMPTS: Record<string, string[]> = {
   noProjects:  ["Help me find my business idea", "What sells well online?", "How do I start?"],
@@ -95,60 +78,63 @@ function ProjectCardHeader({ name }: { name: string }) {
   );
 }
 
-function RotatingQuote() {
-  const [current, setCurrent] = useState(() => Math.floor(Math.random() * QUOTES.length));
-  const [visible, setVisible] = useState(true);
+type TodayCardData = { suggestion: string; actionLabel: string; actionHref?: string; actionType: "mentor" | "href" };
+
+function TodayCard({ onOpenMentor }: { onOpenMentor: () => void }) {
+  const [card, setCard] = useState<TodayCardData | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setVisible(false);
-      setTimeout(() => {
-        setCurrent(c => (c + 1) % QUOTES.length);
-        setVisible(true);
-      }, 350);
-    }, 7000);
-    return () => clearInterval(interval);
+    fetch("/api/dashboard/today")
+      .then(r => r.json())
+      .then(d => { if (d?.suggestion) setCard(d); })
+      .catch(() => {});
   }, []);
+
+  if (!card) return null;
 
   return (
     <div style={{
       marginBottom: 16,
-      padding: "20px 24px",
+      padding: "18px 22px",
       background: "#ffffff",
       borderRadius: 12,
       border: "1px solid #e7e5e4",
-      position: "relative",
+      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
+      animation: "dashFadeIn 0.3s ease-out both",
     }}>
-      {/* Quote mark icon */}
-      <svg
-        width="20" height="20" viewBox="0 0 24 24" fill="none"
-        style={{ position: "absolute", top: 16, left: 20, color: "#d6d3d1" }}
-      >
-        <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-      <div style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(4px)",
-        transition: "all 350ms ease-out",
-        paddingLeft: 28,
-      }}>
-        <p style={{ fontSize: 13, fontStyle: "italic", color: "#57534e", lineHeight: 1.65, marginBottom: 8 }}>
-          "{QUOTES[current].text}"
-        </p>
-        <p style={{ fontSize: 12, color: "#a8a29e", fontWeight: 500 }}>
-          — {QUOTES[current].author}
-        </p>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>Today</p>
+        <p style={{ fontSize: 14, color: "#0c0a09", lineHeight: 1.6, margin: 0 }}>{card.suggestion}</p>
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 14, paddingLeft: 28 }}>
-        {[0,1,2,3,4,5,6,7].map(i => (
-          <div key={i} style={{
-            width: i === current % 8 ? 14 : 4, height: 3, borderRadius: 2,
-            background: i === current % 8 ? "#0f172a" : "#e7e5e4",
-            transition: "all 350ms ease-out",
-          }} />
-        ))}
-      </div>
+      {card.actionType === "href" && card.actionHref ? (
+        <a
+          href={card.actionHref}
+          style={{
+            flexShrink: 0, padding: "8px 16px", borderRadius: 8,
+            background: "#0f172a", color: "#ffffff", fontSize: 13, fontWeight: 600,
+            textDecoration: "none", whiteSpace: "nowrap", alignSelf: "center",
+            transition: "opacity 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+        >
+          {card.actionLabel}
+        </a>
+      ) : (
+        <button
+          onClick={onOpenMentor}
+          style={{
+            flexShrink: 0, padding: "8px 16px", borderRadius: 8,
+            background: "#0f172a", color: "#ffffff", fontSize: 13, fontWeight: 600,
+            border: "none", cursor: "pointer", whiteSpace: "nowrap", alignSelf: "center",
+            transition: "opacity 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+        >
+          {card.actionLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -684,8 +670,8 @@ export default function DashboardClient({
           </span>
         </div>
 
-        {/* Rotating Quote */}
-        <RotatingQuote />
+        {/* Today Card */}
+        <TodayCard onOpenMentor={() => setShowMobileChat(true)} />
 
         {/* Journey Progress */}
         <JourneyProgress stageIndex={stageIndex} />
