@@ -13,7 +13,7 @@ type Insight = {
 
 const CATEGORY_META: Record<string, { label: string; color: string; bg: string }> = {
   conversion: { label: "Conversion", color: "#6d28d9", bg: "rgba(109,40,217,0.08)" },
-  homepage:   { label: "Homepage",   color: "#1d4ed8", bg: "rgba(29,78,216,0.08)"  },
+  homepage:   { label: "Homepage",   color: "#0f172a", bg: "rgba(15,23,42,0.06)"   },
   products:   { label: "Products",   color: "#047857", bg: "rgba(4,120,87,0.08)"   },
   pricing:    { label: "Pricing",    color: "#b45309", bg: "rgba(180,83,9,0.08)"   },
   marketing:  { label: "Marketing",  color: "#be123c", bg: "rgba(190,18,60,0.08)"  },

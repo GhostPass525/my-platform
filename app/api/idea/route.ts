@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/utils/supabase/server";
+import { getCachedMentorContext } from "@/lib/mentor/contextCache";
+import { buildContextBlock } from "@/lib/mentor/systemPrompt";
 
 export const dynamic = "force-dynamic";
 
-type MentorContext = {
+// Legacy client-sent context type — still accepted but server-side context takes precedence
+type ClientContext = {
   brandName?: string;
   niche?: string;
   stage?: string;
   siteGenerated?: boolean;
   recentActions?: string[];
   productList?: string[];
-  revenue?: number;        // total cents
+  revenue?: number;
   isPublished?: boolean;
   daysSinceCreated?: number;
 };
@@ -27,7 +30,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
-    const ctx: MentorContext = body?.mentorContext ?? {};
+    const clientCtx: ClientContext = body?.mentorContext ?? {};
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -36,27 +39,40 @@ export async function POST(req: Request) {
       );
     }
 
-    // Build rich context block
-    const contextLines: string[] = [];
-    if (ctx.brandName) contextLines.push(`Business name: ${ctx.brandName}`);
-    if (ctx.niche) contextLines.push(`Niche/category: ${ctx.niche}`);
-    if (ctx.stage) contextLines.push(`Current stage: ${ctx.stage}`);
-    if (ctx.isPublished !== undefined) contextLines.push(`Store live: ${ctx.isPublished ? "yes" : "no"}`);
-    if (ctx.daysSinceCreated !== undefined) contextLines.push(`Days since starting: ${ctx.daysSinceCreated}`);
-    if (ctx.revenue !== undefined) contextLines.push(`Total revenue: $${(ctx.revenue / 100).toFixed(2)}`);
-    if (ctx.productList?.length) contextLines.push(`Products: ${ctx.productList.join(", ")}`);
-    if (ctx.recentActions?.length) contextLines.push(`Recent builder actions: ${ctx.recentActions.join(", ")}`);
+    // ── Fetch server-side context (cached, 60s TTL) ────────────────────────
+    let serverContextBlock = "";
+    try {
+      const ctx = await getCachedMentorContext(user.id);
+      serverContextBlock = buildContextBlock(ctx);
+    } catch (ctxErr) {
+      // Non-fatal: fall back to client-sent context if DB fetch fails
+      console.warn("[idea] context fetch failed, falling back to client context:", ctxErr);
+    }
 
-    const contextBlock = contextLines.length > 0
-      ? `\n\nLIVE BUSINESS CONTEXT (use this to give specific advice — never ignore it):\n${contextLines.map((l) => `- ${l}`).join("\n")}\n`
-      : "";
+    // ── Build legacy context lines as fallback (used only if server context failed) ──
+    const fallbackLines: string[] = [];
+    if (!serverContextBlock) {
+      if (clientCtx.brandName) fallbackLines.push(`Business name: ${clientCtx.brandName}`);
+      if (clientCtx.niche) fallbackLines.push(`Niche/category: ${clientCtx.niche}`);
+      if (clientCtx.stage) fallbackLines.push(`Current stage: ${clientCtx.stage}`);
+      if (clientCtx.isPublished !== undefined) fallbackLines.push(`Store live: ${clientCtx.isPublished ? "yes" : "no"}`);
+      if (clientCtx.daysSinceCreated !== undefined) fallbackLines.push(`Days since starting: ${clientCtx.daysSinceCreated}`);
+      if (clientCtx.revenue !== undefined) fallbackLines.push(`Total revenue: $${(clientCtx.revenue / 100).toFixed(2)}`);
+      if (clientCtx.productList?.length) fallbackLines.push(`Products: ${clientCtx.productList.join(", ")}`);
+      if (clientCtx.recentActions?.length) fallbackLines.push(`Recent builder actions: ${clientCtx.recentActions.join(", ")}`);
+    }
 
-    // Stage-specific behavioral rules
+    const contextBlock = serverContextBlock ||
+      (fallbackLines.length > 0
+        ? `\n\nLIVE BUSINESS CONTEXT (use this to give specific advice — never ignore it):\n${fallbackLines.map((l) => `- ${l}`).join("\n")}\n`
+        : "");
+
+    // ── Stage-specific behavioral rules ───────────────────────────────────
     const stageRules = (() => {
-      const s = (ctx.stage ?? "").toLowerCase();
+      // Use server context stage if available, otherwise fall back to client-sent stage
+      const s = (clientCtx.stage ?? "").toLowerCase();
 
-      // Pre-generation: store hasn't been built yet — focus entirely on idea clarity and brand
-      if (!ctx.siteGenerated) {
+      if (!clientCtx.siteGenerated && !serverContextBlock) {
         return `The founder has not yet generated their store. Your ONLY focus right now is:
 1. Helping them clarify and get excited about their business idea
 2. Defining their brand identity — name, personality, tone, visual style
@@ -85,7 +101,7 @@ Help them visualize what they're building and make it feel real and exciting. On
       return `Help the founder find the one concrete action today that brings them closest to their next sale. Make it feel achievable and exciting, not overwhelming.`;
     })();
 
-    // Detect marketing mode
+    // ── Marketing expertise block (injected when relevant) ────────────────
     const lastUserMessage = [...(messages as Array<{ role: string; content: string }>)]
       .reverse()
       .find((m) => m.role === "user")?.content ?? "";
@@ -179,6 +195,7 @@ WHEN ANSWERING THIS MARKETING QUESTION:
 ` : "";
 
     const systemPrompt = `You are a deeply experienced, genuinely inspiring startup mentor built into a commerce platform called Volcity. You've helped hundreds of founders build real businesses from scratch, and you bring that hard-won wisdom with warmth, belief, and infectious energy.
+
 ${contextBlock}
 YOUR PERSONA:
 You combine three energies:
@@ -191,7 +208,7 @@ ${stageRules}
 ${marketingBlock}
 HOW YOU COMMUNICATE — NEVER BREAK THESE:
 - Never open with "Great!", "Absolutely!", "Of course!", "Sure!", or hollow filler — jump straight into something real and useful
-- Never give generic advice that could apply to anyone — always connect it to THEIR specific niche, product, and stage
+- Never give generic advice that could apply to anyone — always reference their specific products, prices, and sales numbers from the context above
 - Never ask more than ONE question per response
 - Never write step-by-step numbered lists unless the user explicitly asks for a plan
 - Keep responses SHORT — 3-6 sentences max unless they ask for a deep dive
@@ -200,17 +217,18 @@ HOW YOU COMMUNICATE — NEVER BREAK THESE:
 - You MUST remember everything from this conversation — never re-ask something already answered
 - End with either a direct recommendation OR one forward-looking question — never both
 - When you spot a problem, frame it as a hidden opportunity: not "that's your issue" but "here's what's waiting on the other side of that"
+- USE THEIR ACTUAL NUMBERS. Cite revenue, order counts, product names and prices from the context. "You've made $X" beats "you've been making sales."
+- IF STRIPE ISN'T ONBOARDED: every conversation about sales or customers must include a mention that they can't take money yet and need to finish setup first.
 
 TONE:
-Warm, energized, and genuinely excited about what this person is building. Like the most inspiring mentor you've ever met — someone who's done this before, gives a damn, and makes you feel like your idea is worth fighting for. Honest always, harsh never. Leave every person feeling more capable and fired up than when they started.
-`;
+Warm, energized, and genuinely excited about what this person is building. Like the most inspiring mentor you've ever met — someone who's done this before, gives a damn, and makes you feel like your idea is worth fighting for. Honest always, harsh never. Leave every person feeling more capable and fired up than when they started.`;
 
-    // Sanitize messages to only pass role/content
+    // Sanitize messages
     const safeMessages = (messages as Array<{ role: string; content: string }>)
       .filter((m) => m && typeof m.role === "string" && typeof m.content === "string")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    // If images are attached, convert last user message to multi-modal content
+    // Handle image attachments
     const attachedImages = body?.attachedImages as Array<{ data: string; mediaType: string }> | undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let finalMessages: any[] = safeMessages;
@@ -219,11 +237,7 @@ Warm, energized, and genuinely excited about what this person is building. Like 
       if (lastMsg.role === "user") {
         const imageBlocks = attachedImages.map((img) => ({
           type: "image",
-          source: {
-            type: "base64",
-            media_type: img.mediaType,
-            data: img.data,
-          },
+          source: { type: "base64", media_type: img.mediaType, data: img.data },
         }));
         finalMessages = [
           ...safeMessages.slice(0, -1),
@@ -247,10 +261,7 @@ Warm, energized, and genuinely excited about what this person is building. Like 
 
     if (!text) {
       return NextResponse.json(
-        {
-          error:
-            "Anthropic returned an empty response. Try again (or check Vercel env var ANTHROPIC_API_KEY).",
-        },
+        { error: "Anthropic returned an empty response. Try again (or check Vercel env var ANTHROPIC_API_KEY)." },
         { status: 500 }
       );
     }

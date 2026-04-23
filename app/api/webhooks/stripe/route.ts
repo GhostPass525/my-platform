@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -10,11 +10,17 @@ const redis = new Redis({
 
 export const dynamic = "force-dynamic";
 
-// Single module-level admin client — always uses service role key, bypasses RLS
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _adminClient: SupabaseClient<any> | null = null;
+function getSupabaseAdmin() {
+  if (!_adminClient) {
+    _adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return _adminClient;
+}
 
 export async function POST(req: Request) {
   // Must use raw body for Stripe signature verification — do NOT parse as JSON first
@@ -151,7 +157,7 @@ async function handleCheckoutComplete(
         }
       : null;
 
-  const { error: orderError } = await supabaseAdmin
+  const { error: orderError } = await getSupabaseAdmin()
     .from("orders")
     .insert({
       user_id: userId || null,
@@ -184,7 +190,7 @@ async function handleCheckoutComplete(
   // Auto-fulfill with Printful if the site has a connected Printful account
   if (publishId && shippingAddress) {
     try {
-      const { data: printfulConnection } = await supabaseAdmin
+      const { data: printfulConnection } = await getSupabaseAdmin()
         .from("printful_connections")
         .select("access_token")
         .eq("site_id", publishId)
@@ -221,7 +227,7 @@ async function handleCheckoutComplete(
           });
 
           if (fulfillRes.ok) {
-            await supabaseAdmin
+            await getSupabaseAdmin()
               .from("orders")
               .update({ fulfillment_status: "fulfilled", fulfillment_notes: "Auto-fulfilled via Printful" })
               .eq("stripe_session_id", session.id);
@@ -285,7 +291,7 @@ async function handlePlatformSubscriptionCheckout(
   const rawPeriodEnd = (stripeSub as any).current_period_end as number | undefined;
   const periodEnd = rawPeriodEnd ? new Date(rawPeriodEnd * 1000).toISOString() : null;
 
-  const { error } = await supabaseAdmin.from("subscriptions").upsert(
+  const { error } = await getSupabaseAdmin().from("subscriptions").upsert(
     {
       user_id: userId,
       stripe_customer_id: customerId,
@@ -334,14 +340,14 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   // ── Primary: update the existing row by stripe_customer_id ──────────────
   // This handles the normal flow: checkout creates an 'incomplete' row with the
   // customer ID, and the webhook fills in the subscription ID and real status.
-  const { data: existing, error: lookupError } = await supabaseAdmin
+  const { data: existing, error: lookupError } = await getSupabaseAdmin()
     .from("subscriptions")
     .select("user_id")
     .eq("stripe_customer_id", customerId)
     .single();
 
   if (existing?.user_id) {
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from("subscriptions")
       .update(payload)
       .eq("stripe_customer_id", customerId);
@@ -367,7 +373,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
 
   console.log("[webhook] No row for customer — falling back to upsert by userId from metadata", { userId, customerId });
 
-  const { error } = await supabaseAdmin.from("subscriptions").upsert(
+  const { error } = await getSupabaseAdmin().from("subscriptions").upsert(
     {
       user_id: userId,
       stripe_customer_id: customerId,

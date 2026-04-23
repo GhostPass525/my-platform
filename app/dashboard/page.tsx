@@ -17,9 +17,9 @@ export default async function DashboardPage() {
     await Promise.all([
       supabase
         .from("projects")
-        .select("id, name, created_at, updated_at")
+        .select("id, name, created_at")
         .eq("user_id", user.id)
-        .order("updated_at", { ascending: false }),
+        .order("created_at", { ascending: false }),
       supabase
         .from("orders")
         .select("id, total, customer_email, created_at, order_items(product_name)")

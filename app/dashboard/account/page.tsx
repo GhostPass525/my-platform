@@ -93,7 +93,7 @@ export default function AccountPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
           <div style={{
             width: 48, height: 48, borderRadius: "50%",
-            background: "#2563EB", color: "#fff",
+            background: "linear-gradient(135deg, #4f46e5, #0f172a)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 17, fontWeight: 700, flexShrink: 0,
           }}>
@@ -172,7 +172,7 @@ export default function AccountPage() {
         ) : (
           <p style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.6, margin: 0 }}>
             You don&apos;t have an active subscription.{" "}
-            <a href="/dashboard" style={{ color: "#2563EB", textDecoration: "none", fontWeight: 500 }}>
+            <a href="/dashboard" style={{ color: "#0f172a", textDecoration: "none", fontWeight: 500 }}>
               Publish your store
             </a>{" "}
             to get started.

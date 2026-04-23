@@ -151,7 +151,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               width: 32,
               height: 32,
               borderRadius: 10,
-              background: "#2563eb",
+              background: "#0f172a",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -286,7 +286,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
                     lineHeight: 1.4,
                   }}
                   onMouseEnter={(e) => {
-                    (e.target as HTMLButtonElement).style.borderColor = "#2563eb";
+                    (e.target as HTMLButtonElement).style.borderColor = "#0f172a";
                     (e.target as HTMLButtonElement).style.color = "#1e40af";
                     (e.target as HTMLButtonElement).style.background = "#eff6ff";
                   }}
@@ -348,7 +348,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               color: "#0f172a",
               transition: "border-color 0.15s",
             }}
-            onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
+            onFocus={(e) => (e.target.style.borderColor = "#0f172a")}
             onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
           />
           <button
@@ -358,7 +358,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               padding: "8px 14px",
               borderRadius: 10,
               border: "none",
-              background: loading || !input.trim() ? "#f1f5f9" : "#2563eb",
+              background: loading || !input.trim() ? "#f1f5f9" : "#0f172a",
               color: loading || !input.trim() ? "#94a3b8" : "#fff",
               fontSize: 13,
               fontWeight: 600,

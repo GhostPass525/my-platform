@@ -82,7 +82,7 @@ function SalesChart({ orders }: { orders: Order[] }) {
             return (
               <g key={i}>
                 <rect x={x} y={0} width={barW} height={chartH} rx={6} fill="#EEEDE9" />
-                {barH > 0 && <rect x={x} y={chartH - barH} width={barW} height={barH} rx={6} fill="#2563EB" />}
+                {barH > 0 && <rect x={x} y={chartH - barH} width={barW} height={barH} rx={6} fill="#0f172a" />}
                 <text x={x + barW / 2} y={chartH + 20} textAnchor="middle" fontSize={11} fill="#AAA" fontFamily="inherit">
                   {d.label}
                 </text>
@@ -103,7 +103,7 @@ function SalesChart({ orders }: { orders: Order[] }) {
 const CARD: React.CSSProperties = {
   background: "#fff",
   borderRadius: 12,
-  border: "1px solid #E8E8E4",
+  border: "1px solid #e7e5e4",
   padding: 24,
   marginBottom: 16,
 };
@@ -290,16 +290,16 @@ export default function ConnectClient() {
         <div style={CARD}>
           {error === "CONNECT_NOT_ENABLED" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f5f5f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#57534e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Create or connect a Stripe account</div>
-                <div style={{ fontSize: 13, color: "#888" }}>Sign up for Stripe — it only takes a few minutes.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", marginBottom: 4 }}>Create or connect a Stripe account</div>
+                <div style={{ fontSize: 13, color: "#78716c" }}>Sign up for Stripe — it only takes a few minutes.</div>
               </div>
-              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", textDecoration: "none", width: "fit-content" }}>
+              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", textDecoration: "none", width: "fit-content" }}>
                 Sign up for Stripe
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
@@ -323,7 +323,7 @@ export default function ConnectClient() {
                 <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Connect your Stripe account</div>
                 <div style={{ fontSize: 13, color: "#888" }}>Accept payments directly. Volcity takes a <strong style={{ color: "#1A1A1A" }}>1% platform fee</strong> per sale.</div>
               </div>
-              <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}>
+              <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}>
                 {onboarding ? <><SpinIcon /> Redirecting…</> : "Connect Stripe Account"}
               </button>
             </div>

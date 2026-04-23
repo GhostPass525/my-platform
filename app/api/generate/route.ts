@@ -1,9 +1,11 @@
+export const maxDuration = 300;
+export const runtime = 'nodejs';
+
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -56,7 +58,7 @@ Rules:
     .join("\n\n");
 
   const resp = await anthropic.messages.create({
-    model: "claude-haiku-4-5",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: systemPrompt,
     messages: [
@@ -72,11 +74,80 @@ Rules:
   return tryParseJSON(text);
 }
 
+function validateCartStructure(html: string): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  if (!html.includes('volcity-project-id')) issues.push('Missing <meta name="volcity-project-id">');
+  if (!html.includes('volcity-cart/cart.css')) issues.push('Missing cart.css <link>');
+  if (!html.includes('volcity-cart/cart.js')) issues.push('Missing cart.js <script>');
+  const buttonCount = (html.match(/data-add-to-cart/g) || []).length;
+  if (buttonCount === 0) issues.push('No buttons have data-add-to-cart attribute');
+  let invalidButtons = 0;
+  for (const [btn] of html.matchAll(/<button[^>]*data-add-to-cart[^>]*>/g)) {
+    const hasId    = /data-product-id="[^"]+"/.test(btn);
+    const hasName  = /data-product-name="[^"]+"/.test(btn);
+    const hasPrice = /data-product-price="\d+"/.test(btn);
+    if (!hasId || !hasName || !hasPrice) invalidButtons++;
+  }
+  if (invalidButtons > 0) issues.push(`${invalidButtons} button(s) missing required data attributes`);
+  return { valid: issues.length === 0, issues };
+}
+
 async function generateUniqueStorefront(
   businessDescription: string,
   mentorConversation: string
 ) {
-  const prompt = `You are an elite ecommerce designer with 15 years of experience designing high-converting online stores for premium brands. Your task is to generate a complete, unique, stunning storefront for this specific business.
+  const prompt = `===========================================================
+MANDATORY OUTPUT STRUCTURE — NON-NEGOTIABLE
+===========================================================
+
+You are generating HTML for a functional e-commerce store, not a design mockup. The store MUST work — customers must be able to add products to cart and check out. A beautiful store that can't accept payments is a failure.
+
+REQUIRED IN <head> — copy exactly:
+  <meta name="volcity-project-id" content="__PROJECT_ID__">
+  <link rel="stylesheet" href="https://volcity.to/volcity-cart/cart.css">
+
+REQUIRED AT END OF <body> — copy exactly:
+  <script src="https://volcity.to/volcity-cart/cart.js" defer></script>
+
+REQUIRED PRODUCT CARD STRUCTURE — every product must follow this pattern exactly:
+<div class="product-card" data-product-card>
+  <div class="product-image-placeholder">Product Name</div>
+  <div class="product-info">
+    <h3 class="product-name">Product Name</h3>
+    <p class="product-desc">Short product description.</p>
+    <div class="product-price">$48</div>
+    <button
+      class="add-to-cart"
+      data-add-to-cart
+      data-product-id="unique-slug"
+      data-product-name="Product Name"
+      data-product-price="4800"
+    >Add to Cart — $48</button>
+  </div>
+</div>
+
+PRICE FORMAT — data-product-price is always an INTEGER in CENTS:
+  $48 → data-product-price="4800"
+  $52.50 → data-product-price="5250"
+  $120 → data-product-price="12000"
+  NEVER decimals. NEVER include $ sign. NEVER leave it as 0.
+
+PRODUCT ID FORMAT — lowercase slug, unique per product, no spaces:
+  Good: "foundation-tank", "apex-tee", "botanical-candle"
+  Bad: "product-1", "item", "Foundation Tank"
+
+BEFORE RETURNING, verify:
+  1. <head> contains the volcity-project-id meta tag (content="__PROJECT_ID__")
+  2. <head> contains the cart.css link tag
+  3. <body> ends with the cart.js script tag
+  4. EVERY product button has data-add-to-cart, data-product-id, data-product-name, data-product-price
+  5. All data-product-price values are integers (cents), all data-product-id values are unique
+
+===========================================================
+END OF MANDATORY STRUCTURE
+===========================================================
+
+You are an elite ecommerce designer with 15 years of experience designing high-converting online stores for premium brands. Your task is to generate a complete, unique, stunning storefront for this specific business.
 
 BUSINESS DETAILS:
 ${businessDescription}
@@ -109,69 +180,106 @@ DESIGN PHILOSOPHY BY NICHE:
 TECHNICAL REQUIREMENTS:
 - Return ONLY a complete HTML document — no explanation, no markdown
 - Embedded CSS in a <style> tag with Google Fonts via @import
-- CSS custom properties for easy customization: --primary, --secondary, --accent, --bg, --surface, --text, --text-muted, --border
+- CSS custom properties: --primary, --secondary, --accent, --bg, --surface, --text, --text-muted, --border
 - Sections: nav, hero, features/benefits (3 cards), products grid, about/story, social proof, footer
-- IMPORTANT — every section MUST have both data-section and id attributes:
+- Every section MUST have both data-section and id attributes:
   - Hero: <section data-section="hero" id="home">
-  - Products/Collection: <section data-section="products" id="collection">
-  - About/Story/Philosophy: <section data-section="about" id="about">
-  - Contact/Footer area: <section data-section="contact" id="contact">
-- Navigation links MUST use these exact anchor hrefs: <a href="#collection">, <a href="#about">, <a href="#contact">
-- Add html { scroll-behavior: smooth; } in the CSS
-- Product cards: <div data-product-id="1" class="product-card">
-- Each product card MUST have the product name in an <h3> tag
-- Stripe checkout button on each product: <button class="add-to-cart" data-price="49">Add to Cart — $49</button>
+  - Products: <section data-section="products" id="collection">
+  - About: <section data-section="about" id="about">
+  - Contact/Footer: <section data-section="contact" id="contact">
+- Navigation links: <a href="#collection">, <a href="#about">, <a href="#contact">
+- html { scroll-behavior: smooth; } in CSS
 - Navigation: logo left, links center, CTA button right
-- Hero: Full viewport height, compelling headline, subheading, primary CTA
-- CSS animations: fade-in on scroll using @keyframes, hover effects on buttons and cards
-- No JavaScript — CSS only animations
-- No external images — use CSS gradients as hero backgrounds, light gray rectangles as product image placeholders with the product name inside
+- Hero: full viewport height, compelling headline, subheading, primary CTA
+- CSS animations: fade-in on scroll via @keyframes, hover effects on buttons and cards
+- No JavaScript — CSS only animations (cart.js handles all interactivity)
+- No external images — CSS gradients as hero backgrounds, styled divs as product image placeholders
 - Footer: links, copyright, social icons (SVG)
 - Mobile responsive: stack nav at 768px, single column products at 480px
 
-MICRO-DETAIL REQUIREMENTS (these separate good from great):
-- Button hover: subtle scale(1.02) + shadow increase, 200ms ease
+MICRO-DETAIL REQUIREMENTS:
+- Button hover: scale(1.02) + shadow increase, 200ms ease
 - Product card hover: translateY(-4px) + shadow, smooth transition
 - Nav links: underline animation from left on hover
 - Section transitions: staggered fade-in with animation-delay
-- Smooth scroll behavior on html element
-- Border radius consistency: 8px for cards, 6px for buttons, 4px for inputs
-- Line heights: 1.2 for headings, 1.7 for body text
-- Letter spacing: 0.05em on uppercase labels, -0.02em on large headings
+- Border radius: 8px cards, 6px buttons, 4px inputs
+- Line heights: 1.2 headings, 1.7 body
+- Letter spacing: 0.05em uppercase labels, -0.02em large headings
 
 OUTPUT: Return ONLY the complete HTML. Start with <!DOCTYPE html> and end with </html>. No other text.`;
 
-  const resp = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 8000,
+  const stream = anthropic.messages.stream({
+    model: "claude-sonnet-4-6",
+    max_tokens: 32000,
     messages: [{ role: "user", content: prompt }],
   });
 
-  console.log("[generate] HTML response stop_reason:", resp.stop_reason);
-  console.log("[generate] HTML content[0] type:", resp.content[0]?.type);
+  let raw = "";
+  for await (const chunk of stream) {
+    if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+      raw += chunk.delta.text;
+    }
+  }
 
-  const raw = resp.content[0]?.type === "text" ? resp.content[0].text : "";
+  const finalMsg = await stream.finalMessage();
+  console.log("[generate] HTML response stop_reason:", finalMsg.stop_reason);
   console.log("[generate] HTML raw length:", raw.length, "first 120 chars:", raw.slice(0, 120));
 
-  // Strip any markdown code fences Claude may wrap around the HTML
-  const html = raw
-    .replace(/^```html\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  // Extract the HTML document — handles preamble text, code fences, trailing content
+  const htmlMatch = raw.match(/<!DOCTYPE\s+html[\s\S]*<\/html\s*>/i)
+    ?? raw.match(/<html[\s\S]*<\/html\s*>/i);
 
-  console.log("[generate] HTML after strip, length:", html.length, "starts with:", html.slice(0, 60));
+  const html = htmlMatch
+    ? htmlMatch[0].trim()
+    : raw.replace(/^```html\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  console.log("[generate] HTML after extract, length:", html.length, "starts with:", html.slice(0, 60));
+  console.log("[generate] has </body>:", html.includes("</body>"), "has </html>:", html.includes("</html>"));
+
+  if (!html.includes("</body>") || !html.includes("</html>")) {
+    console.error("[generate] HTML is truncated — stop_reason:", finalMsg.stop_reason, "length:", html.length);
+    throw new Error("Store generation produced truncated HTML — please try again.");
+  }
+
+  // Diagnostic logs for cart structure
+  const cartBtnCount = (html.match(/data-add-to-cart/g) || []).length;
+  console.log("[generate] data-add-to-cart button count:", cartBtnCount);
+  console.log("[generate] sample button:", html.match(/<button[^>]*data-add-to-cart[^>]*>/)?.[0] ?? "NO MATCH");
+  console.log("[generate] has volcity-project-id:", html.includes("volcity-project-id"));
+  console.log("[generate] has cart.js:", html.includes("volcity-cart/cart.js"));
+  console.log("[generate] has cart.css:", html.includes("volcity-cart/cart.css"));
+
+  if (cartBtnCount === 0) {
+    console.error("[generate] no data-add-to-cart buttons in output — model did not follow instructions");
+    throw new Error("Store generation missing Add to Cart buttons — please try again.");
+  }
+
+  // Validate full cart structure and warn (non-fatal — surface issues in logs)
+  const validation = validateCartStructure(html);
+  if (!validation.valid) {
+    console.warn("[generate] cart structure validation issues:", validation.issues.join(" | "));
+  } else {
+    console.log("[generate] cart structure validation passed");
+  }
+
   return html;
 }
 
 export async function POST(req: Request) {
   console.log("[generate] POST called");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  console.log("[generate] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY, "prefix:", process.env.ANTHROPIC_API_KEY?.slice(0, 10));
+
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.log("[generate] user:", user.id);
+  } catch (authErr: unknown) {
+    console.error("[generate] auth error:", authErr);
+    return NextResponse.json({ error: "Auth failed — try refreshing the page." }, { status: 500 });
   }
-  console.log("[generate] user:", user.id);
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -216,10 +324,10 @@ export async function POST(req: Request) {
 
     const html = htmlResult.value;
 
-    if (!html || !html.includes("<!DOCTYPE") && !html.includes("<html")) {
-      console.error("[generate] HTML appears invalid, length:", html?.length, "content:", html?.slice(0, 200));
+    if (!html || (!html.includes("<!DOCTYPE") && !html.includes("<html")) || !html.includes("</body>")) {
+      console.error("[generate] HTML appears invalid or truncated, length:", html?.length, "content:", html?.slice(0, 200));
       return NextResponse.json(
-        { error: "Claude returned invalid HTML. Please try again." },
+        { error: "Store generation produced incomplete HTML. Please try again." },
         { status: 500 }
       );
     }

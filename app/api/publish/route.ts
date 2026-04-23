@@ -1,6 +1,10 @@
+export const maxDuration = 300;
+export const runtime = 'nodejs';
+
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import { createClient } from "@/utils/supabase/server";
+import { createServiceClient } from "@/utils/supabase/service";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -13,101 +17,150 @@ function id() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 }
 
-function injectCart(html: string, publishId: string): string {
-  const script = `<script>
-(function(){
-var cart=[];
-function initCart(){
-  var s=document.createElement('div');
-  s.innerHTML='<div id="vc-ov" onclick="vcClose()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99998;"></div><div id="vc-panel" style="position:fixed;right:-420px;top:0;width:400px;height:100vh;background:#fff;z-index:99999;transition:right .3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,.15);font-family:system-ui,sans-serif;"><div style="padding:20px 24px;border-bottom:1px solid #E5E7EB;display:flex;justify-content:space-between;align-items:center;"><h2 style="font-size:18px;font-weight:600;margin:0;color:#111;">Your Cart</h2><button onclick="vcClose()" style="background:none;border:none;cursor:pointer;font-size:24px;color:#6B7280;line-height:1;">&times;</button></div><div id="vc-items" style="flex:1;overflow-y:auto;padding:16px 24px;"></div><div style="padding:20px 24px;border-top:1px solid #E5E7EB;"><div style="display:flex;justify-content:space-between;margin-bottom:16px;"><span style="font-size:15px;font-weight:500;color:#111;">Total</span><span id="vc-total" style="font-size:15px;font-weight:700;color:#111;">$0.00</span></div><button onclick="vcCheckout()" id="vc-btn" style="width:100%;padding:14px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">Checkout</button></div></div>';
-  document.body.appendChild(s);
-  document.querySelectorAll('.add-to-cart,[class*="add-to-cart"],button[data-price]').forEach(function(btn){
-    btn.addEventListener('click',function(e){
-      e.preventDefault();
-      var price=parseFloat(this.dataset.price||'0');
-      var card=this.closest('[data-product-id]')||this.closest('.product-card');
-      var name=((card&&card.querySelector('h3,h4,[class*="product-name"]'))||{}).textContent||'Product';
-      name=name.trim().slice(0,80);
-      var pid=(card&&card.dataset.productId)||name;
-      vcAdd({id:pid,name:name,price:price});
-    });
-  });
-  vcRender();
-}
-function vcAdd(item){
-  var ex=cart.find(function(i){return i.id===item.id;});
-  if(ex){ex.qty++;}else{cart.push({id:item.id,name:item.name,price:item.price,qty:1});}
-  vcRender();vcOpen();
-}
-function vcRemoveItem(id){cart=cart.filter(function(i){return i.id!==id;});vcRender();}
-function vcRender(){
-  var el=document.getElementById('vc-items');
-  var tot=document.getElementById('vc-total');
-  if(!el)return;
-  if(cart.length===0){el.innerHTML='<p style="color:#9CA3AF;text-align:center;margin-top:48px;font-size:14px;">Your cart is empty</p>';if(tot)tot.textContent='$0.00';return;}
-  var total=cart.reduce(function(s,i){return s+i.price*i.qty;},0);
-  if(tot)tot.textContent='$'+total.toFixed(2);
-  el.innerHTML=cart.map(function(item){
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #F3F4F6;"><div><p style="font-size:14px;font-weight:500;margin:0 0 2px;color:#111;">'+item.name+'</p><p style="font-size:12px;color:#6B7280;margin:0;">$'+item.price.toFixed(2)+' &times; '+item.qty+'</p></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:14px;font-weight:600;color:#111;">$'+(item.price*item.qty).toFixed(2)+'</span><button onclick="vcRemoveItem(\''+item.id+'\')" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:18px;line-height:1;">&times;</button></div></div>';
-  }).join('');
-}
-window.vcOpen=function(){var p=document.getElementById('vc-panel');var o=document.getElementById('vc-ov');if(p)p.style.right='0';if(o)o.style.display='block';};
-window.vcClose=function(){var p=document.getElementById('vc-panel');var o=document.getElementById('vc-ov');if(p)p.style.right='-420px';if(o)o.style.display='none';};
-window.vcRemoveItem=vcRemoveItem;
-window.vcCheckout=async function(){
-  if(cart.length===0)return;
-  var btn=document.getElementById('vc-btn');
-  if(btn){btn.textContent='Processing...';btn.disabled=true;}
-  try{
-    var res=await fetch('/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cart:cart.map(function(i){return{name:i.name,price:i.price,quantity:i.qty};}),publishId:'${publishId}'})});
-    var data=await res.json();
-    if(data.url){(window.top||window).location.href=data.url;}
-    else{throw new Error(data.error||'Checkout failed');}
-  }catch(err){
-    if(btn){btn.textContent='Error — Try Again';btn.disabled=false;setTimeout(function(){btn.textContent='Checkout';},2000);}
+function prepareForPublish(html: string, projectId: string): string {
+  // Replace __PROJECT_ID__ placeholder the generator was told to include
+  let out = html.replace(/__PROJECT_ID__/g, projectId);
+
+  // Fallback: if the generator omitted the cart assets, inject them now
+  const missingMeta   = !out.includes('volcity-project-id');
+  const missingCss    = !out.includes('volcity-cart/cart.css');
+  const missingScript = !out.includes('volcity-cart/cart.js');
+
+  if (missingMeta || missingCss) {
+    const inject = [
+      missingMeta ? `<meta name="volcity-project-id" content="${projectId}">` : '',
+      missingCss  ? `<link rel="stylesheet" href="https://volcity.to/volcity-cart/cart.css">` : '',
+    ].join('\n');
+    out = out.includes('</head>')
+      ? out.replace('</head>', inject + '\n</head>')
+      : out.replace('<body', inject + '\n<body');
+    if (missingMeta) console.warn('[publish] fallback: injected volcity-project-id meta');
+    if (missingCss)  console.warn('[publish] fallback: injected cart.css link');
   }
-};
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initCart);}else{initCart();}
-})();
-</script>`;
-  // Inject before </body>, falling back to end of string
-  return html.includes('</body>')
-    ? html.replace('</body>', script + '</body>')
-    : html + script;
+
+  if (missingScript) {
+    const scriptTag = `<script src="https://volcity.to/volcity-cart/cart.js" defer></script>`;
+    out = out.includes('</body>')
+      ? out.replace('</body>', scriptTag + '\n</body>')
+      : out + scriptTag;
+    console.warn('[publish] fallback: injected cart.js script');
+  }
+
+  return out;
 }
 
 export async function POST(req: Request) {
   try {
-    const { site } = await req.json();
+    const { site, projectId } = await req.json();
 
     if (!site) {
       return NextResponse.json({ error: "Missing site" }, { status: 400 });
     }
 
+    // Log what we received
+    console.log("[publish] generatedHtml present:", !!site.generatedHtml);
+    console.log("[publish] generatedHtml length:", site.generatedHtml?.length ?? 0);
+    console.log("[publish] generatedHtml preview:", site.generatedHtml?.slice(0, 200) ?? "MISSING");
+    console.log("[publish] projectId:", projectId);
+
+    // ── Step 1: Authenticate the request ─────────────────────────
+    const authClient = await createClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.log("[publish] user:", user.id);
+
+    // ── Use service role for all DB writes to bypass RLS ─────────
+    const db = createServiceClient();
+
     const publishId = id();
+    const now = new Date().toISOString();
 
-    // If this is an AI-generated store, inject the cart system with the publishId baked in
-    let siteToStore = site;
+    // ── Step 2: Prepare HTML (replace __PROJECT_ID__ + fallback inject) ───
+    let publishedHtml: string | null = null;
     if (site?.generatedHtml && typeof site.generatedHtml === "string") {
-      siteToStore = { ...site, generatedHtml: injectCart(site.generatedHtml, publishId) };
+      console.log("[publish] pre-prepare length:", site.generatedHtml.length);
+      publishedHtml = prepareForPublish(site.generatedHtml, projectId ?? publishId);
+      console.log("[publish] post-prepare length:", publishedHtml.length);
+      console.log("[publish] has volcity-project-id:", publishedHtml.includes("volcity-project-id"));
+      console.log("[publish] has cart.js:", publishedHtml.includes("volcity-cart/cart.js"));
+    } else {
+      console.warn("[publish] no generatedHtml — published_html will be null");
     }
 
-    // Store site JSON for 30 days
+    // ── Step 3: Single upsert to sites with all fields ────────────
+    if (projectId) {
+      console.log("[publish] upserting to sites table…");
+      // Build payload — include published_html if we have it
+      const upsertPayload: Record<string, unknown> = {
+        project_id: projectId,
+        user_id: user.id,
+        site_json: site,
+        updated_at: now,
+      };
+      if (publishedHtml) {
+        upsertPayload.published_html = publishedHtml;
+        upsertPayload.published_at = now;
+      }
+
+      const { error: siteError } = await db.from("sites").upsert(upsertPayload, { onConflict: "project_id" });
+
+      if (siteError) {
+        // If the error is specifically about published_html not being in the schema cache,
+        // fall back to upsert without it — publish still works via Redis
+        if (siteError.message.includes("published_html") || siteError.message.includes("schema cache")) {
+          console.warn("[publish] published_html column not in schema cache — retrying without it");
+          const { error: fallbackError } = await db.from("sites").upsert(
+            { project_id: projectId, user_id: user.id, site_json: site, updated_at: now },
+            { onConflict: "project_id" }
+          );
+          if (fallbackError) {
+            console.error("[publish] fallback upsert error:", fallbackError);
+            return NextResponse.json({ error: `Failed to save site: ${fallbackError.message}` }, { status: 500 });
+          }
+          console.log("[publish] site saved OK (without published_html — run migration to enable)");
+        } else {
+          console.error("[publish] site upsert error:", siteError);
+          return NextResponse.json({ error: `Failed to save site: ${siteError.message}` }, { status: 500 });
+        }
+      } else {
+        console.log("[publish] site upserted OK");
+      }
+    } else {
+      console.log("[publish] no projectId — skipping sites table write");
+    }
+
+    // ── Step 5: Update projects.status = 'live' ───────────────────
+    if (projectId) {
+      console.log("[publish] updating projects.status = live…");
+      const { error: statusError } = await db.from("projects")
+        .update({ status: "live", published_at: now })
+        .eq("id", projectId)
+        .eq("user_id", user.id);
+      if (statusError) {
+        console.error("[publish] projects status update error:", statusError);
+        // Non-fatal — column may not exist yet in older schemas
+      } else {
+        console.log("[publish] projects.status updated OK");
+      }
+    }
+
+    // ── Step 6: Store in Redis for s/[id] route ───────────────────
+    const siteToStore = publishedHtml
+      ? { ...site, generatedHtml: publishedHtml }
+      : site;
+
     await redis.set(`site:${publishId}`, siteToStore, { ex: TTL });
-
-    // Record which user owns this published site so webhooks can attribute orders
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.id) {
-      await redis.set(`site-owner:${publishId}`, user.id, { ex: TTL });
-    }
+    await redis.set(`site-owner:${publishId}`, user.id, { ex: TTL });
+    console.log("[publish] redis written, publishId:", publishId);
 
     return NextResponse.json({ id: publishId });
   } catch (e: any) {
+    console.error("[publish] unexpected error:", e);
     return NextResponse.json(
       { error: e?.message || "Publish failed" },
       { status: 500 }
     );
   }
 }
-

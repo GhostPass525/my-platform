@@ -15,16 +15,11 @@ const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
 const STAGE_DESCS  = ["Define your business", "Build your store", "Go live", "Get paid", "Scale up"];
 
 const STAGE_ICONS = [
-  // Idea: circle with center dot
-  <svg key="idea" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>,
-  // Setup: square outline
-  <svg key="setup" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>,
-  // Launch: upward arrow
-  <svg key="launch" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>,
-  // First Sale: dollar sign
-  <svg key="sale" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
-  // Growing: trending line
-  <svg key="grow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  <svg key="idea" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>,
+  <svg key="setup" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>,
+  <svg key="launch" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>,
+  <svg key="sale" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  <svg key="grow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
 ];
 
 const QUOTES = [
@@ -88,8 +83,12 @@ function nameToHue(name: string): number {
 function ProjectCardHeader({ name }: { name: string }) {
   const hue = nameToHue(name);
   return (
-    <div style={{ height: 120, background: `linear-gradient(135deg, hsl(${hue},38%,86%) 0%, hsl(${(hue + 30) % 360},32%,80%) 100%)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <span style={{ fontSize: 48, fontWeight: 700, color: `hsl(${hue},45%,32%)`, lineHeight: 1, userSelect: "none" }}>
+    <div style={{
+      height: 120,
+      background: `linear-gradient(135deg, hsl(${hue},35%,88%) 0%, hsl(${(hue + 30) % 360},28%,82%) 100%)`,
+      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 56, fontWeight: 700, color: `hsl(${hue},40%,30%)`, lineHeight: 1, userSelect: "none" }}>
         {name.trim()[0]?.toUpperCase() ?? "?"}
       </span>
     </div>
@@ -106,27 +105,48 @@ function RotatingQuote() {
       setTimeout(() => {
         setCurrent(c => (c + 1) % QUOTES.length);
         setVisible(true);
-      }, 400);
+      }, 350);
     }, 7000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div style={{ marginBottom: 20, padding: "20px 24px", background: "#F0EFE9", borderRadius: 12, borderLeft: "3px solid #2563EB", position: "relative" }}>
-      <div style={{ position: "absolute", top: 10, left: 20, fontSize: 48, color: "rgba(37,99,235,0.12)", fontFamily: "Georgia, serif", lineHeight: 1, userSelect: "none" }}>
-        "
-      </div>
-      <div style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(4px)", transition: "all 400ms ease", paddingLeft: 8 }}>
-        <p style={{ fontSize: 14, fontStyle: "italic", color: "#374151", lineHeight: 1.7, marginBottom: 8 }}>
+    <div style={{
+      marginBottom: 16,
+      padding: "20px 24px",
+      background: "#ffffff",
+      borderRadius: 12,
+      border: "1px solid #e7e5e4",
+      position: "relative",
+    }}>
+      {/* Quote mark icon */}
+      <svg
+        width="20" height="20" viewBox="0 0 24 24" fill="none"
+        style={{ position: "absolute", top: 16, left: 20, color: "#d6d3d1" }}
+      >
+        <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <div style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(4px)",
+        transition: "all 350ms ease-out",
+        paddingLeft: 28,
+      }}>
+        <p style={{ fontSize: 13, fontStyle: "italic", color: "#57534e", lineHeight: 1.65, marginBottom: 8 }}>
           "{QUOTES[current].text}"
         </p>
-        <p style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>
+        <p style={{ fontSize: 12, color: "#a8a29e", fontWeight: 500 }}>
           — {QUOTES[current].author}
         </p>
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 4, marginTop: 14, paddingLeft: 28 }}>
         {[0,1,2,3,4,5,6,7].map(i => (
-          <div key={i} style={{ width: i === current % 8 ? 14 : 4, height: 3, borderRadius: 2, background: i === current % 8 ? "#2563EB" : "#D1D5DB", transition: "all 400ms ease" }} />
+          <div key={i} style={{
+            width: i === current % 8 ? 14 : 4, height: 3, borderRadius: 2,
+            background: i === current % 8 ? "#0f172a" : "#e7e5e4",
+            transition: "all 350ms ease-out",
+          }} />
         ))}
       </div>
     </div>
@@ -136,34 +156,75 @@ function RotatingQuote() {
 function JourneyProgress({ stageIndex }: { stageIndex: number }) {
   const next = STAGE_LABELS[stageIndex + 1];
   return (
-    <div style={{ marginBottom: 20, padding: "20px 24px", background: "white", borderRadius: 14, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+    <div style={{
+      marginBottom: 16,
+      padding: "20px 24px",
+      background: "white",
+      borderRadius: 12,
+      border: "1px solid #e7e5e4",
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>YOUR JOURNEY</p>
-          <p style={{ fontSize: 13, color: "#6B7280" }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>YOUR JOURNEY</p>
+          <p style={{ fontSize: 13, color: "#78716c" }}>
             {STAGE_DESCS[stageIndex]}{next ? ` — next: ${next}` : " — you made it!"}
           </p>
         </div>
-        <span style={{ padding: "4px 12px", background: "#EFF6FF", color: "#2563EB", borderRadius: 999, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+        <span style={{
+          padding: "4px 12px",
+          background: "#f5f5f4",
+          color: "#57534e",
+          borderRadius: 999,
+          fontSize: 12,
+          fontWeight: 600,
+          flexShrink: 0,
+          border: "1px solid #e7e5e4",
+        }}>
           Stage {stageIndex + 1} of {STAGE_LABELS.length}
         </span>
       </div>
       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-        <div style={{ position: "absolute", left: 16, right: 16, height: 2, background: "#E5E7EB", zIndex: 0 }} />
-        <div style={{ position: "absolute", left: 16, width: `calc(${(stageIndex / (STAGE_LABELS.length - 1)) * 100}% - 8px)`, height: 2, background: "#2563EB", zIndex: 1, transition: "width 600ms ease" }} />
+        {/* Track */}
+        <div style={{ position: "absolute", left: 16, right: 16, height: 2, background: "#e7e5e4", zIndex: 0 }} />
+        {/* Fill */}
+        <div style={{
+          position: "absolute", left: 16,
+          width: `calc(${(stageIndex / (STAGE_LABELS.length - 1)) * 100}% - 8px)`,
+          height: 2, background: "#0f172a", zIndex: 1, transition: "width 600ms cubic-bezier(0.32,0.72,0,1)",
+        }} />
+        {/* Nodes */}
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", position: "relative", zIndex: 2 }}>
-          {STAGE_LABELS.map((label, i) => (
-            <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: i <= stageIndex ? "#2563EB" : "white", border: i <= stageIndex ? "2px solid #2563EB" : "2px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: i === stageIndex ? "0 0 0 4px rgba(37,99,235,0.15)" : "none", transition: "all 300ms ease", color: i <= stageIndex ? "white" : "#D1D5DB" }}>
-                {i < stageIndex ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                ) : STAGE_ICONS[i]}
+          {STAGE_LABELS.map((label, i) => {
+            const completed = i < stageIndex;
+            const active = i === stageIndex;
+            return (
+              <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: completed || active ? "#0f172a" : "white",
+                  border: completed || active ? "2px solid #0f172a" : "2px solid #e7e5e4",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  animation: active ? "stagePulse 2s ease-in-out infinite" : "none",
+                  transition: "all 300ms cubic-bezier(0.32,0.72,0,1)",
+                  color: completed || active ? "white" : "#d6d3d1",
+                }}>
+                  {completed ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                  ) : STAGE_ICONS[i]}
+                </div>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? "#0c0a09" : completed ? "#57534e" : "#a8a29e",
+                  whiteSpace: "nowrap",
+                }}>
+                  {label}
+                </span>
               </div>
-              <span style={{ fontSize: 11, fontWeight: i === stageIndex ? 600 : 400, color: i === stageIndex ? "#2563EB" : i < stageIndex ? "#1A1A1A" : "#9CA3AF", whiteSpace: "nowrap" }}>
-                {label}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -184,29 +245,33 @@ function SetupBanner() {
   if (!status || dismissed || status.stripe.onboarded) return null;
 
   return (
-    <div style={{ marginBottom: 20, padding: "14px 18px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 14 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 8, background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div style={{
+      marginBottom: 16,
+      padding: "14px 18px",
+      background: "#fffbeb",
+      border: "1px solid #fde68a",
+      borderRadius: 12,
+      display: "flex", alignItems: "flex-start", gap: 12,
+    }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#92400E", marginBottom: 3 }}>Finish setting up to go live</div>
-        <p style={{ fontSize: 13, color: "#B45309", margin: "0 0 10px", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#92400e", marginBottom: 3 }}>Finish setting up to go live</div>
+        <p style={{ fontSize: 13, color: "#b45309", margin: "0 0 10px", lineHeight: 1.55 }}>
           {!status.stripe.connected
             ? "Connect Stripe to start accepting payments on your store."
             : "Your Stripe account needs a few more details before it can accept payments."}
         </p>
-        <a
-          href="/dashboard/connect"
-          style={{ fontSize: 13, fontWeight: 600, color: "#92400E", textDecoration: "underline" }}
-        >
+        <a href="/dashboard/connect" style={{ fontSize: 13, fontWeight: 600, color: "#92400e", textDecoration: "underline" }}>
           {!status.stripe.connected ? "Connect Stripe →" : "Finish Stripe setup →"}
         </a>
       </div>
       <button
         onClick={() => setDismissed(true)}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "#B45309", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#b45309", padding: "2px 4px", flexShrink: 0, lineHeight: 1, fontSize: 16 }}
         aria-label="Dismiss"
       >
         ×
@@ -258,6 +323,10 @@ export default function DashboardClient({
     if (h < 12) return "morning";
     if (h < 17) return "afternoon";
     return "evening";
+  }, []);
+
+  const todayLabel = useMemo(() => {
+    return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   }, []);
 
   useEffect(() => {
@@ -327,7 +396,19 @@ export default function DashboardClient({
           .is("project_id", null)
           .order("created_at", { ascending: true })
           .limit(50);
-        setDashMessages(data && data.length > 0 ? (data as DashMsg[]) : [{ role: "assistant", content: openingMsg }]);
+
+        if (data && data.length > 0) {
+          setDashMessages(data as DashMsg[]);
+        } else {
+          // Fetch context-aware greeting from the server (knows their actual business state)
+          try {
+            const greetRes = await fetch("/api/mentor/greeting");
+            const greetData = await greetRes.json().catch(() => ({}));
+            setDashMessages([{ role: "assistant", content: greetData.greeting || openingMsg }]);
+          } catch {
+            setDashMessages([{ role: "assistant", content: openingMsg }]);
+          }
+        }
       } catch {
         setDashMessages([{ role: "assistant", content: openingMsg }]);
       }
@@ -439,50 +520,95 @@ export default function DashboardClient({
           .dash-mentor-fab   { display: flex !important; }
           .dash-main-content { margin-left: 0 !important; }
         }
-        @keyframes dashFadeIn    { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes dashDotPulse  { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+        @keyframes dashFadeIn   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dashDotPulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+        @keyframes stagePulse   { 0%, 100% { box-shadow: 0 0 0 0 rgba(15,23,42,0.25); } 50% { box-shadow: 0 0 0 6px rgba(15,23,42,0); } }
       `}</style>
 
       {/* ── Fixed Left Mentor Panel ── */}
       <div
         className="dash-mentor-panel"
-        style={{ position: "fixed", top: 60, left: 0, bottom: 0, width: 320, borderRight: "1px solid rgba(0,0,0,0.08)", background: "#F7F6F3", flexDirection: "column", overflow: "hidden", zIndex: 20 }}
+        style={{
+          position: "fixed", top: 56, left: 0, bottom: 0, width: 340,
+          borderRight: "1px solid #e7e5e4",
+          background: "#fafaf9",
+          flexDirection: "column", overflow: "hidden", zIndex: 20,
+        }}
       >
         {/* Header */}
-        <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #E8E8E4", flexShrink: 0 }}>
+        <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #e7e5e4", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #4f46e5, #0f172a)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.2 }}>Your Mentor</div>
-              <div style={{ fontSize: 12, color: "#AAA", lineHeight: 1.3, marginTop: 1 }}>Ready to help you build</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#0c0a09", lineHeight: 1.2 }}>Your Mentor</div>
+              <div style={{ fontSize: 12, color: "#a8a29e", lineHeight: 1.3, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#15803d", display: "inline-block", flexShrink: 0 }} />
+                Ready to help
+              </div>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-          {dashMessages.map((m, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", animation: "dashFadeIn 0.15s ease-out both" }}>
-              <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: "#334155", background: m.role === "user" ? "#ffffff" : "#F0EFE9", border: m.role === "user" ? "1px solid #E8E8E4" : "none", whiteSpace: "pre-line" }}>
-                {m.content}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 0, minHeight: 0 }}>
+          {dashMessages.map((m, i) => {
+            const prevRole = i > 0 ? dashMessages[i - 1].role : null;
+            const speakerChange = prevRole !== null && prevRole !== m.role;
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                  marginTop: speakerChange ? 20 : 8,
+                  animation: "dashFadeIn 0.2s ease-out both",
+                }}
+              >
+                {m.role === "user" ? (
+                  <div style={{
+                    maxWidth: "85%", padding: "9px 14px",
+                    borderRadius: "18px 18px 4px 18px",
+                    fontSize: 13, lineHeight: 1.55, color: "#ffffff",
+                    background: "#0f172a",
+                    whiteSpace: "pre-line",
+                  }}>
+                    {m.content}
+                  </div>
+                ) : (
+                  <div style={{
+                    maxWidth: "92%",
+                    borderLeft: "2px solid #e7e5e4",
+                    paddingLeft: 14,
+                    fontSize: 13, lineHeight: 1.65, color: "#57534e",
+                    whiteSpace: "pre-line",
+                  }}>
+                    {m.content}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Suggested prompts */}
           {dashMessages.filter(m => m.role === "user").length === 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 16 }}>
               {dashPromptSet.map(prompt => (
                 <button
                   key={prompt}
                   onClick={() => sendDashMentor(prompt)}
-                  style={{ padding: "6px 14px", borderRadius: 999, border: "1px solid #D0CFC9", background: "#ffffff", color: "#555", fontSize: 12, cursor: "pointer", lineHeight: 1.4, transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; e.currentTarget.style.background = "#EFF6FF"; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#D0CFC9"; e.currentTarget.style.color = "#555"; e.currentTarget.style.background = "#ffffff"; }}
+                  style={{
+                    padding: "6px 12px", borderRadius: 999,
+                    border: "1px solid #e7e5e4",
+                    background: "#ffffff", color: "#57534e",
+                    fontSize: 12, cursor: "pointer", lineHeight: 1.4,
+                    transition: "all 0.15s", whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#fafaf9"; e.currentTarget.style.borderColor = "#d6d3d1"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.borderColor = "#e7e5e4"; }}
                 >
                   {prompt}
                 </button>
@@ -491,30 +617,49 @@ export default function DashboardClient({
           )}
 
           {dashLoading && (
-            <div style={{ display: "flex", gap: 4, padding: "4px 4px" }}>
-              {[0, 1, 2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#CBD5E1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}
+            <div style={{ display: "flex", gap: 4, padding: "12px 4px", borderLeft: "2px solid #e7e5e4", marginTop: 8, paddingLeft: 14 }}>
+              {[0, 1, 2].map(d => (
+                <span key={d} style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8a29e", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />
+              ))}
             </div>
           )}
-          <div ref={dashBottomRef} />
+          <div ref={dashBottomRef} style={{ height: 8 }} />
         </div>
 
         {/* Input */}
-        <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0, background: "#F7F6F3" }}>
+        <div style={{ padding: "10px 12px", borderTop: "1px solid #e7e5e4", display: "flex", gap: 8, flexShrink: 0, background: "#fafaf9" }}>
           <input
             value={dashInput}
             onChange={e => setDashInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
             placeholder="Ask your mentor anything..."
-            style={{ flex: 1, height: 44, padding: "0 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a", transition: "border-color 0.15s", boxSizing: "border-box" }}
-            onFocus={e => (e.target.style.borderColor = "#2563EB")}
-            onBlur={e => (e.target.style.borderColor = "#E8E8E4")}
+            style={{
+              flex: 1, height: 40, padding: "0 12px", borderRadius: 8,
+              border: "1px solid #e7e5e4", fontSize: 13, outline: "none",
+              background: "#ffffff", color: "#0c0a09",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e => (e.target.style.borderColor = "#0f172a")}
+            onBlur={e => (e.target.style.borderColor = "#e7e5e4")}
           />
+          {/* Paper plane send button */}
           <button
             onClick={() => sendDashMentor()}
             disabled={dashLoading || !dashInput.trim()}
-            style={{ height: 44, padding: "0 16px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#E2E8F0" : "#2563EB", color: dashLoading || !dashInput.trim() ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600, cursor: dashLoading || !dashInput.trim() ? "default" : "pointer", flexShrink: 0, transition: "all 0.15s" }}
+            aria-label="Send message"
+            style={{
+              height: 40, width: 40, borderRadius: 8, border: "none",
+              background: dashLoading || !dashInput.trim() ? "#f5f5f4" : "#0f172a",
+              color: dashLoading || !dashInput.trim() ? "#a8a29e" : "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: dashLoading || !dashInput.trim() ? "default" : "pointer",
+              flexShrink: 0, transition: "all 0.15s",
+            }}
           >
-            Send
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -522,16 +667,21 @@ export default function DashboardClient({
       {/* ── Main Content ── */}
       <div
         className="dash-main-content"
-        style={{ marginLeft: 320 }}
+        style={{ marginLeft: 340 }}
       >
         {/* Greeting */}
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A1A", marginBottom: 4, letterSpacing: "-0.02em" }}>
-            Good {timeOfDay}, {firstName}
-          </h1>
-          <p style={{ fontSize: 15, color: "#6B7280" }}>
-            Here's where your business stands today.
-          </p>
+        <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h1 style={{ fontSize: 30, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+              Good {timeOfDay}, {firstName}
+            </h1>
+            <p style={{ fontSize: 14, color: "#78716c", lineHeight: 1.5 }}>
+              Here&apos;s where your business stands today.
+            </p>
+          </div>
+          <span style={{ fontSize: 13, color: "#a8a29e", fontWeight: 500, paddingTop: 6, flexShrink: 0, marginLeft: 16 }}>
+            {todayLabel}
+          </span>
         </div>
 
         {/* Rotating Quote */}
@@ -543,10 +693,19 @@ export default function DashboardClient({
         {/* Stats Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
           {STATS.map(stat => (
-            <div key={stat.label} style={{ padding: 20, background: "white", borderRadius: 12, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{stat.label}</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: "#1A1A1A", lineHeight: 1, marginBottom: 4 }}>{stat.value}</p>
-              <p style={{ fontSize: 12, color: "#9CA3AF" }}>{stat.sub}</p>
+            <div key={stat.label} style={{
+              padding: "20px 24px",
+              background: "white",
+              borderRadius: 12,
+              border: "1px solid #e7e5e4",
+              transition: "border-color 0.2s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d6d3d1"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#e7e5e4"; }}
+            >
+              <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 10 }}>{stat.label}</p>
+              <p style={{ fontSize: 32, fontWeight: 600, color: "#0c0a09", lineHeight: 1, marginBottom: 6, fontVariantNumeric: "tabular-nums" }}>{stat.value}</p>
+              <p style={{ fontSize: 12, color: "#a8a29e" }}>{stat.sub}</p>
             </div>
           ))}
         </div>
@@ -556,57 +715,78 @@ export default function DashboardClient({
 
         {/* Your Businesses */}
         <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A1A", marginBottom: 2 }}>Your Businesses</h2>
-              <p style={{ fontSize: 13, color: "#9CA3AF" }}>
-                {projects.length} {projects.length === 1 ? "business" : "businesses"}{liveCount > 0 ? ` · ${liveCount} live` : ""}
-              </p>
-            </div>
-
-            {creating ? (
-              <form onSubmit={createProject} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Business name"
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #D0CFC9", fontSize: 14, outline: "none", width: 176, background: "#fff", color: "#1A1A1A" }}
-                  onFocus={e => { e.currentTarget.style.borderColor = "#2563EB"; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "#D0CFC9"; }}
-                />
-                <button type="submit" disabled={loading || !newName.trim()} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: loading || !newName.trim() ? "not-allowed" : "pointer", opacity: loading || !newName.trim() ? 0.6 : 1 }}>
-                  {loading ? "Creating…" : "Create"}
-                </button>
-                <button type="button" onClick={() => { setCreating(false); setNewName(""); }} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, background: "transparent", border: "1px solid #D0CFC9", color: "#555", cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <button
-                onClick={() => setCreating(true)}
-                style={{ padding: "8px 16px", background: "#2563EB", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "opacity 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                + New Business
-              </button>
-            )}
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: "#0c0a09", marginBottom: 3, letterSpacing: "-0.01em" }}>Your Businesses</h2>
+            <p style={{ fontSize: 13, color: "#a8a29e" }}>
+              {projects.length} {projects.length === 1 ? "business" : "businesses"}{liveCount > 0 ? ` · ${liveCount} live` : ""}
+            </p>
           </div>
 
-          {projects.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "80px 0" }}>
-              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 56, width: 56, borderRadius: 16, background: "#EEEDE9", marginBottom: 20 }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {/* Inline create form */}
+          {creating && (
+            <form onSubmit={createProject} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <input
+                autoFocus
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="Business name"
+                style={{
+                  padding: "8px 12px", borderRadius: 8,
+                  border: "1px solid #e7e5e4", fontSize: 14, outline: "none",
+                  width: 200, background: "#fff", color: "#0c0a09",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = "#0f172a"; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "#e7e5e4"; }}
+              />
+              <button
+                type="submit"
+                disabled={loading || !newName.trim()}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500,
+                  background: "#0f172a", color: "#fff", border: "none",
+                  cursor: loading || !newName.trim() ? "not-allowed" : "pointer",
+                  opacity: loading || !newName.trim() ? 0.4 : 1,
+                  transition: "opacity 0.15s",
+                }}
+              >
+                {loading ? "Creating…" : "Create"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCreating(false); setNewName(""); }}
+                style={{
+                  padding: "8px 14px", borderRadius: 8, fontSize: 13,
+                  background: "transparent", border: "1px solid #e7e5e4", color: "#57534e", cursor: "pointer",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#d6d3d1"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "#e7e5e4"; }}
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+
+          {projects.length === 0 && !creating ? (
+            <div style={{ textAlign: "center", padding: "64px 0" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 52, width: 52, borderRadius: 14, background: "#f5f5f4", marginBottom: 16, border: "1px solid #e7e5e4" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="3" /><path d="M12 8v8M8 12h8" />
                 </svg>
               </div>
-              <p style={{ fontSize: 16, fontWeight: 500, color: "#333", margin: "0 0 6px" }}>No businesses yet</p>
-              <p style={{ fontSize: 14, color: "#999", margin: "0 0 24px", maxWidth: 280, marginLeft: "auto", marginRight: "auto" }}>Start building your first store with Volcity.</p>
-              <button onClick={() => setCreating(true)} style={{ padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: "pointer" }}>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", margin: "0 0 6px" }}>No businesses yet</p>
+              <p style={{ fontSize: 13, color: "#a8a29e", margin: "0 0 24px", maxWidth: 260, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>Start building your first store with Volcity.</p>
+              <button
+                onClick={() => setCreating(true)}
+                style={{
+                  padding: "9px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500,
+                  background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#1e293b"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#0f172a"; }}
+              >
                 Create your first business
               </button>
             </div>
@@ -617,39 +797,57 @@ export default function DashboardClient({
                 return (
                   <div
                     key={project.id}
-                    style={{ background: "#FFFFFF", borderRadius: 12, border: "1px solid #E8E8E4", overflow: "hidden", minHeight: 240, display: "flex", flexDirection: "column", transition: "box-shadow 0.18s, border-color 0.18s", position: "relative" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; (e.currentTarget as HTMLDivElement).style.borderColor = "#D0CFC9"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.borderColor = "#E8E8E4"; }}
+                    style={{
+                      background: "#ffffff", borderRadius: 12,
+                      border: "1px solid #e7e5e4",
+                      overflow: "hidden", minHeight: 240,
+                      display: "flex", flexDirection: "column",
+                      transition: "border-color 0.2s",
+                      position: "relative",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d6d3d1"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#e7e5e4"; }}
                   >
                     <ProjectCardHeader name={project.name} />
                     <button
                       onClick={() => deleteProject(project.id)}
                       title="Delete project"
                       className="delete-btn"
-                      style={{ position: "absolute", top: 10, right: 10, width: 26, height: 26, borderRadius: 6, background: "rgba(255,255,255,0.85)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s", color: "#999" }}
-                      onMouseEnter={e => { e.currentTarget.style.color = "#ef4444"; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = "#999"; }}
+                      style={{
+                        position: "absolute", top: 10, right: 10,
+                        width: 26, height: 26, borderRadius: 6,
+                        background: "rgba(255,255,255,0.9)", border: "1px solid rgba(0,0,0,0.08)",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        opacity: 0, transition: "opacity 0.15s, color 0.15s", color: "#a8a29e",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "#a8a29e"; }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 6L6 18M6 6l12 12" />
                       </svg>
                     </button>
                     <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
-                      <div style={{ marginBottom: 8 }}>
+                      <div style={{ marginBottom: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                          <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A1A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{project.name}</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{project.name}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#22c55e" : "#CBD5E1" }} />
-                            <span style={{ fontSize: 12, color: isLive ? "#16a34a" : "#94a3b8", fontWeight: 500 }}>{isLive ? "Live" : "Draft"}</span>
+                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#15803d" : "#d6d3d1" }} />
+                            <span style={{ fontSize: 12, color: isLive ? "#15803d" : "#a8a29e", fontWeight: 500 }}>{isLive ? "Live" : "Draft"}</span>
                           </div>
                         </div>
-                        <div style={{ fontSize: 13, color: "#AAA" }}>Created {timeAgo(project.updated_at ?? project.created_at)}</div>
+                        <div style={{ fontSize: 12, color: "#a8a29e" }}>Created {timeAgo(project.updated_at ?? project.created_at)}</div>
                       </div>
                       <button
                         onClick={() => router.push(`/builder?project=${project.id}`)}
-                        style={{ marginTop: "auto", width: "100%", padding: "9px 0", borderRadius: 8, fontSize: 14, fontWeight: 500, background: "#2563EB", color: "#fff", border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                        style={{
+                          marginTop: "auto", width: "100%", padding: "9px 0",
+                          borderRadius: 8, fontSize: 14, fontWeight: 500,
+                          background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
+                          transition: "background 0.15s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "#1e293b"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "#0f172a"; }}
                       >
                         Open
                       </button>
@@ -658,6 +856,31 @@ export default function DashboardClient({
                 );
               })}
 
+              {/* Ghost "+" card — new business */}
+              {!creating && (
+                <div
+                  onClick={() => setCreating(true)}
+                  style={{
+                    borderRadius: 12,
+                    border: "2px dashed #d6d3d1",
+                    minHeight: 240,
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: 10, cursor: "pointer",
+                    transition: "border-color 0.2s, background 0.2s",
+                    background: "transparent",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#a8a29e"; (e.currentTarget as HTMLDivElement).style.background = "#fafaf9"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d6d3d1"; (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                >
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", border: "2px solid #d6d3d1", display: "flex", alignItems: "center", justifyContent: "center", color: "#a8a29e" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                  <span style={{ fontSize: 13, color: "#a8a29e", fontWeight: 500 }}>New business</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -679,9 +902,16 @@ export default function DashboardClient({
       <button
         className="dash-mentor-fab"
         onClick={() => setShowMobileChat(true)}
-        style={{ position: "fixed", bottom: 24, right: 24, width: 52, height: 52, borderRadius: "50%", background: "#2563EB", border: "none", color: "#fff", cursor: "pointer", boxShadow: "0 4px 16px rgba(37,99,235,0.35)", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+        aria-label="Open mentor chat"
+        style={{
+          position: "fixed", bottom: 24, right: 24, width: 50, height: 50,
+          borderRadius: "50%", background: "#0f172a", border: "none",
+          color: "#fff", cursor: "pointer",
+          boxShadow: "0 4px 16px rgba(15,23,42,0.3)",
+          alignItems: "center", justifyContent: "center", zIndex: 50,
+        }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
         </svg>
       </button>
@@ -689,28 +919,57 @@ export default function DashboardClient({
       {/* ── Mobile: mentor chat modal ── */}
       {showMobileChat && (
         <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: "0 16px 80px" }}>
-          <div style={{ position: "fixed", inset: 0, background: "rgba(2,6,23,0.35)", backdropFilter: "blur(4px)" }} onClick={() => setShowMobileChat(false)} />
-          <div style={{ position: "relative", width: "100%", maxWidth: 380, background: "#F7F6F3", borderRadius: 20, boxShadow: "0 24px 48px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "75vh" }}>
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid #E8E8E4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(12,10,9,0.4)", backdropFilter: "blur(4px)" }} onClick={() => setShowMobileChat(false)} />
+          <div style={{ position: "relative", width: "100%", maxWidth: 380, background: "#fafaf9", borderRadius: 20, boxShadow: "0 24px 48px rgba(12,10,9,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "75vh" }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #e7e5e4", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #4f46e5, #0f172a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
               </div>
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Your Mentor</div>
-              <button onClick={() => setShowMobileChat(false)} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #E8E8E4", background: "#fff", color: "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>×</button>
+              <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#0c0a09" }}>Your Mentor</div>
+              <button
+                onClick={() => setShowMobileChat(false)}
+                style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #e7e5e4", background: "#fff", color: "#a8a29e", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+              >×</button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-              {dashMessages.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{ maxWidth: "88%", padding: "9px 12px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: 13, lineHeight: 1.55, color: "#334155", background: m.role === "user" ? "#EFF6FF" : "#ffffff", border: "1px solid #E8E8E4", whiteSpace: "pre-line" }}>
-                    {m.content}
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 0 }}>
+              {dashMessages.map((m, i) => {
+                const prevRole = i > 0 ? dashMessages[i - 1].role : null;
+                const speakerChange = prevRole !== null && prevRole !== m.role;
+                return (
+                  <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginTop: speakerChange ? 16 : 8 }}>
+                    {m.role === "user" ? (
+                      <div style={{ maxWidth: "85%", padding: "9px 14px", borderRadius: "18px 18px 4px 18px", fontSize: 13, lineHeight: 1.55, color: "#fff", background: "#0f172a", whiteSpace: "pre-line" }}>
+                        {m.content}
+                      </div>
+                    ) : (
+                      <div style={{ maxWidth: "92%", borderLeft: "2px solid #e7e5e4", paddingLeft: 12, fontSize: 13, lineHeight: 1.65, color: "#57534e", whiteSpace: "pre-line" }}>
+                        {m.content}
+                      </div>
+                    )}
                   </div>
+                );
+              })}
+              {dashLoading && (
+                <div style={{ display: "flex", gap: 4, marginTop: 8, borderLeft: "2px solid #e7e5e4", paddingLeft: 12 }}>
+                  {[0,1,2].map(d => <span key={d} style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8a29e", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}
                 </div>
-              ))}
-              {dashLoading && <div style={{ display: "flex", gap: 4 }}>{[0,1,2].map(d => <span key={d} style={{ width: 7, height: 7, borderRadius: "50%", background: "#CBD5E1", display: "inline-block", animation: `dashDotPulse 1.4s ease-in-out ${d * 0.16}s infinite` }} />)}</div>}
+              )}
             </div>
-            <div style={{ padding: "10px 12px", borderTop: "1px solid #E8E8E4", display: "flex", gap: 8, flexShrink: 0 }}>
-              <input value={dashInput} onChange={e => setDashInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }} placeholder="Ask your mentor anything..." style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid #E8E8E4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0f172a" }} />
-              <button onClick={() => sendDashMentor()} disabled={dashLoading || !dashInput.trim()} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: dashLoading || !dashInput.trim() ? "#E2E8F0" : "#2563EB", color: dashLoading || !dashInput.trim() ? "#94A3B8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Send</button>
+            <div style={{ padding: "10px 12px", borderTop: "1px solid #e7e5e4", display: "flex", gap: 8, flexShrink: 0 }}>
+              <input
+                value={dashInput}
+                onChange={e => setDashInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
+                placeholder="Ask your mentor anything..."
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #e7e5e4", fontSize: 13, outline: "none", background: "#ffffff", color: "#0c0a09" }}
+              />
+              <button
+                onClick={() => sendDashMentor()}
+                disabled={dashLoading || !dashInput.trim()}
+                style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: dashLoading || !dashInput.trim() ? "#f5f5f4" : "#0f172a", color: dashLoading || !dashInput.trim() ? "#a8a29e" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+              >
+                Send
+              </button>
             </div>
           </div>
         </div>

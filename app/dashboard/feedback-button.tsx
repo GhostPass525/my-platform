@@ -49,27 +49,25 @@ export default function FeedbackButton() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 18px",
+          padding: "9px 16px",
           borderRadius: 999,
-          background: "#2563EB",
+          background: "#0f172a",
           color: "#fff",
           border: "none",
           fontSize: 13,
-          fontWeight: 600,
+          fontWeight: 500,
           cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
-          transition: "transform 0.15s, background 0.15s",
+          boxShadow: "0 4px 16px rgba(15,23,42,0.25)",
+          transition: "background 0.15s",
         }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.05)";
-          (e.currentTarget as HTMLButtonElement).style.background = "#1D4ED8";
+          (e.currentTarget as HTMLButtonElement).style.background = "#1e293b";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-          (e.currentTarget as HTMLButtonElement).style.background = "#2563EB";
+          (e.currentTarget as HTMLButtonElement).style.background = "#0f172a";
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
         Give feedback
@@ -80,7 +78,7 @@ export default function FeedbackButton() {
         <div
           onClick={() => !submitting && setOpen(false)}
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+            position: "fixed", inset: 0, background: "rgba(12,10,9,0.4)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 1000, padding: 24,
           }}
@@ -88,18 +86,18 @@ export default function FeedbackButton() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#fff", borderRadius: 16, padding: 28,
+              background: "#fff", borderRadius: 20, padding: 32,
               maxWidth: 440, width: "100%",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.16)",
+              boxShadow: "0 20px 60px rgba(12,10,9,0.16)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: "#0c0a09", margin: 0, letterSpacing: "-0.01em" }}>
                 Share your feedback
               </h2>
               <button
                 onClick={() => setOpen(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 20, lineHeight: 1 }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#a8a29e", fontSize: 20, lineHeight: 1 }}
               >
                 ×
               </button>
@@ -108,7 +106,7 @@ export default function FeedbackButton() {
             {success ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🎉</div>
-                <p style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, margin: 0 }}>
+                <p style={{ fontSize: 14, color: "#57534e", lineHeight: 1.6, margin: 0 }}>
                   Thanks for your feedback! We read every submission and use it to make Volcity better.
                 </p>
               </div>
@@ -126,10 +124,11 @@ export default function FeedbackButton() {
                       onClick={() => setType(value)}
                       style={{
                         padding: "5px 12px", borderRadius: 6,
-                        border: `1px solid ${type === value ? "#2563EB" : "#E5E7EB"}`,
-                        background: type === value ? "#EFF6FF" : "#fff",
-                        color: type === value ? "#2563EB" : "#6B7280",
-                        fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        border: `1px solid ${type === value ? "#0f172a" : "#e7e5e4"}`,
+                        background: type === value ? "#0f172a" : "#fff",
+                        color: type === value ? "#fff" : "#78716c",
+                        fontSize: 12, fontWeight: 500, cursor: "pointer",
+                        transition: "all 0.15s",
                       }}
                     >
                       {label}
@@ -144,13 +143,16 @@ export default function FeedbackButton() {
                   rows={4}
                   style={{
                     width: "100%", padding: "10px 12px",
-                    borderRadius: 8, border: "1px solid #E5E7EB",
-                    fontSize: 14, color: "#111827", resize: "vertical",
+                    borderRadius: 8, border: "1px solid #e7e5e4",
+                    fontSize: 14, color: "#0c0a09", resize: "vertical",
                     outline: "none", fontFamily: "inherit",
                     boxSizing: "border-box",
+                    transition: "border-color 0.15s",
                   }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#0f172a"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#e7e5e4"; }}
                 />
-                <p style={{ fontSize: 12, color: "#9CA3AF", margin: "6px 0 16px" }}>
+                <p style={{ fontSize: 12, color: "#a8a29e", margin: "6px 0 16px" }}>
                   We&apos;ll follow up if we need more info.
                 </p>
 
@@ -158,11 +160,12 @@ export default function FeedbackButton() {
                   onClick={handleSubmit}
                   disabled={submitting || !message.trim()}
                   style={{
-                    width: "100%", padding: "11px 0", borderRadius: 8,
-                    border: "none", background: "#2563EB", color: "#fff",
-                    fontSize: 14, fontWeight: 600,
+                    width: "100%", padding: "10px 0", borderRadius: 8,
+                    border: "none", background: "#0f172a", color: "#fff",
+                    fontSize: 14, fontWeight: 500,
                     cursor: submitting || !message.trim() ? "default" : "pointer",
-                    opacity: submitting || !message.trim() ? 0.6 : 1,
+                    opacity: submitting || !message.trim() ? 0.4 : 1,
+                    transition: "opacity 0.15s",
                   }}
                 >
                   {submitting ? "Submitting…" : "Submit feedback"}

@@ -147,8 +147,12 @@ export async function POST(req: Request) {
 
     const sessionParams: Record<string, string> = {
       mode: "payment",
-      success_url: `${origin}/checkout/success?pid=${encodeURIComponent(publishId || "")}`,
-      cancel_url: `${origin}/checkout/cancel?pid=${encodeURIComponent(publishId || "")}`,
+      success_url: publishId
+        ? `${origin}/s/${publishId}?checkout=success`
+        : `${origin}/checkout/success`,
+      cancel_url: publishId
+        ? `${origin}/s/${publishId}?checkout=cancelled`
+        : `${origin}/checkout/cancel`,
       "metadata[publishId]": publishId || "",
       "metadata[userId]": ownerId,
       "metadata[checkoutDataKey]": checkoutDataKey,

@@ -526,12 +526,12 @@ export default function OrdersClient({
       </div>
 
       {/* Payout info */}
-      <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 flex gap-3">
-        <svg className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <div className="mb-6 rounded-xl px-4 py-3 flex gap-3" style={{ border: "1px solid #e7e5e4", background: "#fafaf9" }}>
+        <svg className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#a8a29e" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
         </svg>
-        <div className="text-sm text-blue-800 leading-relaxed">
-          <strong>How payouts work:</strong> Stripe deposits funds directly into your connected bank account, typically within 2–7 business days. Stripe charges a processing fee (usually 2.9% + 30¢ per transaction). You keep the rest.
+        <div className="text-sm leading-relaxed" style={{ color: "#57534e" }}>
+          <strong style={{ color: "#0c0a09" }}>How payouts work:</strong> Stripe deposits funds directly into your connected bank account, typically within 2–7 business days. Stripe charges a processing fee (usually 2.9% + 30¢ per transaction). You keep the rest.
         </div>
       </div>
 

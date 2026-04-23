@@ -35,25 +35,14 @@ const STAGES: { id: StageId; label: string; description: string; next: string }[
   },
 ];
 
-export function computeStageIndex(
-  hasSite: boolean,
-  hasProducts: boolean,
-  hasPublished: boolean,
-  ordersCount: number
-): number {
-  if (ordersCount >= 3) return 4;
-  if (ordersCount >= 1) return 3;
-  if (hasPublished) return 2;
-  if (hasSite && hasProducts) return 1;
-  return 0;
-}
+export { computeStageIndex } from "@/lib/journey";
 
 type Props = {
   activeIndex: number;
   accent?: string;
 };
 
-export default function StageTracker({ activeIndex, accent = "#2563eb" }: Props) {
+export default function StageTracker({ activeIndex, accent = "#0f172a" }: Props) {
   return (
     <div style={{ padding: "12px 16px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", flexWrap: "nowrap", gap: 0 }}>

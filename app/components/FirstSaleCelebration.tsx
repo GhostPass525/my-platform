@@ -54,7 +54,7 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
         <div
           style={{
             height: 3,
-            background: "linear-gradient(90deg, #22c55e, #2563eb)",
+            background: "linear-gradient(90deg, #15803d, #0f172a)",
           }}
         />
 
@@ -141,8 +141,8 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
               display: "flex",
               gap: 10,
               padding: "12px 14px",
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
+              background: "#fafaf9",
+              border: "1px solid #e7e5e4",
               borderRadius: 12,
               marginBottom: 20,
             }}
@@ -152,7 +152,7 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
                 width: 28,
                 height: 28,
                 borderRadius: 8,
-                background: "#2563eb",
+                background: "linear-gradient(135deg, #4f46e5, #0f172a)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -178,7 +178,7 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
                 padding: "11px 0",
                 borderRadius: 11,
                 border: "none",
-                background: "#2563eb",
+                background: "linear-gradient(135deg, #4f46e5, #0f172a)",
                 color: "#fff",
                 fontSize: 13,
                 fontWeight: 600,
@@ -196,7 +196,7 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
                 flex: 1,
                 padding: "11px 0",
                 borderRadius: 11,
-                border: "1px solid #e2e8f0",
+                border: "1px solid #e7e5e4",
                 background: "#fff",
                 color: "#64748b",
                 fontSize: 13,
@@ -205,7 +205,7 @@ export default function FirstSaleCelebration({ order, brandName, onTalkToMentor,
                 transition: "all 0.15s",
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.background = "#fafaf9";
                 e.currentTarget.style.color = "#0f172a";
               }}
               onMouseOut={(e) => {

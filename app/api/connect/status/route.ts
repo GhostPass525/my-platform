@@ -71,7 +71,7 @@ export async function GET() {
         })
         .eq("user_id", user.id);
     } catch (stripeErr) {
-      console.error("Failed to retrieve Stripe account:", stripeErr);
+      console.warn("[connect/status] Stripe account lookup failed (may not be set up yet):", (stripeErr as Error)?.message);
     }
 
     return NextResponse.json({

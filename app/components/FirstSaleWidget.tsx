@@ -86,7 +86,7 @@ export default function FirstSaleWidget({ brandName, totalRevenue, userId, onSte
       style={{
         background: "#FFFFFF",
         borderRadius: 12,
-        border: "1px solid #E8E8E4",
+        border: "1px solid #e7e5e4",
         padding: "24px 24px 20px",
         marginBottom: 28,
       }}
@@ -118,7 +118,7 @@ export default function FirstSaleWidget({ brandName, totalRevenue, userId, onSte
           style={{
             height: "100%",
             width: `${progress}%`,
-            background: "#2563EB",
+            background: "#0f172a",
             borderRadius: 2,
             transition: "width 0.4s ease",
           }}
@@ -152,7 +152,7 @@ export default function FirstSaleWidget({ brandName, totalRevenue, userId, onSte
                 height: 18,
                 borderRadius: 4,
                 border: checked[i] ? "none" : "1.5px solid #CBD5E1",
-                background: checked[i] ? "#2563EB" : "transparent",
+                background: checked[i] ? "#0f172a" : "transparent",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -198,7 +198,7 @@ export default function FirstSaleWidget({ brandName, totalRevenue, userId, onSte
                   flexShrink: 0,
                   background: "none",
                   border: "none",
-                  color: "#2563EB",
+                  color: "#0f172a",
                   fontSize: 13,
                   fontWeight: 500,
                   cursor: "pointer",
