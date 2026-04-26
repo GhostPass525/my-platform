@@ -36,7 +36,6 @@ export default function StartBuildingCard() {
             window.dispatchEvent(new CustomEvent("mentor:prefill", {
               detail: { message: "I'm not sure what kind of business to build. Can you help me figure out what I should create?" },
             }));
-            document.querySelector('[data-mentor-chat]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }}
           className="px-6 py-3 bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 rounded-xl font-medium transition-colors"
         >

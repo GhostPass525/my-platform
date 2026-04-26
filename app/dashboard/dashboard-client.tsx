@@ -314,6 +314,15 @@ export default function DashboardClient({
   }, []);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent<{ message: string }>).detail?.message;
+      setMentorMessage(msg || "Let's figure out what you should build. What are you interested in, and do you have any skills or experience you'd want to lean into?");
+    };
+    window.addEventListener("mentor:prefill", handler);
+    return () => window.removeEventListener("mentor:prefill", handler);
+  }, []);
+
+  useEffect(() => {
     try {
       const ids = new Set<string>();
       for (const key of Object.keys(localStorage)) {

@@ -53,18 +53,6 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const msg = (e as CustomEvent<{ message: string }>).detail?.message;
-      if (msg) {
-        setInput(msg);
-        setTimeout(() => inputRef.current?.focus(), 100);
-      }
-    };
-    window.addEventListener("mentor:prefill", handler);
-    return () => window.removeEventListener("mentor:prefill", handler);
-  }, []);
-
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
