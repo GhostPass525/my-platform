@@ -47,10 +47,23 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent<{ message: string }>).detail?.message;
+      if (msg) {
+        setInput(msg);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    };
+    window.addEventListener("mentor:prefill", handler);
+    return () => window.removeEventListener("mentor:prefill", handler);
+  }, []);
 
   const send = async () => {
     const text = input.trim();
@@ -120,6 +133,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
 
       {/* Chat panel */}
       <div
+        data-mentor-chat
         style={{
           position: "relative",
           pointerEvents: "all",
@@ -333,6 +347,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
           }}
         >
           <input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
