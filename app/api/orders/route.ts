@@ -17,7 +17,7 @@ export async function GET() {
 
     const { data: orders, error } = await supabase
       .from("orders")
-      .select("id, site_id, customer_email, total, status, created_at")
+      .select("id, site_id, customer_email, customer_name, amount, currency, fulfillment_status, created_at, product_name, product_type")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -32,7 +32,7 @@ export async function GET() {
     }
 
     const list = orders ?? [];
-    const totalRevenue = list.reduce((s, o) => s + Number(o.total), 0);
+    const totalRevenue = list.reduce((s, o) => s + Number(o.amount || 0), 0);
     const totalOrders = list.length;
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
