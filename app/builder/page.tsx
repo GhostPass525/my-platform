@@ -543,8 +543,8 @@ export default function Home() {
   const [projectName, setProjectName] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [showStripeModal, setShowStripeModal] = useState(false);
   const [autoPublishPending, setAutoPublishPending] = useState(false);
+  const [autoGeneratePending, setAutoGeneratePending] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishPhase, setPublishPhase] = useState<"saving" | "publishing" | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -663,6 +663,7 @@ export default function Home() {
         setActivePageId(projectData.site.pages?.[0]?.id ?? "");
         setRightTab("quick");
       }
+      const ideaParam = searchParams.get("idea");
       if (Array.isArray(historyRows) && historyRows.length > 0) {
         setMessages(
           historyRows.map((m: { role: string; content: string }) => ({
@@ -670,6 +671,18 @@ export default function Home() {
             content: m.content,
           }))
         );
+      }
+      // If arriving from discovery, pre-fill idea and queue auto-generation
+      if (ideaParam) {
+        const decodedIdea = decodeURIComponent(ideaParam);
+        setMessages((prev) => [
+          ...prev,
+          { role: "user" as const, content: decodedIdea },
+        ]);
+        setAutoGeneratePending(true);
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("idea");
+        window.history.replaceState(null, "", `/builder?project=${pid}`);
       }
       setChatLoaded(true);
     }).catch(() => { setChatLoaded(true); });
@@ -766,6 +779,14 @@ export default function Home() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPublishPending, site, chatLoaded]);
+
+  // Auto-generate when arriving from discovery with an idea pre-filled
+  useEffect(() => {
+    if (!autoGeneratePending || !chatLoaded || generating) return;
+    setAutoGeneratePending(false);
+    generateSite();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGeneratePending, chatLoaded]);
 
   // Fetch order count once on mount for stage computation
   useEffect(() => {
@@ -1104,6 +1125,7 @@ export default function Home() {
           body: JSON.stringify({
             messages: updatedMessages,
             mentorContext,
+            context: "builder",
             attachedImages: imagesToSend.length > 0 ? imagesToSend : undefined,
           }),
         });
@@ -1256,19 +1278,6 @@ export default function Home() {
         return;
       }
 
-      // ── Step 2: Stripe Connect gate (after subscription confirmed) ─
-      try {
-        const setupRes = await fetch("/api/setup/status");
-        const setup = await setupRes.json().catch(() => ({}));
-        if (!setup?.stripe?.onboarded) {
-          console.log("[publish] stripe not onboarded — showing connect modal");
-          setShowStripeModal(true);
-          return;
-        }
-      } catch {
-        // If status check fails, allow publish through (don't block on network error)
-      }
-
       // ── Step 4: Force-save current state FIRST (always, blocking) ─
       console.log("[publish] generatedHtml present:", !!site.generatedHtml);
       console.log("[publish] generatedHtml length:", site.generatedHtml?.length ?? 0);
@@ -1336,6 +1345,24 @@ export default function Home() {
       if (isFirstPublish) {
         localStorage.setItem(`launched_${projectId ?? data.id}`, String(Date.now()));
         setShowLaunchMoment(true);
+      }
+
+      // Soft reminder if Stripe Connect isn't set up yet (non-blocking)
+      try {
+        const setupRes = await fetch("/api/setup/status");
+        const setup = await setupRes.json().catch(() => ({}));
+        if (!setup?.stripe?.onboarded) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                "Your store is live! One thing to note: you'll need to connect Stripe before customers can check out. You can do that anytime from the dashboard — it takes about 3 minutes.",
+            },
+          ]);
+        }
+      } catch {
+        // Don't block on network error
       }
     } catch (e: any) {
       console.error("[publish] unexpected error:", e);
@@ -1689,6 +1716,40 @@ export default function Home() {
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, scrollbarWidth: "thin" as const }}>
+            {messages.length === 0 && !site && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }}>
+                <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 4 }}>How do you want to start?</p>
+                <button
+                  onClick={() => setMessages([{ role: "assistant", content: "Tell me about your business idea — what are you building?" }])}
+                  style={{
+                    width: "100%", padding: "12px 14px", textAlign: "left",
+                    background: "white", border: "1px solid #E5E7EB", borderRadius: 10,
+                    fontSize: 13, color: "#1A1A1A", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    transition: "border-color 0.15s",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = "#2563EB")}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = "#E5E7EB")}
+                >
+                  <span>I know what I want to build →</span>
+                </button>
+                <a
+                  href="/discovery"
+                  style={{
+                    width: "100%", padding: "12px 14px", textAlign: "left",
+                    background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10,
+                    fontSize: 13, color: "#15803d", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    textDecoration: "none", transition: "border-color 0.15s",
+                    boxSizing: "border-box" as const,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = "#15803d")}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = "#BBF7D0")}
+                >
+                  <span>Help me figure out what to build →</span>
+                </a>
+              </div>
+            )}
             {messages.map((m, i) => (
               <div key={i} className="animate-fadeIn" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: 8 }}>
                 {m.role === "assistant" && (
@@ -2044,51 +2105,6 @@ export default function Home() {
         </main>
 
       </div>
-
-      {/* Stripe Connect required modal */}
-      {showStripeModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-          <div style={{ maxWidth: 440, width: "calc(100% - 32px)", borderRadius: 20, background: "white", padding: "36px 32px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
-              </svg>
-            </div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#0F172A", margin: "0 0 8px", letterSpacing: "-0.01em" }}>Connect Stripe to publish</h2>
-            <p style={{ fontSize: 14, color: "#64748B", margin: "0 0 24px", lineHeight: 1.65 }}>
-              Your store needs Stripe to accept payments. Takes about 3 minutes — we'll walk you through it.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-              {[
-                "Verify your identity",
-                "Add a bank account for payouts",
-                "Start accepting payments",
-              ].map((step, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#2563EB" }}>{i + 1}</span>
-                  </div>
-                  <span style={{ fontSize: 14, color: "#374151" }}>{step}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                onClick={() => setShowStripeModal(false)}
-                style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1px solid #E2E8F0", background: "transparent", color: "#64748B", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
-              >
-                Not now
-              </button>
-              <a
-                href="/dashboard/connect"
-                style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "#2563EB", color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                Connect Stripe →
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Phase 3: Paywall modal */}
       {showPaywall && (

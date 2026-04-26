@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const messages = body?.messages;
     const clientCtx: ClientContext = body?.mentorContext ?? {};
+    const uiContext: string = body?.context ?? "dashboard";
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -221,7 +222,9 @@ HOW YOU COMMUNICATE — NEVER BREAK THESE:
 - IF STRIPE ISN'T ONBOARDED: every conversation about sales or customers must include a mention that they can't take money yet and need to finish setup first.
 
 TONE:
-Warm, energized, and genuinely excited about what this person is building. Like the most inspiring mentor you've ever met — someone who's done this before, gives a damn, and makes you feel like your idea is worth fighting for. Honest always, harsh never. Leave every person feeling more capable and fired up than when they started.`;
+Warm, energized, and genuinely excited about what this person is building. Like the most inspiring mentor you've ever met — someone who's done this before, gives a damn, and makes you feel like your idea is worth fighting for. Honest always, harsh never. Leave every person feeling more capable and fired up than when they started.${uiContext === "builder" ? `
+
+IMPORTANT CONTEXT: The user is currently IN the store builder interface. They can see a live preview of their store as they chat with you. Do NOT tell them to "go to the builder", "open the builder", or "describe your business in the builder" — they are already there. Give direct, specific guidance assuming they can see and interact with the builder right now.` : ""}`;
 
     // Sanitize messages
     const safeMessages = (messages as Array<{ role: string; content: string }>)
