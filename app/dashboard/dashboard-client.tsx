@@ -304,15 +304,15 @@ export default function DashboardClient({
   const [showMobileChat, setShowMobileChat] = useState(false);
   const dashBottomRef = useRef<HTMLDivElement>(null);
 
-  const timeOfDay = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 12) return "morning";
-    if (h < 17) return "afternoon";
-    return "evening";
-  }, []);
+  const [timeOfDay, setTimeOfDay] = useState<string | null>(null);
+  const [todayLabel, setTodayLabel] = useState<string | null>(null);
+  const [monthName, setMonthName] = useState<string | null>(null);
 
-  const todayLabel = useMemo(() => {
-    return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  useEffect(() => {
+    const h = new Date().getHours();
+    setTimeOfDay(h < 12 ? "morning" : h < 17 ? "afternoon" : "evening");
+    setTodayLabel(new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }));
+    setMonthName(new Date().toLocaleString("default", { month: "long" }));
   }, []);
 
   useEffect(() => {
@@ -486,13 +486,12 @@ export default function DashboardClient({
   const liveCount = projects.filter(p => p.status === 'live' || publishedIds.has(p.id)).length;
   const totalSalesDollars = (initialRevenue / 100).toFixed(2);
   const monthSalesDollars = (initialMonthRevenue / 100).toFixed(2);
-  const monthName = new Date().toLocaleString("default", { month: "long" });
 
   const STATS = [
     { label: "BUSINESSES", value: String(projects.length), sub: projects.length === 1 ? "project" : "projects" },
     { label: "LIVE STORES", value: String(liveCount), sub: "published" },
     { label: "TOTAL SALES", value: `$${totalSalesDollars}`, sub: "all time" },
-    { label: "THIS MONTH", value: `$${monthSalesDollars}`, sub: monthName },
+    { label: "THIS MONTH", value: `$${monthSalesDollars}`, sub: monthName ?? "this month" },
   ];
 
   return (
@@ -659,7 +658,7 @@ export default function DashboardClient({
         <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1 style={{ fontSize: 30, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              Good {timeOfDay}, {firstName}
+              Good {timeOfDay ?? "day"}, {firstName}
             </h1>
             <p style={{ fontSize: 14, color: "#78716c", lineHeight: 1.5 }}>
               Here&apos;s where your business stands today.
