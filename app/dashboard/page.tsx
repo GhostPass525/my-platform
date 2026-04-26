@@ -34,7 +34,7 @@ export default async function DashboardPage() {
         .maybeSingle(),
       supabase
         .from("profiles")
-        .select("first_name")
+        .select("first_name, name, full_name")
         .eq("id", user.id)
         .maybeSingle(),
     ]);
@@ -55,11 +55,12 @@ export default async function DashboardPage() {
     .filter(Boolean)
     .join(", ") || undefined;
 
-  // Derive display name: saved first_name > email username > fallback
-  const profileFirstName = (profile as { first_name?: string } | null)?.first_name;
-  const firstName = profileFirstName?.trim() ||
-    (user.email ? user.email.split("@")[0].replace(/[._-]/g, " ").split(" ")[0] : "") ||
-    "there";
+  // Derive display name: first_name > name > full_name (first word) > email username > fallback
+  const p = profile as { first_name?: string; name?: string; full_name?: string } | null;
+  const rawName = p?.first_name?.trim() || p?.name?.trim() || p?.full_name?.trim() || "";
+  const firstName = rawName
+    ? rawName.split(" ")[0]
+    : (user.email ? user.email.split("@")[0].replace(/[._-]/g, " ").split(" ")[0] : "") || "there";
   const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
   return (
