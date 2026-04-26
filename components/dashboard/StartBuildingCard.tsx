@@ -32,7 +32,14 @@ export default function StartBuildingCard() {
         </button>
 
         <button
-          onClick={() => router.push('/discovery')}
+          onClick={() => {
+            const mentorInput = document.querySelector('textarea[placeholder*="Ask your mentor"]');
+            if (mentorInput) {
+              (mentorInput as HTMLTextAreaElement).value = "I'm not sure what kind of business to build. Can you help me figure out what I'm passionate about and what might sell?";
+              mentorInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              (mentorInput as HTMLTextAreaElement).focus();
+            }
+          }}
           className="px-6 py-3 bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 rounded-xl font-medium transition-colors"
         >
           Not sure what to build?
