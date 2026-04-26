@@ -14,7 +14,7 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/auth/login");
 
-  const [{ data: projects }, { data: orders }, { data: siteRow }, { data: profile }] =
+  const [{ data: projects }, { data: orders }, { data: siteRow }] =
     await Promise.all([
       supabase
         .from("projects")
@@ -31,11 +31,6 @@ export default async function DashboardPage() {
         .select("site_json")
         .eq("user_id", user.id)
         .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("profiles")
-        .select("first_name, name, full_name")
-        .eq("id", user.id)
         .maybeSingle(),
     ]);
 
@@ -55,14 +50,6 @@ export default async function DashboardPage() {
     .filter(Boolean)
     .join(", ") || undefined;
 
-  // Derive display name: first_name > name > full_name (first word) > email username > fallback
-  const p = profile as { first_name?: string; name?: string; full_name?: string } | null;
-  const rawName = p?.first_name?.trim() || p?.name?.trim() || p?.full_name?.trim() || "";
-  const firstName = rawName
-    ? rawName.split(" ")[0]
-    : (user.email ? user.email.split("@")[0].replace(/[._-]/g, " ").split(" ")[0] : "") || "there";
-  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-
   return (
     <>
       {(projects ?? []).length === 0 && (
@@ -76,7 +63,6 @@ export default async function DashboardPage() {
       initialOrdersCount={orderList.length}
       initialRevenue={totalRevenue}
       initialMonthRevenue={monthRevenue}
-      firstName={displayName}
       brandName={brandName}
       niche={niche}
     />

@@ -33,11 +33,11 @@ export default function StartBuildingCard() {
 
         <button
           onClick={() => {
-            const mentorInput = document.querySelector('textarea[placeholder*="Ask your mentor"]');
+            const mentorInput = document.querySelector('textarea') as HTMLTextAreaElement | null;
             if (mentorInput) {
-              (mentorInput as HTMLTextAreaElement).value = "I'm not sure what kind of business to build. Can you help me figure out what I'm passionate about and what might sell?";
+              mentorInput.value = "I'm not sure what kind of business to build. Can you help me figure out what I should create?";
               mentorInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              (mentorInput as HTMLTextAreaElement).focus();
+              setTimeout(() => mentorInput.focus(), 500);
             }
           }}
           className="px-6 py-3 bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 rounded-xl font-medium transition-colors"

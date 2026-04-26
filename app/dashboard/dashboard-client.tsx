@@ -274,7 +274,6 @@ export default function DashboardClient({
   initialMonthRevenue,
   brandName,
   niche,
-  firstName,
 }: {
   initialProjects: Project[];
   userId: string;
@@ -283,7 +282,6 @@ export default function DashboardClient({
   initialMonthRevenue: number;
   brandName: string;
   niche?: string;
-  firstName: string;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -658,7 +656,7 @@ export default function DashboardClient({
         <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1 style={{ fontSize: 30, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              Good {timeOfDay ?? "day"}, {firstName}
+              Good {timeOfDay ?? "day"}
             </h1>
             <p style={{ fontSize: 14, color: "#78716c", lineHeight: 1.5 }}>
               Here&apos;s where your business stands today.
