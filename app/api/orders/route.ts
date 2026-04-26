@@ -25,7 +25,12 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[orders] Query failed:", error);
+      console.error("[orders] Query failed");
+      console.error("[orders] Error message:", error.message);
+      console.error("[orders] Error details:", error.details);
+      console.error("[orders] Error hint:", error.hint);
+      console.error("[orders] Error code:", error.code);
+      console.error("[orders] Full error:", JSON.stringify(error, null, 2));
       return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
     }
 
