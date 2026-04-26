@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import DashboardClient from "./dashboard-client";
+import StartBuildingCard from "@/components/dashboard/StartBuildingCard";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,13 @@ export default async function DashboardPage() {
   const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
   return (
-    <DashboardClient
+    <>
+      {(projects ?? []).length === 0 && (
+        <div className="mb-8 px-4 pt-8">
+          <StartBuildingCard />
+        </div>
+      )}
+      <DashboardClient
       initialProjects={projects ?? []}
       userId={user.id}
       initialOrdersCount={orderList.length}
@@ -72,5 +79,6 @@ export default async function DashboardPage() {
       brandName={brandName}
       niche={niche}
     />
+    </>
   );
 }
