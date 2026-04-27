@@ -299,6 +299,7 @@ export default function DashboardClient({
   const [dashMessages, setDashMessages] = useState<DashMsg[]>([]);
   const [dashInput, setDashInput] = useState("");
   const [dashLoading, setDashLoading] = useState(false);
+  const [pendingAutoSend, setPendingAutoSend] = useState<string | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const dashBottomRef = useRef<HTMLDivElement>(null);
 
@@ -316,7 +317,7 @@ export default function DashboardClient({
   useEffect(() => {
     const handler = (e: Event) => {
       const msg = (e as CustomEvent<{ message: string }>).detail?.message;
-      if (msg) setDashInput(msg);
+      if (msg) setPendingAutoSend(msg);
     };
     window.addEventListener("mentor:prefill", handler);
     return () => window.removeEventListener("mentor:prefill", handler);
@@ -448,6 +449,14 @@ export default function DashboardClient({
       setDashLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (pendingAutoSend) {
+      sendDashMentor(pendingAutoSend);
+      setPendingAutoSend(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAutoSend]);
 
   useEffect(() => {
     const supabase = createClient();
