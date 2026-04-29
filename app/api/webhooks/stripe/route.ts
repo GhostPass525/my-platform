@@ -309,6 +309,19 @@ async function handlePlatformSubscriptionCheckout(
   } else {
     console.log("[webhook] Subscription upserted successfully from checkout", { userId, status: stripeSub.status });
   }
+
+  // Write tier + billing period to profiles
+  const tier = session.metadata?.planId ?? (stripeSub.metadata as any)?.planId ?? "starter";
+  const billingPeriod = session.metadata?.billing ?? (stripeSub.metadata as any)?.billing ?? "monthly";
+  const { error: profileError } = await getSupabaseAdmin()
+    .from("profiles")
+    .update({ tier, billing_period: billingPeriod })
+    .eq("id", userId);
+  if (profileError) {
+    console.error("[webhook] Failed to update profile tier", { profileError, userId, tier });
+  } else {
+    console.log("[webhook] Profile tier updated", { userId, tier, billingPeriod });
+  }
 }
 
 // ---------- Platform subscription lifecycle (upgrades, renewals, cancellations) ----------

@@ -147,7 +147,7 @@ export default function Hero() {
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 720, padding: '0 20px' }}>
         {/* Eyebrow */}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 50, padding: '6px 14px', marginBottom: 28 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#2563EB' }}>Your AI business mentor is here</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#2563EB' }}>Your AI co-founder for your first business</span>
         </div>
 
         {/* Headline */}
@@ -155,16 +155,16 @@ export default function Hero() {
           fontSize: 'clamp(38px, 7vw, 72px)', fontWeight: 800, color: '#0F172A',
           lineHeight: 1.05, letterSpacing: '-0.04em', margin: '0 0 20px',
         }}>
-          Launch your first<br />
-          online business.<br />
+          Stop guessing.<br />
+          Start building.<br />
           <span style={{ background: 'linear-gradient(135deg, #2563EB 0%, #4338CA 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-            Without the guesswork.
+            With an AI by your side.
           </span>
         </h1>
 
         {/* Subhead */}
         <p style={{ fontSize: 'clamp(16px, 2.5vw, 20px)', color: '#475569', maxWidth: 580, margin: '0 auto 36px', lineHeight: 1.65, fontWeight: 400 }}>
-          Volcity is the AI mentor that builds your store, sets up payments, and tells you exactly what to do next. Go from idea to launched in under 10 minutes.
+          Stop staring at blank Shopify templates. Volcity&apos;s AI helps you figure out what to sell, builds your store, and guides you to your first sale.
         </p>
 
         {/* CTAs */}

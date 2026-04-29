@@ -8,6 +8,7 @@ import HowItWorks from "@/components/marketing/HowItWorks";
 import Features from "@/components/marketing/Features";
 import Testimonials from "@/components/marketing/Testimonials";
 import Pricing from "@/components/marketing/Pricing";
+import FounderStory from "@/components/marketing/FounderStory";
 import FAQ from "@/components/marketing/FAQ";
 import FinalCTA from "@/components/marketing/FinalCTA";
 import Footer from "@/components/marketing/Footer";
@@ -30,6 +31,7 @@ export default async function LandingPage() {
       <Features />
       <Testimonials />
       <Pricing />
+      <FounderStory />
       <FAQ />
       <FinalCTA />
       <Footer />
