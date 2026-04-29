@@ -122,8 +122,7 @@ export default function AccountPage() {
           <>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: "#111827" }}>Volcity Pro</div>
-                <div style={{ fontSize: 14, color: "#6B7280", marginTop: 2 }}>$14.99/month</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "#111827" }}>Volcity</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusLabel(sub.status).color }} />

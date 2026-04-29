@@ -31,6 +31,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const projectId: string | null = body?.projectId ?? null;
+    const planId: string = body?.planId ?? "starter";
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -44,9 +45,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "STRIPE_SECRET_KEY is not set in environment." }, { status: 500 });
     }
 
-    const priceId = process.env.VOLCITY_PRICE_ID?.trim();
+    // Resolve price ID: plan-specific env vars take priority, fall back to legacy VOLCITY_PRICE_ID
+    const priceIdMap: Record<string, string | undefined> = {
+      starter: process.env.VOLCITY_STARTER_PRICE_ID?.trim(),
+      founder: process.env.VOLCITY_FOUNDER_PRICE_ID?.trim(),
+      empire:  process.env.VOLCITY_EMPIRE_PRICE_ID?.trim(),
+    };
+    const priceId = priceIdMap[planId] ?? process.env.VOLCITY_PRICE_ID?.trim();
     if (!priceId) {
-      return NextResponse.json({ error: "VOLCITY_PRICE_ID is not set in Vercel environment variables." }, { status: 500 });
+      return NextResponse.json({ error: "No price ID configured for this plan. Set VOLCITY_STARTER_PRICE_ID, VOLCITY_FOUNDER_PRICE_ID, or VOLCITY_EMPIRE_PRICE_ID in Vercel environment variables." }, { status: 500 });
     }
 
     const keyMode = secretKey.startsWith("sk_live") ? "LIVE" : secretKey.startsWith("sk_test") ? "TEST" : "UNKNOWN";
@@ -161,6 +168,7 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/`,
       "metadata[userId]": user.id,
       "metadata[type]": "platform_subscription",
+      "metadata[planId]": planId,
     });
 
     const session = await stripePost("checkout/sessions", params, secretKey);
