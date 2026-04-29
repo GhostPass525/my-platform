@@ -468,7 +468,20 @@ export default function OrdersClient({
   const [activeTab, setActiveTab] = useState<ActiveTab>("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [storeUrl, setStoreUrl] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("launched_")) {
+          const id = key.replace("launched_", "");
+          setStoreUrl(`${window.location.origin}/s/${id}`);
+          break;
+        }
+      }
+    } catch {}
+  }, []);
 
   const unfulfilledCount = orders.filter((o) => o.fulfillment_status === "unfulfilled").length;
   const inProgressCount  = orders.filter((o) => o.fulfillment_status === "in_progress").length;
@@ -581,6 +594,16 @@ export default function OrdersClient({
               ? "Share your store to start getting sales. Your orders will appear here."
               : `Orders with "${activeTab.replace("_", " ")}" status will appear here.`}
           </p>
+          {activeTab === "all" && storeUrl && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(storeUrl).then(() => setToast("Store link copied!")).catch(() => setToast("Failed to copy"));
+              }}
+              className="mt-6 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
+            >
+              Copy Store Link
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

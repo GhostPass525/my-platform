@@ -25,12 +25,18 @@ export function buildContextBlock(ctx: MentorContext): string {
       ? `\nNote: ${hist.daysSinceLastMessage} days since their last message — acknowledge the gap warmly if relevant.`
       : "";
 
+  const discoveryBlock = ctx.discovery
+    ? `\nDISCOVERY (why they chose this business — reference this when giving advice)
+  Rationale: ${ctx.discovery.chosenIdeaRationale}
+  Their answers: ${ctx.discovery.topInterests.map((t) => `"${t}"`).join("; ")}\n`
+    : "";
+
   return `=== LIVE BUSINESS CONTEXT (treat this as ground truth — never ignore it) ===
 
 FOUNDER
   Name: ${name}
   Days on Volcity: ${ctx.user.joinedDaysAgo}
-  Subscription: ${ctx.user.subscriptionStatus ?? "none"}
+  Subscription: ${ctx.user.subscriptionStatus ?? "none"}${discoveryBlock}
 
 BUSINESS
   Project: ${biz.hasProject ? biz.projectName ?? "(unnamed)" : "none created yet"}

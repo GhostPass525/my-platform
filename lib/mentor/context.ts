@@ -6,6 +6,11 @@ export type MentorContext = {
     joinedDaysAgo: number;
     subscriptionStatus: string | null;
   };
+  discovery?: {
+    whyThisBusiness: string;
+    topInterests: string[];
+    chosenIdeaRationale: string;
+  };
   business: {
     hasProject: boolean;
     projectName: string | null;
@@ -65,7 +70,7 @@ export async function getMentorContext(userId: string): Promise<MentorContext> {
     { data: recentMessages },
   ] = await Promise.all([
     db.from("profiles")
-      .select("first_name, created_at")
+      .select("first_name, created_at, discovery_answers")
       .eq("id", userId)
       .maybeSingle(),
     db.from("projects")
@@ -133,12 +138,30 @@ export async function getMentorContext(userId: string): Promise<MentorContext> {
     ordersCount,
   });
 
+  // Extract discovery context if available
+  const discoveryAnswers = (profile as any)?.discovery_answers ?? null;
+  let discovery: MentorContext["discovery"] | undefined;
+  if (discoveryAnswers?.chosenIdea) {
+    const idea = discoveryAnswers.chosenIdea;
+    const conversation: Array<{ role: string; content: string }> = discoveryAnswers.conversation ?? [];
+    const userAnswers = conversation
+      .filter((m) => m.role === "user")
+      .map((m) => m.content.slice(0, 100))
+      .slice(0, 5);
+    discovery = {
+      whyThisBusiness: idea.whyFits ?? "",
+      topInterests: userAnswers,
+      chosenIdeaRationale: `${idea.name} — ${idea.tagline}. ${idea.whyFits}`,
+    };
+  }
+
   return {
     user: {
       firstName: profile?.first_name ?? null,
       joinedDaysAgo: daysSince(profile?.created_at) ?? 0,
       subscriptionStatus: subscription?.status ?? null,
     },
+    discovery,
     business: {
       hasProject: !!project,
       projectName: project?.name ?? null,

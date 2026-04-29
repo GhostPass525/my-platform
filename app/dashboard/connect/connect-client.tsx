@@ -279,6 +279,21 @@ export default function ConnectClient() {
         </div>
       )}
 
+      {/* ── Empty state callout ── */}
+      {!loading && !loadingPrintful && !status?.connected && !printfulStatus?.connected && (
+        <div style={{ ...CARD, background: "#FAFAF9", border: "1px solid #E7E5E4", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 12, padding: "32px 24px", marginBottom: 16 }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>No integrations connected</div>
+            <div style={{ fontSize: 13, color: "#888" }}>Connect Stripe to accept payments, and Printful to sell physical products without holding inventory.</div>
+          </div>
+        </div>
+      )}
+
       {/* ── Stripe Connect Card ── */}
       {loading ? (
         <div style={CARD}>

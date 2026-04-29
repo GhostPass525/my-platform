@@ -1,0 +1,137 @@
+/* Volcity Store Cart — /volcity-cart/cart.css */
+
+#vc-toggle {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; align-items: center; gap: 8px;
+  background: #0f172a; color: white;
+  border: none; border-radius: 9999px;
+  padding: 14px 20px; font-size: 14px; font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer; white-space: nowrap;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+  z-index: 9998;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+#vc-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.45);
+}
+
+#vc-count {
+  background: #ef4444; color: white;
+  border-radius: 9999px; padding: 2px 7px;
+  font-size: 11px; font-weight: 700;
+  min-width: 20px; text-align: center;
+  display: none;
+}
+
+#vc-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 9997;
+}
+#vc-backdrop.open { opacity: 1; pointer-events: auto; }
+
+#vc-panel {
+  position: fixed; top: 0; right: -420px;
+  width: 400px; max-width: 100vw; height: 100vh;
+  background: white; color: #0f172a;
+  display: flex; flex-direction: column;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  transition: right 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#vc-panel.open { right: 0; }
+
+#vc-panel header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px; border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+#vc-panel h3 { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
+
+#vc-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 28px; line-height: 1; padding: 0 4px;
+  color: #64748b; transition: color 0.15s;
+}
+#vc-close:hover { color: #0f172a; }
+
+#vc-items { flex: 1; overflow-y: auto; padding: 16px 24px; }
+
+.vc-empty {
+  color: #94a3b8; text-align: center;
+  padding: 48px 0; font-size: 14px; margin: 0;
+}
+
+.vc-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid #f1f5f9;
+}
+.vc-item:last-child { border-bottom: none; }
+
+.vc-item img, .vc-no-img {
+  width: 60px; height: 60px; object-fit: cover;
+  border-radius: 8px; background: #f1f5f9;
+  flex-shrink: 0;
+}
+
+.vc-item-body { flex: 1; min-width: 0; }
+.vc-item-name {
+  font-weight: 600; font-size: 14px;
+  margin: 0 0 4px; color: #0f172a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vc-item-price { color: #64748b; font-size: 13px; margin: 0; }
+
+.vc-remove {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 2px 4px;
+  color: #cbd5e1; align-self: flex-start;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.vc-remove:hover { color: #ef4444; }
+
+#vc-panel footer {
+  padding: 20px 24px; border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.vc-total {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 700; font-size: 16px; margin-bottom: 16px; color: #0f172a;
+}
+
+#vc-checkout {
+  width: 100%; padding: 14px;
+  background: #0f172a; color: white;
+  border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+#vc-checkout:hover:not(:disabled) { background: #1e293b; }
+#vc-checkout:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#vc-success {
+  position: fixed; top: 24px; left: 50%;
+  transform: translateX(-50%);
+  background: #10b981; color: white;
+  padding: 12px 24px; border-radius: 12px;
+  font-weight: 600; font-size: 14px;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+  z-index: 10000;
+  animation: vc-slide-in 0.3s ease;
+  white-space: nowrap;
+}
+
+@keyframes vc-slide-in {
+  from { transform: translate(-50%, -16px); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
+}

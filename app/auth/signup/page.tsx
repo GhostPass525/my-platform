@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
 import SignupForm from "./signup-form";
 
@@ -46,7 +47,9 @@ export default async function SignupPage() {
         <p style={{ fontSize: 14, color: "#6B7280", margin: "0 0 28px" }}>
           Free to start. No credit card required.
         </p>
-        <SignupForm />
+        <Suspense fallback={null}>
+          <SignupForm />
+        </Suspense>
       </div>
 
       <p style={{ marginTop: 20, fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>

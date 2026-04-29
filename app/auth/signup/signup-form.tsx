@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 const inputStyle: React.CSSProperties = {
@@ -20,6 +20,9 @@ const inputStyle: React.CSSProperties = {
 
 export default function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get("return");
+
   const [firstName, setFirstName] = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -41,6 +44,10 @@ export default function SignupForm() {
       await supabase.from('profiles').upsert({ id: data.user?.id, first_name: firstName.trim(), updated_at: new Date().toISOString() });
     }
     setDone(true);
+    // If coming from /start, redirect immediately to continue the flow
+    if (returnUrl) {
+      setTimeout(() => router.push(returnUrl), 600);
+    }
   };
 
   if (done) {
@@ -52,17 +59,23 @@ export default function SignupForm() {
           </svg>
         </div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", marginBottom: 8, letterSpacing: "-0.3px" }}>Welcome to Volcity</h2>
-        <p style={{ fontSize: 15, color: "#6B7280", marginBottom: 28 }}>Your AI mentor is ready to help you build.</p>
-        <button
-          onClick={() => router.push("/dashboard")}
-          style={{
-            height: 44, padding: "0 28px", borderRadius: 8, border: "none",
-            background: "#2563EB", color: "#fff", fontSize: 15, fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Start building
-        </button>
+        {returnUrl ? (
+          <p style={{ fontSize: 15, color: "#6B7280", marginBottom: 28 }}>Picking up where you left off...</p>
+        ) : (
+          <>
+            <p style={{ fontSize: 15, color: "#6B7280", marginBottom: 28 }}>Your AI mentor is ready to help you build.</p>
+            <button
+              onClick={() => router.push("/dashboard")}
+              style={{
+                height: 44, padding: "0 28px", borderRadius: 8, border: "none",
+                background: "#2563EB", color: "#fff", fontSize: 15, fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Start building
+            </button>
+          </>
+        )}
       </div>
     );
   }

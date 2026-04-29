@@ -46,6 +46,20 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Returning users on /start — redirect to dashboard if they already have a project
+  if (user && pathname.startsWith("/start")) {
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1);
+    if (projects && projects.length > 0) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+  }
+
   // Protect /dashboard — redirect unauthenticated users to login
   if (!user && pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();

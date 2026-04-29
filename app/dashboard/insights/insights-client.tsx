@@ -234,13 +234,20 @@ export default function InsightsClient() {
         <div className="text-center py-20">
           <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-slate-100 mb-4 mx-auto">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <p className="text-base font-medium text-slate-700 mb-1">Ready to analyze your store</p>
-          <p className="text-sm text-slate-400 max-w-sm mx-auto">
-            Select a project and generate AI-powered optimization suggestions.
+          <p className="text-base font-medium text-slate-700 mb-1">No insights yet</p>
+          <p className="text-sm text-slate-400 max-w-sm mx-auto mb-6">
+            Generate AI-powered suggestions to improve your store&apos;s conversions and sales.
           </p>
+          <button
+            onClick={generateInsights}
+            disabled={loading || !selectedProjectId || !siteData}
+            className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Generate Insights
+          </button>
         </div>
       )}
     </div>
