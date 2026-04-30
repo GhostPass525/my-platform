@@ -7,6 +7,7 @@ import { computeStageIndex } from "@/app/components/StageTracker";
 import FirstSaleWidget from "@/app/components/FirstSaleWidget";
 import MentorChat from "@/app/components/MentorChat";
 import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
+import OnboardingTooltip from "@/app/components/OnboardingTooltip";
 
 const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
 const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -353,6 +354,15 @@ export default function DashboardClient({
 
   const showFirstSaleWidget = hasPublished && ordersCount === 0 && projects.length > 0;
 
+  const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!hasPublished) return;
+    fetch("/api/setup/status")
+      .then(r => r.json())
+      .then(d => setStripeOnboarded(!!d?.stripe?.onboarded))
+      .catch(() => {});
+  }, [hasPublished]);
+
   const stageIndex = computeStageIndex(projects.length > 0, true, hasPublished, ordersCount);
   const currentStage = STAGE_LABELS[stageIndex];
 
@@ -687,6 +697,47 @@ export default function DashboardClient({
           </span>
         </div>
 
+        {/* Stripe Connect banner — show when store is live but Stripe not connected */}
+        {hasPublished && stripeOnboarded === false && (
+          <div style={{
+            marginBottom: 12,
+            padding: "14px 18px",
+            background: "#FFFBEB",
+            border: "1px solid #FDE68A",
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            animation: "dashFadeIn 0.3s ease-out both",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+              </svg>
+              <span style={{ fontSize: 13, color: "#78350F", fontWeight: 500 }}>
+                Connect Stripe to start accepting orders — customers can&apos;t check out yet.
+              </span>
+            </div>
+            <a
+              href="/dashboard/connect"
+              style={{
+                flexShrink: 0,
+                padding: "7px 14px",
+                borderRadius: 8,
+                background: "#0f172a",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 600,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Connect Now
+            </a>
+          </div>
+        )}
+
         {/* Today Card */}
         <TodayCard onOpenMentor={() => setShowMobileChat(true)} />
 
@@ -780,18 +831,27 @@ export default function DashboardClient({
               </div>
               <p style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", margin: "0 0 6px" }}>No businesses yet</p>
               <p style={{ fontSize: 13, color: "#a8a29e", margin: "0 0 24px", maxWidth: 260, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>Start building your first store with Volcity.</p>
-              <button
-                onClick={() => setCreating(true)}
-                style={{
-                  padding: "9px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500,
-                  background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#1e293b"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#0f172a"; }}
-              >
-                Create your first business
-              </button>
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <button
+                  onClick={() => setCreating(true)}
+                  style={{
+                    padding: "9px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500,
+                    background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#1e293b"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "#0f172a"; }}
+                >
+                  Create your first business
+                </button>
+                <OnboardingTooltip
+                  storageKey="onb:dashboard"
+                  message="Welcome! Click here to create your first business in under 5 minutes."
+                  autoCloseMs={10000}
+                  arrowDir="up"
+                  style={{ top: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)" }}
+                />
+              </div>
             </div>
           ) : (
             <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>

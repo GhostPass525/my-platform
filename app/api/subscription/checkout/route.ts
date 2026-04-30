@@ -175,11 +175,12 @@ export async function POST(req: Request) {
       "subscription_data[metadata][userId]": user.id,
       payment_method_collection: "always",
       success_url: `${origin}/builder?${projectId ? `project=${projectId}&` : ""}subscribed=1`,
-      cancel_url: `${origin}/`,
+      cancel_url: `${origin}/builder${projectId ? `?project=${projectId}` : ""}`,
       "metadata[userId]": user.id,
       "metadata[type]": "platform_subscription",
       "metadata[planId]": planId,
       "metadata[billing]": billingPeriod,
+      ...(projectId ? { "metadata[projectId]": projectId } : {}),
     });
 
     const session = await stripePost("checkout/sessions", params, secretKey);

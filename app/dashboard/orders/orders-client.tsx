@@ -469,6 +469,7 @@ export default function OrdersClient({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [storeUrl, setStoreUrl] = useState<string | null>(null);
+  const [stripeConnected, setStripeConnected] = useState<boolean | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -481,6 +482,10 @@ export default function OrdersClient({
         }
       }
     } catch {}
+    fetch("/api/setup/status")
+      .then((r) => r.json())
+      .then((d) => setStripeConnected(!!d?.stripe?.onboarded))
+      .catch(() => setStripeConnected(null));
   }, []);
 
   const unfulfilledCount = orders.filter((o) => o.fulfillment_status === "unfulfilled").length;
@@ -586,23 +591,43 @@ export default function OrdersClient({
               <path d="M16 10a4 4 0 01-8 0" />
             </svg>
           </div>
-          <p className="text-base font-medium text-slate-700 mb-1">
-            {activeTab === "all" ? "No orders yet" : `No ${activeTab.replace("_", " ")} orders`}
-          </p>
-          <p className="text-sm text-slate-400 max-w-xs mx-auto">
-            {activeTab === "all"
-              ? "Share your store to start getting sales. Your orders will appear here."
-              : `Orders with "${activeTab.replace("_", " ")}" status will appear here.`}
-          </p>
-          {activeTab === "all" && storeUrl && (
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(storeUrl).then(() => setToast("Store link copied!")).catch(() => setToast("Failed to copy"));
-              }}
-              className="mt-6 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
-            >
-              Copy Store Link
-            </button>
+          {activeTab === "all" && stripeConnected === false ? (
+            <>
+              <p className="text-base font-medium text-slate-700 mb-1">Connect Stripe to start accepting orders</p>
+              <p className="text-sm text-slate-400 max-w-xs mx-auto mb-6">
+                Customers can&apos;t check out until you connect a Stripe account. It only takes a few minutes.
+              </p>
+              <a
+                href="/dashboard/connect"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                style={{ textDecoration: "none" }}
+              >
+                Connect Stripe Now
+              </a>
+            </>
+          ) : (
+            <>
+              <p className="text-base font-medium text-slate-700 mb-1">
+                {activeTab === "all" ? "No orders yet" : `No ${activeTab.replace("_", " ")} orders`}
+              </p>
+              <p className="text-sm text-slate-400 max-w-xs mx-auto">
+                {activeTab === "all"
+                  ? storeUrl
+                    ? `Share your store to start getting sales: ${storeUrl}`
+                    : "Share your store to start getting sales. Your orders will appear here."
+                  : `Orders with "${activeTab.replace("_", " ")}" status will appear here.`}
+              </p>
+              {activeTab === "all" && storeUrl && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(storeUrl).then(() => setToast("Store link copied!")).catch(() => setToast("Failed to copy"));
+                  }}
+                  className="mt-6 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Copy Store Link
+                </button>
+              )}
+            </>
           )}
         </div>
       ) : (

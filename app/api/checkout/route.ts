@@ -116,6 +116,13 @@ export async function POST(req: Request) {
         .single();
       if (connectData?.charges_enabled && connectData?.connected_account_id) {
         connectedAccountId = connectData.connected_account_id;
+      } else {
+        // Store owner hasn't completed Stripe Connect — block checkout and track the attempt
+        await redis.incr(`blocked-checkout:${ownerId}`).catch(() => {});
+        return NextResponse.json(
+          { error: "Payments are being set up. Check back soon!" },
+          { status: 402 }
+        );
       }
     }
 

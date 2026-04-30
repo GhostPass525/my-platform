@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { Redis } from "@upstash/redis";
 
 export const dynamic = "force-dynamic";
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
 function getServiceSupabase() {
   return createServiceClient(
@@ -46,11 +52,13 @@ export async function GET() {
       .single();
 
     if (!connectData?.connected_account_id) {
+      const blockedCount = await redis.get<number>(`blocked-checkout:${user.id}`).catch(() => 0);
       return NextResponse.json({
         connected: false,
         connected_account_id: null,
         charges_enabled: false,
         payouts_enabled: false,
+        blocked_checkout_count: blockedCount ?? 0,
       });
     }
 

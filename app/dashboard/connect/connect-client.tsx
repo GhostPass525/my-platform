@@ -15,6 +15,7 @@ type ConnectStatus = {
   connected_account_id: string | null;
   charges_enabled: boolean;
   payouts_enabled: boolean;
+  blocked_checkout_count?: number;
 };
 
 type OrderItem = { product_name: string };
@@ -141,6 +142,7 @@ export default function ConnectClient() {
   const [loadingPrintful, setLoadingPrintful] = useState(true);
   const [showPrintfulBanner, setShowPrintfulBanner] = useState(false);
   const [printfulError, setPrintfulError] = useState(false);
+  const [showPrintfulPrompt, setShowPrintfulPrompt] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -225,6 +227,14 @@ export default function ConnectClient() {
       return () => { clearTimeout(bannerTimer); clearInterval(poll); };
     }
   }, [isConnected, fetchStatus]);
+
+  // Show Printful prompt after Stripe connects (if Printful not yet connected)
+  useEffect(() => {
+    if (isConnected && !loadingPrintful && printfulStatus && !printfulStatus.connected) {
+      const t = setTimeout(() => setShowPrintfulPrompt(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [isConnected, loadingPrintful, printfulStatus]);
 
   useEffect(() => {
     if (isRefresh && !loading && status && !status.charges_enabled) startOnboarding();
@@ -336,8 +346,28 @@ export default function ConnectClient() {
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Connect your Stripe account</div>
-                <div style={{ fontSize: 13, color: "#888" }}>Accept payments directly. Volcity takes a <strong style={{ color: "#1A1A1A" }}>1% platform fee</strong> per sale.</div>
+                <div style={{ fontSize: 13, color: "#888" }}>Accept credit card payments from your customers. Volcity takes a <strong style={{ color: "#1A1A1A" }}>5% platform fee</strong> per sale.</div>
               </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  "Customers can check out on your store",
+                  "Funds go directly to your Stripe account",
+                  "Volcity deducts 5% per transaction",
+                ].map((step, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888" }}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#AAA" }}>{i + 1}</div>
+                    {step}
+                  </div>
+                ))}
+              </div>
+              {(status?.blocked_checkout_count ?? 0) > 0 && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, background: "#FEF3C7", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", fontWeight: 500 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  {status.blocked_checkout_count} {status.blocked_checkout_count === 1 ? "person" : "people"} tried to buy while payments were disabled
+                </div>
+              )}
               <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}>
                 {onboarding ? <><SpinIcon /> Redirecting…</> : "Connect Stripe Account"}
               </button>
@@ -465,8 +495,23 @@ export default function ConnectClient() {
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Printful</div>
-              <div style={{ fontSize: 13, color: "#888" }}>Sell custom printed products with no inventory. T-shirts, hoodies, mugs &amp; more.</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Printful</div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#6B7280", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 4, padding: "2px 6px" }}>Optional</span>
+              </div>
+              <div style={{ fontSize: 13, color: "#888" }}>Automatically print and ship products when orders come in. Great for t-shirts, mugs, phone cases &mdash; no inventory needed.</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[
+                "Customer places an order on your store",
+                "Printful auto-fulfills and ships directly to them",
+                "You keep the profit margin",
+              ].map((step, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888" }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#AAA" }}>{i + 1}</div>
+                  {step}
+                </div>
+              ))}
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 6, background: "#EEEDE9", width: "fit-content" }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#AAA" }} />
@@ -547,6 +592,37 @@ export default function ConnectClient() {
           </div>
         )}
       </div>
+
+      {/* ── Printful Post-Stripe Prompt ── */}
+      {showPrintfulPrompt && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}>
+          <div style={{ width: "100%", maxWidth: 440, background: "#fff", borderRadius: 20, boxShadow: "0 24px 60px rgba(0,0,0,0.2)", padding: "28px 28px 24px", margin: 16 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
+              </svg>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#1A1A1A", marginBottom: 8 }}>Sell physical products?</div>
+            <p style={{ fontSize: 13, color: "#888", lineHeight: 1.65, marginBottom: 20 }}>
+              Connect Printful to automatically print and ship products when orders come in — no inventory required. Perfect for t-shirts, mugs, phone cases, and more.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <a
+                href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", gap: 6 }}
+              >
+                Connect Printful
+              </a>
+              <button
+                onClick={() => setShowPrintfulPrompt(false)}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid #E7E5E4", background: "#fff", color: "#888", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+              >
+                I&apos;ll handle fulfillment myself
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Recent Activity ── */}
       <div style={CARD}>

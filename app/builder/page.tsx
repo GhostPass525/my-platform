@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
+import OnboardingTooltip from "@/app/components/OnboardingTooltip";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 import FloatingPanel from "@/app/components/FloatingPanel";
 import LayoutPickerModal from "@/app/components/LayoutPickerModal";
@@ -549,6 +550,10 @@ export default function Home() {
   const [publishPhase, setPublishPhase] = useState<"saving" | "publishing" | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [showLaunchMoment, setShowLaunchMoment] = useState(false);
+  const [stripeOnboarded, setStripeOnboarded] = useState(true); // true = don't flash warning until we know
+  const [showGenerationTip, setShowGenerationTip] = useState(false);
+  const [showPublishHint, setShowPublishHint] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
   const [isUpdatingStore, setIsUpdatingStore] = useState(false);
   const [recentActions, setRecentActions] = useState<string[]>([]);
@@ -749,10 +754,12 @@ export default function Home() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Handle ?subscribed=1 redirect from Stripe — strip param and queue auto-publish
+  // Handle ?subscribed=1 redirect from Stripe — strip param, show toast, queue auto-publish
   useEffect(() => {
     if (searchParams.get("subscribed") === "1") {
       setAutoPublishPending(true);
+      setShowPaymentSuccess(true);
+      setTimeout(() => setShowPaymentSuccess(false), 5000);
       const params = new URLSearchParams(searchParams.toString());
       params.delete("subscribed");
       const newPath = params.toString() ? `/builder?${params.toString()}` : "/builder";
@@ -787,6 +794,26 @@ export default function Home() {
     generateSite();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGeneratePending, chatLoaded]);
+
+  // Publish hint: show after 2 minutes in the builder
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (!localStorage.getItem("onb:publish_hint")) setShowPublishHint(true);
+      } catch {}
+    }, 2 * 60 * 1000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Publish hint: also trigger after the user makes their first edit
+  useEffect(() => {
+    if (historyIndex > 0) {
+      try {
+        if (!localStorage.getItem("onb:publish_hint")) setShowPublishHint(true);
+      } catch {}
+    }
+  }, [historyIndex]);
 
   // Fetch order count once on mount for stage computation
   useEffect(() => {
@@ -1218,6 +1245,10 @@ export default function Home() {
         ...prev,
         { role: "assistant", content: "Your store is live in the preview. Customize the copy, colors, and products in the right panel — or just tell me what to change." },
       ]);
+      // Show post-generation onboarding tooltip once
+      try {
+        if (!localStorage.getItem("onb:generated")) setShowGenerationTip(true);
+      } catch {}
     } catch (e: unknown) {
       console.error("[generateSite] caught exception:", e);
       setMessages((prev) => [...prev, { role: "assistant", content: `Generation error: ${(e as Error)?.message || e}` }]);
@@ -1273,7 +1304,46 @@ export default function Home() {
       }
 
       if (!subData.active) {
-        console.log("[publish] no active subscription (status:", subData.status, ") — showing paywall");
+        console.log("[publish] no active subscription — saving draft before paywall");
+        // ── Save draft so work survives the Stripe redirect ──────
+        if (!projectId && site) {
+          // No project yet — create one now to persist the draft
+          try {
+            const createRes = await fetch("/api/projects", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: site.brandName || "My Store",
+                site: sanitizeSiteJson(site),
+              }),
+            });
+            if (createRes.ok) {
+              const created = await createRes.json();
+              const newId: string = created.id;
+              setProjectId(newId);
+              projectIdRef.current = newId;
+              lastSavedSiteJsonRef.current = JSON.stringify(sanitizeSiteJson(site));
+              window.history.replaceState(null, "", `/builder?project=${newId}`);
+              console.log("[publish] draft project created:", newId);
+            }
+          } catch (e) {
+            console.warn("[publish] failed to create draft project before paywall:", e);
+          }
+        } else if (projectId && site) {
+          // Project exists — force-save latest state before checkout redirect
+          try {
+            const sanitized = sanitizeSiteJson(site);
+            await fetch(`/api/projects/${projectId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ site: sanitized }),
+            });
+            lastSavedSiteJsonRef.current = JSON.stringify(sanitized);
+            console.log("[publish] draft force-saved before paywall");
+          } catch (e) {
+            console.warn("[publish] failed to force-save before paywall:", e);
+          }
+        }
         setShowPaywall(true);
         return;
       }
@@ -1347,20 +1417,11 @@ export default function Home() {
         setShowLaunchMoment(true);
       }
 
-      // Soft reminder if Stripe Connect isn't set up yet (non-blocking)
+      // Check Stripe Connect status for the LaunchMoment modal
       try {
         const setupRes = await fetch("/api/setup/status");
         const setup = await setupRes.json().catch(() => ({}));
-        if (!setup?.stripe?.onboarded) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content:
-                "Your store is live! One thing to note: you'll need to connect Stripe before customers can check out. You can do that anytime from the dashboard — it takes about 3 minutes.",
-            },
-          ]);
-        }
+        setStripeOnboarded(!!setup?.stripe?.onboarded);
       } catch {
         // Don't block on network error
       }
@@ -1675,15 +1736,39 @@ export default function Home() {
             style={{ height: 30, padding: "0 12px", borderRadius: 7, fontSize: 13, border: "1px solid rgba(0,0,0,0.1)", background: "transparent", color: "#6B7280", cursor: "pointer", transition: "all 150ms ease" }}
           >Export</button>
 
-          <button
-            onClick={publish}
-            disabled={publishing}
-            style={{ height: 32, padding: "0 16px", background: publishing ? "#93C5FD" : "#2563EB", color: "white", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer", transition: "all 150ms ease", boxShadow: "0 1px 3px rgba(37,99,235,0.35)", whiteSpace: "nowrap" }}
-            onMouseEnter={e => { if (!publishing) (e.currentTarget as HTMLElement).style.background = "#1D4ED8"; }}
-            onMouseLeave={e => { if (!publishing) (e.currentTarget as HTMLElement).style.background = "#2563EB"; }}
-          >
-            {publishPhase === "saving" ? "Saving…" : publishPhase === "publishing" ? "Publishing…" : "Publish"}
-          </button>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            {showPublishHint && (
+              <>
+                <div style={{
+                  position: "absolute",
+                  inset: -4,
+                  borderRadius: 11,
+                  border: "2px solid rgba(37,99,235,0.6)",
+                  animation: "onbPulse 1.6s ease-in-out infinite",
+                  pointerEvents: "none",
+                  zIndex: 1,
+                }} />
+                <OnboardingTooltip
+                  storageKey="onb:publish_hint"
+                  message="Ready to go live? Click Publish to share your store with the world!"
+                  dismissLabel="Got it"
+                  autoCloseMs={null}
+                  arrowDir="up"
+                  style={{ top: "calc(100% + 10px)", right: 0, left: "auto", width: 220 }}
+                  onDismiss={() => setShowPublishHint(false)}
+                />
+              </>
+            )}
+            <button
+              onClick={() => { setShowPublishHint(false); publish(); }}
+              disabled={publishing}
+              style={{ height: 32, padding: "0 16px", background: publishing ? "#93C5FD" : "#2563EB", color: "white", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer", transition: "all 150ms ease", boxShadow: "0 1px 3px rgba(37,99,235,0.35)", whiteSpace: "nowrap", position: "relative", zIndex: 2 }}
+              onMouseEnter={e => { if (!publishing) { (e.currentTarget as HTMLElement).style.background = "#1D4ED8"; setShowPublishHint(false); } }}
+              onMouseLeave={e => { if (!publishing) (e.currentTarget as HTMLElement).style.background = "#2563EB"; }}
+            >
+              {publishPhase === "saving" ? "Saving…" : publishPhase === "publishing" ? "Publishing…" : "Publish"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1716,6 +1801,15 @@ export default function Home() {
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, scrollbarWidth: "thin" as const }}>
+            {/* Builder welcome — shown once to new users */}
+            <OnboardingTooltip
+              storageKey="onb:builder"
+              message="Not sure where to start? Ask your mentor anything — 'Help me build a coaching business' — or pick an option below."
+              dismissLabel="Got it"
+              autoCloseMs={15000}
+              arrowDir="none"
+              style={{ position: "relative", maxWidth: "100%", width: "100%", borderRadius: 8, fontSize: 12 }}
+            />
             {messages.length === 0 && !site && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }}>
                 <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 4 }}>How do you want to start?</p>
@@ -2051,6 +2145,17 @@ export default function Home() {
                     Updating your store...
                   </div>
                 )}
+                {/* Post-generation onboarding tip */}
+                {showGenerationTip && (
+                  <OnboardingTooltip
+                    storageKey="onb:generated"
+                    message="Your store is ready! Customize the design, add products in the right panel, or click Publish when you're happy."
+                    autoCloseMs={10000}
+                    arrowDir="none"
+                    style={{ top: 14, left: 14, right: "auto", maxWidth: 240, fontSize: 12 }}
+                    onDismiss={() => setShowGenerationTip(false)}
+                  />
+                )}
                 <iframe
                   ref={iframeRef}
                   style={{ width: "100%", height: "100%", border: "none", display: "block" }}
@@ -2106,6 +2211,43 @@ export default function Home() {
 
       </div>
 
+      {/* Payment success toast */}
+      {showPaymentSuccess && (
+        <div style={{
+          position: "fixed",
+          bottom: 28,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 200,
+          background: "#0f172a",
+          color: "#fff",
+          padding: "12px 20px",
+          borderRadius: 12,
+          fontSize: 14,
+          fontWeight: 500,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          animation: "onbFadeIn 0.2s ease-out both",
+          whiteSpace: "nowrap",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          Payment successful! Your store draft is ready — click Publish to go live.
+          <button onClick={() => setShowPaymentSuccess(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, marginLeft: 4 }}>×</button>
+        </div>
+      )}
+
+      {/* Onboarding animation keyframes */}
+      <style>{`
+        @keyframes onbPulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(37,99,235,0.45); }
+          50%       { opacity: 0.7; box-shadow: 0 0 0 7px rgba(37,99,235,0); }
+        }
+      `}</style>
+
       {/* Phase 3: Paywall modal */}
       {showPaywall && (
         <PaywallModal
@@ -2122,6 +2264,7 @@ export default function Home() {
           storeUrl={publishedUrl}
           site={site}
           projectCreatedAt={projectCreatedAt}
+          stripeConnected={stripeOnboarded}
           onContinue={() => setShowLaunchMoment(false)}
         />
       )}

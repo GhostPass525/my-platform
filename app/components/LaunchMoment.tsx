@@ -17,10 +17,11 @@ type Props = {
   storeUrl: string;
   site: SiteSpec;
   projectCreatedAt: string | null;
+  stripeConnected?: boolean;
   onContinue: () => void;
 };
 
-export default function LaunchMoment({ storeUrl, site, projectCreatedAt, onContinue }: Props) {
+export default function LaunchMoment({ storeUrl, site, projectCreatedAt, stripeConnected, onContinue }: Props) {
   const [copied, setCopied] = useState(false);
   const [captionCopied, setCaptionCopied] = useState(false);
   const [launchKit, setLaunchKit] = useState<{ instagramCaption: string; firstMove: string } | null>(null);
@@ -448,61 +449,125 @@ export default function LaunchMoment({ storeUrl, site, projectCreatedAt, onConti
           </div>
 
           {/* CTAs */}
-          <div style={{ display: "flex", gap: 9 }}>
-            <button
-              onClick={handleShare}
+          {stripeConnected === false ? (
+            <div
               style={{
-                flex: 1,
-                padding: "11px 0",
-                borderRadius: 11,
-                border: "none",
-                background: accent,
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = "0.88")}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                <polyline points="16 6 12 2 8 6" />
-                <line x1="12" y1="2" x2="12" y2="15" />
-              </svg>
-              Share Store
-            </button>
-            <button
-              onClick={onContinue}
-              style={{
-                flex: 1,
-                padding: "11px 0",
-                borderRadius: 11,
-                border: "1px solid #e2e8f0",
-                background: "#fff",
-                color: "#64748b",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.color = "#0f172a";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = "#fff";
-                e.currentTarget.style.color = "#64748b";
+                background: "#FFFBEB",
+                border: "1px solid #FDE68A",
+                borderRadius: 14,
+                padding: "16px",
               }}
             >
-              Continue Building
-            </button>
-          </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#92400E" }}>
+                  Your store is live — now connect Stripe to accept payments
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: "#78716C", margin: "0 0 12px", lineHeight: 1.55 }}>
+                Customers can view your store but can&apos;t check out until Stripe is connected. It only takes a few minutes.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <a
+                  href="/dashboard/connect"
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 9,
+                    border: "none",
+                    background: "#0f172a",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    textDecoration: "none",
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  Connect Stripe Now
+                </a>
+                <button
+                  onClick={onContinue}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 9,
+                    border: "1px solid #E2E8F0",
+                    background: "#fff",
+                    color: "#64748B",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  I&apos;ll do this later
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 9 }}>
+              <button
+                onClick={handleShare}
+                style={{
+                  flex: 1,
+                  padding: "11px 0",
+                  borderRadius: 11,
+                  border: "none",
+                  background: accent,
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  transition: "opacity 0.15s",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.opacity = "0.88")}
+                onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <polyline points="16 6 12 2 8 6" />
+                  <line x1="12" y1="2" x2="12" y2="15" />
+                </svg>
+                Share Store
+              </button>
+              <button
+                onClick={onContinue}
+                style={{
+                  flex: 1,
+                  padding: "11px 0",
+                  borderRadius: 11,
+                  border: "1px solid #e2e8f0",
+                  background: "#fff",
+                  color: "#64748b",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = "#f8fafc";
+                  e.currentTarget.style.color = "#0f172a";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = "#fff";
+                  e.currentTarget.style.color = "#64748b";
+                }}
+              >
+                Continue Building
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

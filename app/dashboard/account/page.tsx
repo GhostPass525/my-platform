@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 type SubData = {
@@ -12,9 +12,14 @@ type SubData = {
   stripe_customer_id: string | null;
 };
 
+const ONB_KEYS = ["onb:dashboard", "onb:builder", "onb:generated", "onb:publish_hint"];
+
 export default function AccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  const isDebug = process.env.NODE_ENV === "development" || searchParams.get("debug") === "true";
+  const [onbReset, setOnbReset] = useState(false);
 
   const [email, setEmail] = useState("");
   const [createdAt, setCreatedAt] = useState<string | null>(null);
@@ -210,6 +215,32 @@ export default function AccountPage() {
           </button>
         </div>
       </div>
+
+      {/* Onboarding Reset (dev / ?debug=true only) */}
+      {isDebug && (
+        <div style={{ background: "#fff", borderRadius: 14, border: "1px dashed #D1D5DB", padding: 28, marginTop: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#9CA3AF", marginBottom: 10 }}>
+            Dev — Onboarding Reset
+          </div>
+          <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 14, lineHeight: 1.6 }}>
+            Clear all onboarding tooltip localStorage keys to re-trigger the guided tour.
+            {onbReset && <strong style={{ color: "#16A34A" }}> Reset done — refresh the builder.</strong>}
+          </p>
+          <button
+            onClick={() => {
+              ONB_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+              setOnbReset(true);
+            }}
+            style={{
+              padding: "8px 16px", borderRadius: 8, border: "1px solid #D1D5DB",
+              background: "#F9FAFB", fontSize: 13, fontWeight: 600, color: "#374151",
+              cursor: "pointer",
+            }}
+          >
+            Reset Onboarding Tooltips
+          </button>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {showDeleteModal && (
