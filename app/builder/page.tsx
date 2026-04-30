@@ -2149,8 +2149,68 @@ export default function Home() {
 }
 
 // ─── Paywall Modal (Phase 3) ──────────────────────────────────────
+const PAYWALL_PLANS = [
+  {
+    id: "starter" as const,
+    name: "Starter",
+    monthly: 19,
+    annual: 16,
+    features: [
+      "1 store",
+      "AI mentor chat",
+      "Proactive AI check-ins",
+      "Discovery flow",
+      "Store builder + templates",
+      "Stripe payments",
+      "Printful integration",
+      "Unlimited orders",
+      "Email support",
+    ],
+    popular: false,
+  },
+  {
+    id: "founder" as const,
+    name: "Founder",
+    monthly: 39,
+    annual: 32,
+    features: [
+      "Everything in Starter, plus:",
+      "3 stores",
+      "Custom domain",
+      "Analytics dashboard",
+      "AI image generation",
+      "Marketing content generator",
+      "Email automation",
+      "A/B testing tools",
+      "Launch day plan generator",
+      "Priority support",
+    ],
+    popular: true,
+  },
+  {
+    id: "empire" as const,
+    name: "Empire",
+    monthly: 99,
+    annual: 82,
+    features: [
+      "Everything in Founder, plus:",
+      "Unlimited stores",
+      "Marketplace access (coming soon)",
+      "Business valuation widget",
+      "Competitor teardown",
+      "1-on-1 AI strategy sessions",
+      "White-label option",
+      "API access",
+      "Dedicated success manager",
+    ],
+    popular: false,
+  },
+];
+
 function PaywallModal({ theme, onClose, projectId, onAlreadySubscribed }: { theme: Theme; onClose: () => void; projectId: string | null; onAlreadySubscribed?: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<"starter" | "founder" | "empire">("founder");
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   const startSubscription = async () => {
     setLoading(true);
@@ -2158,18 +2218,17 @@ function PaywallModal({ theme, onClose, projectId, onAlreadySubscribed }: { them
       const res = await fetch("/api/subscription/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({ projectId, planId: selectedPlan, billing }),
       });
       const data = await res.json().catch(() => ({}));
       if (data?.alreadySubscribed) {
-        // User already has an active subscription — no need to go through checkout
         onAlreadySubscribed?.();
         return;
       }
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        alert(data?.error || `Checkout failed (HTTP ${res.status}). Check that STRIPE_SECRET_KEY and VOLCITY_PRICE_ID are set in your environment.`);
+        alert(data?.error || `Checkout failed (HTTP ${res.status}). Check that Stripe env vars are set in your environment.`);
       }
     } catch (err: any) {
       alert(`Checkout failed: ${err?.message || err}. Check your Vercel environment variables and function logs.`);
@@ -2178,67 +2237,125 @@ function PaywallModal({ theme, onClose, projectId, onAlreadySubscribed }: { them
     }
   };
 
+  const plan = PAYWALL_PLANS.find((p) => p.id === selectedPlan)!;
+  const price = billing === "annual" ? plan.annual : plan.monthly;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.45)" }}
+      style={{ background: "rgba(0,0,0,0.55)" }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-sm p-7 animate-slideUp shadow-xl"
+        className="bg-white rounded-2xl w-full max-w-2xl p-7 animate-slideUp shadow-xl overflow-y-auto"
+        style={{ maxHeight: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Icon */}
-        <div className="flex items-center justify-center h-11 w-11 rounded-xl mb-5 mx-auto" style={{ background: `${theme.accent}10` }}>
+        {/* Header */}
+        <div className="flex items-center justify-center h-11 w-11 rounded-xl mb-4 mx-auto" style={{ background: `${theme.accent}10` }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
-
         <h2 className="text-lg font-semibold text-center text-slate-900 tracking-tight">Publish your store</h2>
-        <p className="mt-1.5 text-center text-slate-500 text-sm">
-          Try free for 7 days, then go live and start selling.
-        </p>
+        <p className="mt-1.5 text-center text-slate-500 text-sm">Try free for 7 days, then go live and start selling.</p>
 
-        {/* Price */}
-        <div className="mt-5 rounded-xl border border-slate-200 p-4 text-center bg-slate-50">
-          <div className="mt-1 inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2" style={{ background: `${theme.accent}15`, color: theme.accent }}>
-            7-day free trial
-          </div>
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">$14.99<span className="text-base font-normal text-slate-400">/month</span></div>
-          <div className="text-xs text-slate-400 mt-1">Cancel anytime. No charge during your trial.</div>
+        {/* Billing toggle */}
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <button
+            onClick={() => setBilling("monthly")}
+            className="text-sm font-medium transition-colors"
+            style={{ color: billing === "monthly" ? theme.accent : "#94a3b8" }}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setBilling(billing === "monthly" ? "annual" : "monthly")}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+            style={{ background: billing === "annual" ? theme.accent : "#cbd5e1" }}
+          >
+            <span
+              className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+              style={{ transform: billing === "annual" ? "translateX(24px)" : "translateX(4px)" }}
+            />
+          </button>
+          <button
+            onClick={() => setBilling("annual")}
+            className="text-sm font-medium transition-colors flex items-center gap-1.5"
+            style={{ color: billing === "annual" ? theme.accent : "#94a3b8" }}
+          >
+            Annual
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ background: "#16a34a" }}>
+              Save 17%
+            </span>
+          </button>
         </div>
 
-        {/* Features */}
-        <ul className="mt-4 space-y-2">
-          {[
-            "Live storefront with custom URL",
-            "Stripe payments for your customers",
-            "Unlimited publishes & updates",
-            "AI site builder access",
-            "Order dashboard & analytics",
-          ].map((feat) => (
-            <li key={feat} className="flex items-center gap-2.5 text-sm text-slate-600">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              {feat}
-            </li>
-          ))}
-        </ul>
+        {/* Plan cards */}
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PAYWALL_PLANS.map((p) => {
+            const selected = selectedPlan === p.id;
+            const displayPrice = billing === "annual" ? p.annual : p.monthly;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setSelectedPlan(p.id)}
+                className="relative text-left rounded-xl border-2 p-4 transition-all"
+                style={{
+                  borderColor: selected ? theme.accent : "#e2e8f0",
+                  background: selected ? `${theme.accent}08` : "#f8fafc",
+                }}
+              >
+                {p.popular && (
+                  <span
+                    className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white whitespace-nowrap"
+                    style={{ background: theme.accent }}
+                  >
+                    MOST POPULAR
+                  </span>
+                )}
+                <div className="font-semibold text-slate-800 text-sm">{p.name}</div>
+                <div className="mt-1 flex items-end gap-0.5">
+                  <span className="text-2xl font-bold text-slate-900">${displayPrice}</span>
+                  <span className="text-xs text-slate-400 mb-0.5">/mo</span>
+                </div>
+                {billing === "annual" && (
+                  <div className="text-[10px] text-slate-400 mt-0.5">billed annually</div>
+                )}
+                <ul className="mt-3 space-y-1.5">
+                  {p.features.map((feat) => (
+                    <li key={feat} className="flex items-start gap-1.5 text-xs text-slate-600">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={selected ? theme.accent : "#94a3b8"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {feat}
+                    </li>
+                  ))}
+                </ul>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Trial badge */}
+        <div className="mt-4 text-center">
+          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${theme.accent}15`, color: theme.accent }}>
+            7-day free trial — no charge until trial ends
+          </span>
+        </div>
 
         {/* CTA */}
         <button
           onClick={startSubscription}
           disabled={loading}
-          className="mt-5 w-full py-3 rounded-lg font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+          className="mt-4 w-full py-3 rounded-lg font-semibold text-sm transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
           style={{ background: theme.accent, color: "#fff", opacity: loading ? 0.7 : 1 }}
         >
-          {loading ? "Loading…" : "Start 7-day free trial"}
+          {loading ? "Loading…" : `Start free trial — ${plan.name} ${billing === "annual" ? "Annual" : "Monthly"}`}
         </button>
 
         <p className="mt-2 text-center text-xs text-slate-400">
-          7-day free trial, then $14.99/month. Cancel anytime.
+          Cancel anytime. ${price}/mo after trial{billing === "annual" ? ", billed annually" : ""}.
         </p>
 
         <button

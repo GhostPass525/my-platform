@@ -477,6 +477,8 @@ export default function DashboardClient({
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
+    // TODO: Enforce store limit — fetch user tier from subscriptions table and call
+    // getStoreLimit(tier). If projects.length >= limit, show an upgrade prompt instead.
     setLoading(true);
     try {
       const res = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
