@@ -49,19 +49,19 @@ export async function POST(req: Request) {
     // Resolve price ID — plan + billing period specific, falls back to legacy VOLCITY_PRICE_ID
     const priceIdMap: Record<string, Record<string, string | undefined>> = {
       starter: {
-        monthly: process.env.VOLCITY_STARTER_PRICE_ID?.trim() ?? process.env.STRIPE_PRICE_STARTER_MONTHLY?.trim(),
-        annual:  process.env.STRIPE_PRICE_STARTER_ANNUAL?.trim(),
+        monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID?.trim(),
+        annual:  process.env.STRIPE_STARTER_YEARLY_PRICE_ID?.trim(),
       },
       founder: {
-        monthly: process.env.VOLCITY_FOUNDER_PRICE_ID?.trim() ?? process.env.STRIPE_PRICE_FOUNDER_MONTHLY?.trim(),
-        annual:  process.env.STRIPE_PRICE_FOUNDER_ANNUAL?.trim(),
+        monthly: process.env.STRIPE_FOUNDER_MONTHLY_PRICE_ID?.trim(),
+        annual:  process.env.STRIPE_FOUNDER_YEARLY_PRICE_ID?.trim(),
       },
       empire: {
-        monthly: process.env.VOLCITY_EMPIRE_PRICE_ID?.trim() ?? process.env.STRIPE_PRICE_EMPIRE_MONTHLY?.trim(),
-        annual:  process.env.STRIPE_PRICE_EMPIRE_ANNUAL?.trim(),
+        monthly: process.env.STRIPE_EMPIRE_MONTHLY_PRICE_ID?.trim(),
+        annual:  process.env.STRIPE_EMPIRE_YEARLY_PRICE_ID?.trim(),
       },
     };
-    const priceId = priceIdMap[planId]?.[billingPeriod] ?? process.env.VOLCITY_PRICE_ID?.trim();
+    const priceId = priceIdMap[planId]?.[billingPeriod];
     if (!priceId) {
       return NextResponse.json({ error: `No price ID configured for ${planId}/${billingPeriod}. Set the corresponding STRIPE_PRICE_* env vars in Vercel.` }, { status: 500 });
     }

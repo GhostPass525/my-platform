@@ -126,7 +126,7 @@ export async function POST(req: Request) {
       0
     );
     const appFeeCents = connectedAccountId
-      ? Math.max(1, Math.round(totalCents * 0.01))
+      ? Math.max(1, Math.round(totalCents * 0.05))
       : 0;
 
     // Build line_items as Stripe form-encoded array
