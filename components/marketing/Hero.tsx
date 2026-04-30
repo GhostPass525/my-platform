@@ -158,7 +158,7 @@ export default function Hero() {
           Stop guessing.<br />
           Start building.<br />
           <span style={{ background: 'linear-gradient(135deg, #2563EB 0%, #4338CA 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-            With an AI by your side.
+            With AI by your side.
           </span>
         </h1>
 
