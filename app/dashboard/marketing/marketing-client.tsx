@@ -3,7 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type Project = { id: string; name: string; updated_at: string; status?: string | null };
+type Project = {
+  id: string;
+  name: string;
+  updated_at: string;
+  sites?: Array<{ published_at: string | null }> | null;
+};
 
 type PublishedStore = { id: string; name: string; url: string };
 
@@ -144,16 +149,19 @@ export default function MarketingClient() {
         try {
           const stores: PublishedStore[] = [];
           for (const project of data) {
-            // Try new-style URL key first, then fall back to old launched_ key
-            const url =
-              localStorage.getItem(`pub_url_${project.id}`) ??
-              (localStorage.getItem(`launched_${project.id}`) ? null : null);
-            if (url) {
-              stores.push({ id: project.id, name: project.name, url });
-            } else if (project.status === "live") {
-              // Server says live but we don't have the URL locally — ask user to republish
-              stores.push({ id: project.id, name: project.name, url: "" });
-            }
+            // A project is published if:
+            // - sites table has a published_at (authoritative server-side check), OR
+            // - localStorage has launched_${id} (client-side fallback for older entries)
+            const sitePublishedAt = Array.isArray(project.sites)
+              ? project.sites[0]?.published_at
+              : (project.sites as { published_at?: string | null } | null)?.published_at;
+            const isPublished = !!sitePublishedAt || !!localStorage.getItem(`launched_${project.id}`);
+
+            if (!isPublished) continue;
+
+            // Get the shareable URL — new-style key first (stores actual publishId-based URL)
+            const url = localStorage.getItem(`pub_url_${project.id}`) ?? "";
+            stores.push({ id: project.id, name: project.name, url });
           }
 
           if (stores.length > 0) {

@@ -474,11 +474,12 @@ export default function OrdersClient({
 
   useEffect(() => {
     try {
+      // pub_url_${projectId} stores the actual publishId-based URL (set since May 2026)
+      // Fall back to scanning for any pub_url_ key if project-specific lookup fails
       for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("launched_")) {
-          const id = key.replace("launched_", "");
-          setStoreUrl(`${window.location.origin}/s/${id}`);
-          break;
+        if (key.startsWith("pub_url_")) {
+          const url = localStorage.getItem(key);
+          if (url) { setStoreUrl(url); break; }
         }
       }
     } catch {}

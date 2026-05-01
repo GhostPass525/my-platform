@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-type Project = { id: string; name: string; updated_at: string };
+type Project = { id: string; name: string; updated_at: string; sites?: unknown };
 
 type Insight = {
   category: string;
