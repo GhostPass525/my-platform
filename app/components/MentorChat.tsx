@@ -168,7 +168,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
             <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0 }}>
               Your Mentor
             </p>
-            <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>Inflection Point</p>
+            <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>{brandName || "Volcity"}</p>
           </div>
           <button
             onClick={onClose}

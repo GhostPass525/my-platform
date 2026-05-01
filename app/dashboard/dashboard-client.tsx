@@ -9,8 +9,8 @@ import MentorChat from "@/app/components/MentorChat";
 import FirstSaleCelebration from "@/app/components/FirstSaleCelebration";
 import OnboardingTooltip from "@/app/components/OnboardingTooltip";
 
-const NUDGE_DELAY_MS = 4 * 60 * 60 * 1000;
-const NUDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const NUDGE_DELAY_MS = 6 * 60 * 60 * 1000;
+const NUDGE_COOLDOWN_MS = 72 * 60 * 60 * 1000;
 
 const STAGE_LABELS = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
 const STAGE_DESCS  = ["Define your business", "Build your store", "Go live", "Get paid", "Scale up"];
@@ -218,47 +218,61 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
   );
 }
 
-function SetupBanner() {
+const STRIPE_BANNER_KEY = "stripe_connect_banner_dismissed";
+
+function SetupBanner({ hasPublished }: { hasPublished: boolean }) {
   const [status, setStatus] = useState<{ stripe: { connected: boolean; onboarded: boolean } } | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return !!localStorage.getItem(STRIPE_BANNER_KEY); } catch { return false; }
+  });
 
   useEffect(() => {
+    if (!hasPublished) return;
     fetch("/api/setup/status")
       .then((r) => r.json())
       .then((d) => { if (d?.stripe) setStatus(d); })
       .catch(() => {});
-  }, []);
+  }, [hasPublished]);
 
-  if (!status || dismissed || status.stripe.onboarded) return null;
+  if (!hasPublished || !status || dismissed || status.stripe.onboarded) return null;
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem(STRIPE_BANNER_KEY, "1"); } catch {}
+  };
 
   return (
     <div style={{
       marginBottom: 16,
       padding: "14px 18px",
-      background: "#fffbeb",
-      border: "1px solid #fde68a",
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
       borderRadius: 12,
       display: "flex", alignItems: "flex-start", gap: 12,
+      animation: "dashFadeIn 0.3s ease-out both",
     }}>
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: "#dbeafe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
         </svg>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#92400e", marginBottom: 3 }}>Finish setting up to go live</div>
-        <p style={{ fontSize: 13, color: "#b45309", margin: "0 0 10px", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#1e40af", marginBottom: 3 }}>Connect Stripe to accept payments</div>
+        <p style={{ fontSize: 13, color: "#3b82f6", margin: "0 0 10px", lineHeight: 1.55 }}>
           {!status.stripe.connected
-            ? "Connect Stripe to start accepting payments on your store."
-            : "Your Stripe account needs a few more details before it can accept payments."}
+            ? "Your store is live! Connect your Stripe account to start accepting orders and getting paid."
+            : "Almost there — your Stripe account needs a few more details before it can accept payments."}
         </p>
-        <a href="/dashboard/connect" style={{ fontSize: 13, fontWeight: 600, color: "#92400e", textDecoration: "underline" }}>
-          {!status.stripe.connected ? "Connect Stripe →" : "Finish Stripe setup →"}
+        <a
+          href="/dashboard/connect"
+          style={{ display: "inline-block", padding: "6px 14px", borderRadius: 7, background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+        >
+          {!status.stripe.connected ? "Connect Stripe" : "Finish setup"}
         </a>
       </div>
       <button
-        onClick={() => setDismissed(true)}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "#b45309", padding: "2px 4px", flexShrink: 0, lineHeight: 1, fontSize: 16 }}
+        onClick={handleDismiss}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", padding: "2px 4px", flexShrink: 0, lineHeight: 1, fontSize: 18 }}
         aria-label="Dismiss"
       >
         ×
@@ -341,10 +355,28 @@ export default function DashboardClient({
 
       const lastNudgeAt = parseInt(localStorage.getItem(`nudge_at_${userId}`) ?? "0", 10);
       const now = Date.now();
-      if (now - publishedAt >= NUDGE_DELAY_MS && now - lastNudgeAt >= NUDGE_COOLDOWN_MS && initialOrdersCount === 0) {
+      if (now - publishedAt >= NUDGE_DELAY_MS && now - lastNudgeAt >= NUDGE_COOLDOWN_MS) {
+        const nudgeCountKey = `nudge_count_${userId}`;
+        const nudgeCount = parseInt(localStorage.getItem(nudgeCountKey) ?? "0", 10);
+        const store = brandName ? ` ${brandName}` : "";
+
+        const NO_SALE_MESSAGES = [
+          `It's been a few hours since you launched${store}. No sale yet — that's completely normal. Want to talk through what's working and what to try next?`,
+          `How's${store || " your store"} feeling? Let's strategize on getting your first sale — what's your biggest question right now?`,
+          `Still building momentum for${store || " your store"}. The first sale is the hardest. Want to map out a quick plan to get there?`,
+        ];
+        const WITH_SALES_MESSAGES = [
+          `Nice work on those sales${store ? ` for${store}` : ""}! Ready to scale up? Let's make a plan.`,
+          `You've got real traction going. What's the next move for${store || " your store"}?`,
+        ];
+
+        const messages = initialOrdersCount > 0 ? WITH_SALES_MESSAGES : NO_SALE_MESSAGES;
+        const msg = messages[nudgeCount % messages.length];
+
         const delay = setTimeout(() => {
           localStorage.setItem(`nudge_at_${userId}`, String(Date.now()));
-          setMentorMessage(`It's been a few hours since you launched${brandName ? ` ${brandName}` : ""}. No sale yet — that's completely normal. Want to talk through what's working and what to try next?`);
+          localStorage.setItem(nudgeCountKey, String(nudgeCount + 1));
+          setMentorMessage(msg);
         }, 2000);
         return () => clearTimeout(delay);
       }
@@ -687,10 +719,10 @@ export default function DashboardClient({
         {/* Greeting */}
         <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h1 style={{ fontSize: 30, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
               Good {timeOfDay ?? "day"}
             </h1>
-            <p style={{ fontSize: 14, color: "#78716c", lineHeight: 1.5 }}>
+            <p style={{ fontSize: 15, color: "#78716c", lineHeight: 1.6 }}>
               Here&apos;s where your business stands today.
             </p>
           </div>
@@ -698,47 +730,6 @@ export default function DashboardClient({
             {todayLabel}
           </span>
         </div>
-
-        {/* Stripe Connect banner — show when store is live but Stripe not connected */}
-        {hasPublished && stripeOnboarded === false && (
-          <div style={{
-            marginBottom: 12,
-            padding: "14px 18px",
-            background: "#FFFBEB",
-            border: "1px solid #FDE68A",
-            borderRadius: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            animation: "dashFadeIn 0.3s ease-out both",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
-              </svg>
-              <span style={{ fontSize: 13, color: "#78350F", fontWeight: 500 }}>
-                Connect Stripe to start accepting orders — customers can&apos;t check out yet.
-              </span>
-            </div>
-            <a
-              href="/dashboard/connect"
-              style={{
-                flexShrink: 0,
-                padding: "7px 14px",
-                borderRadius: 8,
-                background: "#0f172a",
-                color: "#fff",
-                fontSize: 12,
-                fontWeight: 600,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Connect Now
-            </a>
-          </div>
-        )}
 
         {/* Today Card */}
         <TodayCard onOpenMentor={() => setShowMobileChat(true)} />
@@ -759,21 +750,21 @@ export default function DashboardClient({
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d6d3d1"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#e7e5e4"; }}
             >
-              <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 10 }}>{stat.label}</p>
-              <p style={{ fontSize: 32, fontWeight: 600, color: "#0c0a09", lineHeight: 1, marginBottom: 6, fontVariantNumeric: "tabular-nums" }}>{stat.value}</p>
-              <p style={{ fontSize: 12, color: "#a8a29e" }}>{stat.sub}</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 10 }}>{stat.label}</p>
+              <p style={{ fontSize: 32, fontWeight: 700, color: "#0c0a09", lineHeight: 1, marginBottom: 6, fontVariantNumeric: "tabular-nums" }}>{stat.value}</p>
+              <p style={{ fontSize: 13, color: "#a8a29e" }}>{stat.sub}</p>
             </div>
           ))}
         </div>
 
-        {/* Setup Banner */}
-        <SetupBanner />
+        {/* Setup Banner — blue info card, shown only when store is published */}
+        <SetupBanner hasPublished={hasPublished} />
 
         {/* Your Businesses */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: "#0c0a09", marginBottom: 3, letterSpacing: "-0.01em" }}>Your Businesses</h2>
-            <p style={{ fontSize: 13, color: "#a8a29e" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0c0a09", marginBottom: 3, letterSpacing: "-0.02em" }}>Your Businesses</h2>
+            <p style={{ fontSize: 14, color: "#a8a29e" }}>
               {projects.length} {projects.length === 1 ? "business" : "businesses"}{liveCount > 0 ? ` · ${liveCount} live` : ""}
             </p>
           </div>
@@ -895,19 +886,27 @@ export default function DashboardClient({
                     <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                          <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{project.name}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: isLive ? "#15803d" : "#d6d3d1" }} />
-                            <span style={{ fontSize: 12, color: isLive ? "#15803d" : "#a8a29e", fontWeight: 500 }}>{isLive ? "Live" : "Draft"}</span>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: "#0c0a09", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{project.name}</div>
+                          <div style={{ flexShrink: 0 }}>
+                            {isLive ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 999, padding: "2px 8px" }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#15803d", display: "inline-block" }} />
+                                Live
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 999, padding: "2px 8px" }}>
+                                Draft
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div style={{ fontSize: 12, color: "#a8a29e" }}>Created {timeAgo(project.updated_at ?? project.created_at)}</div>
+                        <div style={{ fontSize: 13, color: "#a8a29e" }}>Updated {timeAgo(project.updated_at ?? project.created_at)}</div>
                       </div>
                       <button
                         onClick={() => router.push(`/builder?project=${project.id}`)}
                         style={{
-                          marginTop: "auto", width: "100%", padding: "9px 0",
-                          borderRadius: 8, fontSize: 14, fontWeight: 500,
+                          marginTop: "auto", width: "100%", padding: "11px 0",
+                          borderRadius: 8, fontSize: 15, fontWeight: 500,
                           background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
                           transition: "background 0.15s",
                         }}

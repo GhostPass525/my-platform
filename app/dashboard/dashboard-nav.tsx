@@ -153,7 +153,7 @@ export default function DashboardNav({
                 key={href}
                 href={href}
                 style={{
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: 500,
                   textDecoration: "none",
                   padding: "5px 14px",
