@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-type Project = { id: string; name: string; updated_at: string };
+type Project = { id: string; name: string; updated_at: string; status?: string | null };
+
+type PublishedStore = { id: string; name: string; url: string };
 
 type MarketingContent = {
   tiktok: string[];
@@ -75,6 +78,9 @@ const CHECKLIST_ITEMS = [
 ];
 
 export default function MarketingClient() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [projects,          setProjects]          = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [content,           setContent]           = useState<MarketingContent | null>(null);
@@ -83,11 +89,13 @@ export default function MarketingClient() {
   const [siteData,          setSiteData]          = useState<unknown>(null);
   const [loadingProjects,   setLoadingProjects]   = useState(true);
 
-  // Share store
-  const [storeUrl,         setStoreUrl]         = useState<string | null>(null);
-  const [urlCopied,        setUrlCopied]        = useState(false);
+  // Published stores (those with a valid share URL)
+  const [publishedStores,      setPublishedStores]      = useState<PublishedStore[]>([]);
+  const [selectedStoreId,      setSelectedStoreId]      = useState<string>("");
+  const [storeUrl,             setStoreUrl]             = useState<string | null>(null);
+  const [urlCopied,            setUrlCopied]            = useState(false);
 
-  // Checklist auto-states
+  // Checklist auto-states (per selected published store)
   const [hasGeneratedSite, setHasGeneratedSite] = useState(false);
   const [stripeConnected,  setStripeConnected]  = useState(false);
   const [hasPublished,     setHasPublished]     = useState(false);
@@ -95,44 +103,80 @@ export default function MarketingClient() {
   // Manual checklist (localStorage)
   const [manualChecks, setManualChecks] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    // Load projects
-    fetch("/api/projects")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setProjects(data);
-          if (data.length > 0) {
-            setSelectedProjectId(data[0].id);
-            setHasGeneratedSite(true);
-          }
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingProjects(false));
+  const selectStore = useCallback((store: PublishedStore) => {
+    setSelectedStoreId(store.id);
+    setStoreUrl(store.url || null);
+    setHasPublished(!!store.url);
+    // Update URL param without reload
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("storeId", store.id);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [searchParams, router]);
 
+  useEffect(() => {
     // Check Stripe status
     fetch("/api/connect/status")
       .then((r) => r.json())
       .then((d) => { if (d?.charges_enabled) setStripeConnected(true); })
       .catch(() => {});
 
-    // Check published store + load manual checks
+    // Load manual checks
     try {
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("launched_")) {
-          const id = key.replace("launched_", "");
-          setHasPublished(true);
-          setStoreUrl(`${window.location.origin}/s/${id}`);
-          break;
-        }
-      }
       const checks: Record<string, boolean> = {};
       for (const item of CHECKLIST_ITEMS.filter((i) => !i.auto)) {
         checks[item.key] = localStorage.getItem(item.key) === "1";
       }
       setManualChecks(checks);
     } catch {}
+
+    // Load projects + build published stores list
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((data: Project[]) => {
+        if (!Array.isArray(data)) return;
+        setProjects(data);
+        if (data.length > 0) {
+          setHasGeneratedSite(true);
+          setSelectedProjectId(data[0].id);
+        }
+
+        // Build list of published stores with their share URLs
+        try {
+          const stores: PublishedStore[] = [];
+          for (const project of data) {
+            // Try new-style URL key first, then fall back to old launched_ key
+            const url =
+              localStorage.getItem(`pub_url_${project.id}`) ??
+              (localStorage.getItem(`launched_${project.id}`) ? null : null);
+            if (url) {
+              stores.push({ id: project.id, name: project.name, url });
+            } else if (project.status === "live") {
+              // Server says live but we don't have the URL locally — ask user to republish
+              stores.push({ id: project.id, name: project.name, url: "" });
+            }
+          }
+
+          if (stores.length > 0) {
+            setPublishedStores(stores);
+
+            // Auto-select from URL param, or pick the first store with a valid URL
+            const paramId = searchParams.get("storeId");
+            const target =
+              (paramId ? stores.find((s) => s.id === paramId) : null) ??
+              stores.find((s) => !!s.url) ??
+              stores[0];
+
+            if (target) {
+              setSelectedStoreId(target.id);
+              setStoreUrl(target.url || null);
+              setHasPublished(!!target.url);
+            }
+          }
+        } catch {}
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProjects(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -142,6 +186,13 @@ export default function MarketingClient() {
       .then((data) => { setSiteData(data?.site ?? null); })
       .catch(() => setSiteData(null));
   }, [selectedProjectId]);
+
+  // Keep checklist hasPublished in sync with selected store
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    const store = publishedStores.find((s) => s.id === selectedStoreId);
+    setHasPublished(!!store?.url);
+  }, [selectedStoreId, publishedStores]);
 
   const toggleManual = (key: string) => {
     const next = !manualChecks[key];
@@ -198,7 +249,11 @@ export default function MarketingClient() {
         <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 16 }}>
           Share Your Store
         </div>
-        {!storeUrl ? (
+
+        {loadingProjects ? (
+          <div className="h-10 bg-slate-100 rounded-xl animate-pulse w-64" />
+        ) : publishedStores.length === 0 ? (
+          /* No published stores */
           <div className="flex items-start gap-4">
             <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -207,63 +262,118 @@ export default function MarketingClient() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-1">Publish your store first</p>
-              <p className="text-sm text-slate-400">Once you publish, your shareable store link will appear here.</p>
-              <a href="/dashboard" className="inline-flex items-center gap-1.5 mt-3 text-sm text-blue-600 font-medium hover:underline">
-                Go to Builder →
+              <p className="text-sm font-medium text-slate-700 mb-1">Publish your store first to get your shareable link</p>
+              <p className="text-sm text-slate-400">Once you publish, your store URL will appear here.</p>
+              <a href="/dashboard" className="inline-flex items-center gap-1.5 mt-3 text-sm font-medium hover:underline" style={{ color: "#0f172a" }}>
+                Go to Dashboard →
               </a>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 mb-5">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-                </svg>
-                <span className="flex-1 text-sm text-slate-600 truncate">{storeUrl}</span>
+            {/* Store selector — only shown when there are multiple published stores */}
+            {publishedStores.length > 1 && (
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">Select store</label>
+                <select
+                  value={selectedStoreId}
+                  onChange={(e) => {
+                    const store = publishedStores.find((s) => s.id === e.target.value);
+                    if (store) selectStore(store);
+                  }}
+                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all bg-white text-slate-900 w-full max-w-xs"
+                >
+                  {publishedStores.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
-              <button
-                onClick={copyStoreUrl}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0 border ${
-                  urlCopied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {urlCopied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 10 }}>Share on</div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: "Twitter / X", color: "#000", href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(storeUrl)}&text=${encodeURIComponent("Check out my new store!")}` },
-                  { label: "Facebook",    color: "#1877F2", href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(storeUrl)}` },
-                  { label: "LinkedIn",    color: "#0A66C2", href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(storeUrl)}` },
-                  { label: "Instagram",   color: "#E1306C", href: undefined },
-                ].map(({ label, color, href }) => (
-                  href ? (
+            )}
+
+            {/* URL display */}
+            {storeUrl ? (
+              <>
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 min-w-0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                    </svg>
+                    <span className="flex-1 text-sm text-slate-600 truncate">{storeUrl}</span>
                     <a
-                      key={label}
-                      href={href}
+                      href={storeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+                      className="flex-shrink-0 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Open store"
                     >
-                      {label}
+                      ↗
                     </a>
-                  ) : (
+                  </div>
+                  <button
+                    onClick={copyStoreUrl}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0 border ${
+                      urlCopied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {urlCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", marginBottom: 10 }}>Share on</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      {
+                        label: "Twitter / X",
+                        href: `https://twitter.com/intent/tweet?text=${encodeURIComponent("Check out my new store!")}&url=${encodeURIComponent(storeUrl)}`,
+                      },
+                      {
+                        label: "Facebook",
+                        href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(storeUrl)}`,
+                      },
+                      {
+                        label: "LinkedIn",
+                        href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(storeUrl)}`,
+                      },
+                    ].map(({ label, href }) => (
+                      <a
+                        key={label}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        {label}
+                      </a>
+                    ))}
                     <button
-                      key={label}
                       onClick={() => { try { navigator.clipboard.writeText(storeUrl); } catch {} }}
                       className="px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-                      title="Copy link to share on Instagram"
+                      title="Copy link — then paste into Instagram"
                     >
-                      {label} (copy link)
+                      Instagram (copy link)
                     </button>
-                  )
-                ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Store is marked live server-side but URL not cached locally — need republish */
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-amber-800 mb-1">Store URL not found — please republish</p>
+                  <p className="text-sm text-amber-700">Your store is marked as live but the share link isn&apos;t stored in this browser. Open it in the builder and publish again to get your link.</p>
+                  <a
+                    href={`/builder?project=${selectedStoreId}`}
+                    className="inline-flex items-center gap-1 mt-2 text-sm font-medium text-amber-800 hover:underline"
+                  >
+                    Open in Builder →
+                  </a>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

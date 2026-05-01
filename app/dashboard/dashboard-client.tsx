@@ -144,16 +144,16 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
   const next = STAGE_LABELS[stageIndex + 1];
   return (
     <div style={{
-      marginBottom: 16,
-      padding: "20px 24px",
+      marginBottom: 24,
+      padding: "24px 28px",
       background: "white",
       borderRadius: 12,
       border: "1px solid #e7e5e4",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>YOUR JOURNEY</p>
-          <p style={{ fontSize: 13, color: "#78716c" }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>YOUR JOURNEY</p>
+          <p style={{ fontSize: 16, color: "#78716c" }}>
             {STAGE_DESCS[stageIndex]}{next ? ` — next: ${next}` : " — you made it!"}
           </p>
         </div>
@@ -172,12 +172,12 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
       </div>
       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
         {/* Track */}
-        <div style={{ position: "absolute", left: 16, right: 16, height: 2, background: "#e7e5e4", zIndex: 0 }} />
+        <div style={{ position: "absolute", left: 16, right: 16, height: 8, borderRadius: 4, background: "#e7e5e4", zIndex: 0 }} />
         {/* Fill */}
         <div style={{
           position: "absolute", left: 16,
           width: `calc(${(stageIndex / (STAGE_LABELS.length - 1)) * 100}% - 8px)`,
-          height: 2, background: "#0f172a", zIndex: 1, transition: "width 600ms cubic-bezier(0.32,0.72,0,1)",
+          height: 8, borderRadius: 4, background: "#0f172a", zIndex: 1, transition: "width 600ms cubic-bezier(0.32,0.72,0,1)",
         }} />
         {/* Nodes */}
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", position: "relative", zIndex: 2 }}>
@@ -187,7 +187,7 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
             return (
               <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                 <div style={{
-                  width: 30, height: 30, borderRadius: "50%",
+                  width: 32, height: 32, borderRadius: "50%",
                   background: completed || active ? "#0f172a" : "white",
                   border: completed || active ? "2px solid #0f172a" : "2px solid #e7e5e4",
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -196,13 +196,13 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
                   color: completed || active ? "white" : "#d6d3d1",
                 }}>
                   {completed ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 6L9 17l-5-5"/>
                     </svg>
                   ) : STAGE_ICONS[i]}
                 </div>
                 <span style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: active ? 600 : 400,
                   color: active ? "#0c0a09" : completed ? "#57534e" : "#a8a29e",
                   whiteSpace: "nowrap",
@@ -243,8 +243,8 @@ function SetupBanner({ hasPublished }: { hasPublished: boolean }) {
 
   return (
     <div style={{
-      marginBottom: 16,
-      padding: "14px 18px",
+      marginBottom: 32,
+      padding: "20px 24px",
       background: "#eff6ff",
       border: "1px solid #bfdbfe",
       borderRadius: 12,
@@ -257,15 +257,15 @@ function SetupBanner({ hasPublished }: { hasPublished: boolean }) {
         </svg>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#1e40af", marginBottom: 3 }}>Connect Stripe to accept payments</div>
-        <p style={{ fontSize: 13, color: "#3b82f6", margin: "0 0 10px", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "#1e40af", marginBottom: 4 }}>Connect Stripe to accept payments</div>
+        <p style={{ fontSize: 15, color: "#3b82f6", margin: "0 0 12px", lineHeight: 1.6 }}>
           {!status.stripe.connected
             ? "Your store is live! Connect your Stripe account to start accepting orders and getting paid."
             : "Almost there — your Stripe account needs a few more details before it can accept payments."}
         </p>
         <a
           href="/dashboard/connect"
-          style={{ display: "inline-block", padding: "6px 14px", borderRadius: 7, background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+          style={{ display: "inline-block", padding: "8px 18px", borderRadius: 8, background: "#2563eb", color: "#fff", fontSize: 15, fontWeight: 600, textDecoration: "none" }}
         >
           {!status.stripe.connected ? "Connect Stripe" : "Finish setup"}
         </a>
@@ -576,7 +576,7 @@ export default function DashboardClient({
       <div
         className="dash-mentor-panel"
         style={{
-          position: "fixed", top: 56, left: 0, bottom: 0, width: 340,
+          position: "fixed", top: 64, left: 0, bottom: 0, width: 340,
           borderRight: "1px solid #e7e5e4",
           background: "#fafaf9",
           flexDirection: "column", overflow: "hidden", zIndex: 20,
@@ -591,8 +591,8 @@ export default function DashboardClient({
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#0c0a09", lineHeight: 1.2 }}>Your Mentor</div>
-              <div style={{ fontSize: 12, color: "#a8a29e", lineHeight: 1.3, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", lineHeight: 1.2 }}>Your Mentor</div>
+              <div style={{ fontSize: 13, color: "#a8a29e", lineHeight: 1.3, marginTop: 1, display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#15803d", display: "inline-block", flexShrink: 0 }} />
                 Ready to help
               </div>
@@ -617,9 +617,9 @@ export default function DashboardClient({
               >
                 {m.role === "user" ? (
                   <div style={{
-                    maxWidth: "85%", padding: "9px 14px",
+                    maxWidth: "85%", padding: "10px 14px",
                     borderRadius: "18px 18px 4px 18px",
-                    fontSize: 13, lineHeight: 1.55, color: "#ffffff",
+                    fontSize: 15, lineHeight: 1.6, color: "#ffffff",
                     background: "#0f172a",
                     whiteSpace: "pre-line",
                   }}>
@@ -630,7 +630,7 @@ export default function DashboardClient({
                     maxWidth: "92%",
                     borderLeft: "2px solid #e7e5e4",
                     paddingLeft: 14,
-                    fontSize: 13, lineHeight: 1.65, color: "#57534e",
+                    fontSize: 15, lineHeight: 1.65, color: "#57534e",
                     whiteSpace: "pre-line",
                   }}>
                     {m.content}
@@ -648,10 +648,10 @@ export default function DashboardClient({
                   key={prompt}
                   onClick={() => sendDashMentor(prompt)}
                   style={{
-                    padding: "6px 12px", borderRadius: 999,
+                    padding: "7px 14px", borderRadius: 999,
                     border: "1px solid #e7e5e4",
                     background: "#ffffff", color: "#57534e",
-                    fontSize: 12, cursor: "pointer", lineHeight: 1.4,
+                    fontSize: 14, cursor: "pointer", lineHeight: 1.4,
                     transition: "all 0.15s", whiteSpace: "nowrap",
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = "#fafaf9"; e.currentTarget.style.borderColor = "#d6d3d1"; }}
@@ -681,8 +681,8 @@ export default function DashboardClient({
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDashMentor(); } }}
             placeholder="Ask your mentor anything..."
             style={{
-              flex: 1, height: 40, padding: "0 12px", borderRadius: 8,
-              border: "1px solid #e7e5e4", fontSize: 13, outline: "none",
+              flex: 1, height: 44, padding: "0 14px", borderRadius: 8,
+              border: "1px solid #e7e5e4", fontSize: 15, outline: "none",
               background: "#ffffff", color: "#0c0a09",
               transition: "border-color 0.15s",
             }}
@@ -695,7 +695,7 @@ export default function DashboardClient({
             disabled={dashLoading || !dashInput.trim()}
             aria-label="Send message"
             style={{
-              height: 40, width: 40, borderRadius: 8, border: "none",
+              height: 44, width: 44, borderRadius: 8, border: "none",
               background: dashLoading || !dashInput.trim() ? "#f5f5f4" : "#0f172a",
               color: dashLoading || !dashInput.trim() ? "#a8a29e" : "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -719,10 +719,10 @@ export default function DashboardClient({
         {/* Greeting */}
         <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: 36, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
               Good {timeOfDay ?? "day"}
             </h1>
-            <p style={{ fontSize: 15, color: "#78716c", lineHeight: 1.6 }}>
+            <p style={{ fontSize: 17, color: "#78716c", lineHeight: 1.6 }}>
               Here&apos;s where your business stands today.
             </p>
           </div>
@@ -738,10 +738,10 @@ export default function DashboardClient({
         <JourneyProgress stageIndex={stageIndex} />
 
         {/* Stats Row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 32 }}>
           {STATS.map(stat => (
             <div key={stat.label} style={{
-              padding: "20px 24px",
+              padding: "28px 28px",
               background: "white",
               borderRadius: 12,
               border: "1px solid #e7e5e4",
@@ -750,9 +750,9 @@ export default function DashboardClient({
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d6d3d1"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#e7e5e4"; }}
             >
-              <p style={{ fontSize: 12, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 10 }}>{stat.label}</p>
-              <p style={{ fontSize: 32, fontWeight: 700, color: "#0c0a09", lineHeight: 1, marginBottom: 6, fontVariantNumeric: "tabular-nums" }}>{stat.value}</p>
-              <p style={{ fontSize: 13, color: "#a8a29e" }}>{stat.sub}</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#a8a29e", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>{stat.label}</p>
+              <p style={{ fontSize: 48, fontWeight: 700, color: "#0c0a09", lineHeight: 1, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>{stat.value}</p>
+              <p style={{ fontSize: 16, fontWeight: 500, color: "#a8a29e" }}>{stat.sub}</p>
             </div>
           ))}
         </div>
@@ -763,8 +763,8 @@ export default function DashboardClient({
         {/* Your Businesses */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ marginBottom: 16 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0c0a09", marginBottom: 3, letterSpacing: "-0.02em" }}>Your Businesses</h2>
-            <p style={{ fontSize: 14, color: "#a8a29e" }}>
+            <h2 style={{ fontSize: 24, fontWeight: 600, color: "#0c0a09", marginBottom: 4, letterSpacing: "-0.02em" }}>Your Businesses</h2>
+            <p style={{ fontSize: 16, color: "#a8a29e" }}>
               {projects.length} {projects.length === 1 ? "business" : "businesses"}{liveCount > 0 ? ` · ${liveCount} live` : ""}
             </p>
           </div>
@@ -883,10 +883,10 @@ export default function DashboardClient({
                         <path d="M18 6L6 18M6 6l12 12" />
                       </svg>
                     </button>
-                    <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
-                      <div style={{ marginBottom: 12 }}>
+                    <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", flex: 1 }}>
+                      <div style={{ marginBottom: 14 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                          <div style={{ fontSize: 16, fontWeight: 600, color: "#0c0a09", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{project.name}</div>
+                          <div style={{ fontSize: 17, fontWeight: 600, color: "#0c0a09", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>{project.name}</div>
                           <div style={{ flexShrink: 0 }}>
                             {isLive ? (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 999, padding: "2px 8px" }}>
@@ -905,9 +905,10 @@ export default function DashboardClient({
                       <button
                         onClick={() => router.push(`/builder?project=${project.id}`)}
                         style={{
-                          marginTop: "auto", width: "100%", padding: "11px 0",
-                          borderRadius: 8, fontSize: 15, fontWeight: 500,
+                          marginTop: "auto", width: "100%", padding: "12px 0",
+                          borderRadius: 8, fontSize: 16, fontWeight: 500,
                           background: "#0f172a", color: "#fff", border: "none", cursor: "pointer",
+                          minHeight: 44,
                           transition: "background 0.15s",
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background = "#1e293b"; }}

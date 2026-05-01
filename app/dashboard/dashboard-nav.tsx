@@ -131,21 +131,21 @@ export default function DashboardNav({
   const pathname = usePathname();
 
   return (
-    <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(250,250,249,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e7e5e4" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", gap: 16 }}>
+    <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(250,250,249,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #e7e5e4" }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", height: 64, display: "flex", alignItems: "center", gap: 20 }}>
 
         {/* Brand */}
         <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, textDecoration: "none" }}>
-          <div style={{ height: 28, width: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #4f46e5, #0f172a)", flexShrink: 0 }}>
+          <div style={{ height: 30, width: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #4f46e5, #0f172a)", flexShrink: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <span style={{ fontSize: 17, fontWeight: 700, color: "#0c0a09", letterSpacing: "-0.03em" }}>Volcity</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "#0c0a09", letterSpacing: "-0.03em" }}>Volcity</span>
         </a>
 
-        {/* Nav links */}
-        <nav style={{ display: "flex", alignItems: "center", gap: 2 }} className="hidden md:flex">
+        {/* Nav links — spread across available space */}
+        <nav style={{ display: "flex", alignItems: "center", gap: 4, flex: 1, justifyContent: "center" }} className="hidden md:flex">
           {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
@@ -153,11 +153,14 @@ export default function DashboardNav({
                 key={href}
                 href={href}
                 style={{
-                  fontSize: 15,
-                  fontWeight: 500,
+                  fontSize: 16,
+                  fontWeight: active ? 600 : 500,
                   textDecoration: "none",
-                  padding: "5px 14px",
-                  borderRadius: 999,
+                  padding: "8px 20px",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: 6,
                   transition: "all 0.15s ease-out",
                   background: active ? "#0f172a" : "transparent",
                   color: active ? "#ffffff" : "#78716c",
@@ -170,9 +173,6 @@ export default function DashboardNav({
             );
           })}
         </nav>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
 
         {/* Account avatar */}
         <AccountAvatar firstName={firstName} email={email} />

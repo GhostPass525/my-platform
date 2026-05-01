@@ -214,11 +214,11 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               <div
                 style={{
                   maxWidth: "88%",
-                  padding: "9px 12px",
+                  padding: "10px 14px",
                   borderRadius:
                     m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
-                  fontSize: 13,
-                  lineHeight: 1.55,
+                  fontSize: 16,
+                  lineHeight: 1.6,
                   color: m.role === "user" ? "#1e40af" : "#334155",
                   background: m.role === "user" ? "#eff6ff" : "#f8fafc",
                   border: m.role === "user"
@@ -277,12 +277,12 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
                   }}
                   style={{
                     textAlign: "left",
-                    padding: "8px 12px",
+                    padding: "9px 14px",
                     borderRadius: 10,
                     border: "1px solid #e2e8f0",
                     background: "#f8fafc",
                     color: "#334155",
-                    fontSize: 12,
+                    fontSize: 15,
                     cursor: "pointer",
                     transition: "all 0.15s",
                     lineHeight: 1.4,
@@ -342,10 +342,10 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
             placeholder="Reply…"
             style={{
               flex: 1,
-              padding: "8px 12px",
+              padding: "10px 14px",
               borderRadius: 10,
               border: "1px solid #e2e8f0",
-              fontSize: 13,
+              fontSize: 15,
               outline: "none",
               background: "#f8fafc",
               color: "#0f172a",
@@ -363,7 +363,7 @@ export default function MentorChat({ openingMessage, brandName, stage = "Launch"
               border: "none",
               background: loading || !input.trim() ? "#f1f5f9" : "#0f172a",
               color: loading || !input.trim() ? "#94a3b8" : "#fff",
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: 600,
               cursor: loading || !input.trim() ? "default" : "pointer",
               transition: "all 0.15s",

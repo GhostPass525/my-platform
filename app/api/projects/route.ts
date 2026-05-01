@@ -29,7 +29,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, name, created_at, updated_at")
+    .select("id, name, created_at, updated_at, status")
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 

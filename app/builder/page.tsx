@@ -1410,10 +1410,13 @@ export default function Home() {
       const url = `${window.location.origin}/s/${data.id}`;
       console.log("[publish] published successfully:", url);
       trackAction("Published store");
-      const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${projectId ?? data.id}`);
+      const storageKey = projectId ?? data.id;
+      const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${storageKey}`);
       setPublishedUrl(url);
+      // Store both the timestamp marker and the actual URL so other pages can read it
+      localStorage.setItem(`launched_${storageKey}`, String(Date.now()));
+      localStorage.setItem(`pub_url_${storageKey}`, url);
       if (isFirstPublish) {
-        localStorage.setItem(`launched_${projectId ?? data.id}`, String(Date.now()));
         setShowLaunchMoment(true);
       }
 
