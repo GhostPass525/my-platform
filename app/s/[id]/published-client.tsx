@@ -42,6 +42,8 @@ type FontChoice =
   | "Times New Roman"
   | "Pacifico";
 
+type PrintfulVariant = { id: number; size: string; color: string; color_code?: string };
+
 type Product = {
   id: string;
   name: string;
@@ -51,6 +53,8 @@ type Product = {
   product_type?: string;
   booking_method?: "email" | "calendly" | "custom";
   booking_url?: string;
+  description?: string;
+  printful_variants?: PrintfulVariant[];
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -102,6 +106,8 @@ type CartItem = {
   quantity: number;
   image?: string;
   product_type?: string;
+  selectedSize?: string;
+  selectedColor?: string;
 };
 
 type CustomerData = {
@@ -182,6 +188,7 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
   const [checkingOut, setCheckingOut]     = useState(false);
   const [checkoutFormOpen, setCheckoutFormOpen] = useState(false);
   const [cart, setCart]                   = useState<CartItem[]>([]);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
   const productsTopRef             = useRef<HTMLDivElement | null>(null);
   const [pendingScroll, setPendingScroll] = useState(false);
@@ -205,13 +212,27 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
   const subtotal  = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
 
-  const addToCart = (p: Product) => {
+  const addToCart = (p: Product, opts?: { selectedSize?: string; selectedColor?: string }) => {
     const price = parsePriceDollars(p.price);
     const image = p.imageUrl || p.imageDataUrl;
+    const variantSuffix = (opts?.selectedSize || opts?.selectedColor)
+      ? ` — ${[opts?.selectedSize, opts?.selectedColor].filter(Boolean).join(" / ")}`
+      : "";
+    // Use composite key so each size/color combo is a separate cart line
+    const cartKey = opts ? `${p.id}|${opts.selectedSize || ""}|${opts.selectedColor || ""}` : p.id;
     setCart((prev) => {
-      const existing = prev.find((x) => x.productId === p.id);
-      if (existing) return prev.map((x) => x.productId === p.id ? { ...x, quantity: x.quantity + 1 } : x);
-      return [...prev, { productId: p.id, name: p.name, price, quantity: 1, image, product_type: p.product_type || "physical" }];
+      const existing = prev.find((x) => x.productId === cartKey);
+      if (existing) return prev.map((x) => x.productId === cartKey ? { ...x, quantity: x.quantity + 1 } : x);
+      return [...prev, {
+        productId: cartKey,
+        name: `${p.name}${variantSuffix}`,
+        price,
+        quantity: 1,
+        image,
+        product_type: p.product_type || "physical",
+        selectedSize: opts?.selectedSize,
+        selectedColor: opts?.selectedColor,
+      }];
     });
     setCartOpen(true);
   };
@@ -402,7 +423,7 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
       {/* ─── Page content ─── */}
       <main className="animate-fadeIn">
         {activePage.key === "products" ? (
-          <ProductsPage site={site} onAdd={addToCart} productsTopRef={productsTopRef} />
+          <ProductsPage site={site} onAdd={addToCart} onViewDetail={setDetailProduct} productsTopRef={productsTopRef} />
         ) : activePage.key === "about" ? (
           <AboutPage site={site} />
         ) : activePage.key === "contact" ? (
@@ -554,6 +575,19 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
           checkingOut={checkingOut}
           onClose={() => setCheckoutFormOpen(false)}
           onSubmit={submitCheckout}
+        />
+      )}
+
+      {/* Product detail modal */}
+      {detailProduct && (
+        <ProductDetailModal
+          product={detailProduct}
+          theme={t}
+          onClose={() => setDetailProduct(null)}
+          onAddToCart={(opts) => {
+            addToCart(detailProduct, opts);
+            setDetailProduct(null);
+          }}
         />
       )}
     </>
@@ -977,11 +1011,118 @@ function HomePage({ site, heroSrc, onPrimaryCTA, onLearnMore }: {
   );
 }
 
+/* ─── Product Detail Modal ───────────────────────────────────────── */
+
+function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
+  product: Product;
+  theme: Theme;
+  onClose: () => void;
+  onAddToCart: (opts: { selectedSize?: string; selectedColor?: string }) => void;
+}) {
+  const variants = product.printful_variants || [];
+  const sizes    = [...new Set(variants.map((v) => v.size))].filter(Boolean);
+  const colors   = [...new Map(variants.map((v) => [v.color, v])).values()].filter((v) => v.color);
+  const [selectedSize,  setSelectedSize]  = useState(sizes[0]  || "");
+  const [selectedColor, setSelectedColor] = useState(colors[0]?.color || "");
+  const img = product.imageUrl || product.imageDataUrl;
+  const hasVariants = sizes.length > 0 || colors.length > 0;
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: "100%", maxWidth: 560, background: "#fff", borderRadius: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.22)", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #F0EFED", flexShrink: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>{product.name}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#AAA", padding: 4 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {/* Image */}
+          <div style={{ aspectRatio: "1", background: "#F5F4F2", overflow: "hidden" }}>
+            {img ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={img} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: "20px 20px 24px" }}>
+            {/* Price */}
+            <div style={{ fontSize: 22, fontWeight: 700, color: theme.accent, marginBottom: 10 }}>{product.price}</div>
+
+            {/* Description */}
+            {product.description && (
+              <p style={{ fontSize: 13, color: "#666", lineHeight: 1.6, marginBottom: 16 }}>{product.description}</p>
+            )}
+
+            {/* Color selector */}
+            {colors.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>
+                  Color: <span style={{ color: "#1A1A1A", textTransform: "none", letterSpacing: 0 }}>{selectedColor}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {colors.map((v) => (
+                    <button
+                      key={v.color}
+                      title={v.color}
+                      onClick={() => setSelectedColor(v.color)}
+                      style={{ width: 28, height: 28, borderRadius: "50%", background: v.color_code || "#ccc", border: selectedColor === v.color ? `3px solid ${theme.accent}` : "2px solid rgba(0,0,0,0.12)", cursor: "pointer", flexShrink: 0, outline: "none" }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Size selector */}
+            {sizes.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Size</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {sizes.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSelectedSize(s)}
+                      style={{ padding: "6px 12px", borderRadius: 7, border: `1.5px solid ${selectedSize === s ? theme.accent : "#E5E7EB"}`, background: selectedSize === s ? theme.accent : "#fff", color: selectedSize === s ? "#fff" : "#1A1A1A", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add to cart */}
+            <button
+              onClick={() => onAddToCart(hasVariants ? { selectedSize: selectedSize || undefined, selectedColor: selectedColor || undefined } : {})}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: theme.accent, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            >
+              Add to cart
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Products Page ──────────────────────────────────────────────── */
 
-function ProductsPage({ site, onAdd, productsTopRef }: {
+function ProductsPage({ site, onAdd, onViewDetail, productsTopRef }: {
   site: SiteSpec;
-  onAdd: (p: Product) => void;
+  onAdd: (p: Product, opts?: { selectedSize?: string; selectedColor?: string }) => void;
+  onViewDetail: (p: Product) => void;
   productsTopRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const t = site.theme;
@@ -1048,6 +1189,14 @@ function ProductsPage({ site, onAdd, productsTopRef }: {
                       style={{ background: t.accent, color: "#fff" }}
                     >
                       Book Now
+                    </button>
+                  ) : (p.printful_variants?.length ?? 0) > 0 ? (
+                    <button
+                      onClick={() => onViewDetail(p)}
+                      className="mt-3 w-full px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                      style={{ background: t.accent, color: "#fff" }}
+                    >
+                      Select options
                     </button>
                   ) : (
                     <button

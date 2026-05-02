@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       syncProductId: result.id,
       externalId: result.external_id,
       productId,
+      thumbnailUrl: result.thumbnail_url || null,
     });
   } catch (err: unknown) {
     console.error('[printful/create-product]', err);

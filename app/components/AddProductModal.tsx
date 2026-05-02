@@ -35,43 +35,56 @@ export type NewProduct = {
   printful_sync_product_id: number;
   printful_catalog_product_id: number;
   printful_variant_ids: number[];
+  printful_variants: Array<{ id: number; size: string; color: string; color_code?: string }>;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { id: "tshirts",    label: "T-Shirts",     keywords: ["T-SHIRT", "TEE"] },
-  { id: "hoodies",    label: "Hoodies",       keywords: ["HOODIE", "SWEATSHIRT", "PULLOVER"] },
-  { id: "tanks",      label: "Tank Tops",     keywords: ["TANK", "MUSCLE"] },
-  { id: "mugs",       label: "Mugs",          keywords: ["MUG", "CUP"] },
-  { id: "posters",    label: "Posters",       keywords: ["POSTER", "PRINT", "CANVAS"] },
-  { id: "phonecases", label: "Phone Cases",   keywords: ["PHONE", "CASE"] },
-  { id: "totebags",   label: "Tote Bags",     keywords: ["TOTE", "BAG"] },
-  { id: "stickers",   label: "Stickers",      keywords: ["STICKER", "DECAL"] },
+  { id: "tshirts",     label: "T-Shirts",       keywords: ["T-SHIRT"] },
+  { id: "hoodies",     label: "Hoodies",         keywords: ["HOODIE"] },
+  { id: "sweatshirts", label: "Sweatshirts",     keywords: ["SWEATSHIRT"] },
+  { id: "tanks",       label: "Tank Tops",       keywords: ["TANK TOP"] },
+  { id: "longsleeves", label: "Long Sleeves",    keywords: ["LONG SLEEVE"] },
+  { id: "allover",     label: "All-Over Print",  keywords: ["ALL-OVER"] },
+  { id: "hats",        label: "Hats",            keywords: ["HAT", "CAP", "BEANIE", "SNAPBACK", "VISOR", "BUCKET"] },
+  { id: "mugs",        label: "Mugs",            keywords: ["MUG"] },
+  { id: "posters",     label: "Posters",         keywords: ["POSTER", "CANVAS PRINT", "FRAMED POSTER", "CANVAS"] },
+  { id: "phonecases",  label: "Phone Cases",     keywords: ["PHONE CASE"] },
+  { id: "totebags",    label: "Tote Bags",       keywords: ["TOTE BAG"] },
+  { id: "stickers",    label: "Stickers",        keywords: ["STICKER", "DECAL"] },
 ] as const;
 
 type CategoryId = typeof CATEGORIES[number]["id"];
 
 const DESIGN_REQS: Record<CategoryId, string> = {
-  tshirts:    "PNG with transparent background · 4500×5400 px recommended",
-  hoodies:    "PNG with transparent background · 4500×5400 px recommended",
-  tanks:      "PNG with transparent background · 4500×5400 px recommended",
-  mugs:       "PNG/JPG · 3600×2400 px recommended",
-  posters:    "PNG/JPG · 300 DPI · 3000×4500 px minimum",
-  phonecases: "PNG with transparent background · varies by model",
-  totebags:   "PNG with transparent background · 3600×3600 px recommended",
-  stickers:   "PNG with transparent background · 2000×2000 px recommended",
+  tshirts:     "PNG with transparent background · 4500×5400 px recommended",
+  hoodies:     "PNG with transparent background · 4500×5400 px recommended",
+  sweatshirts: "PNG with transparent background · 4500×5400 px recommended",
+  tanks:       "PNG with transparent background · 4500×5400 px recommended",
+  longsleeves: "PNG with transparent background · 4500×5400 px recommended",
+  allover:     "PNG/JPG · full-wrap print · high resolution required",
+  hats:        "PNG with transparent background · embroidery or DTF print · varies by model",
+  mugs:        "PNG/JPG · 3600×2400 px recommended",
+  posters:     "PNG/JPG · 300 DPI · 3000×4500 px minimum",
+  phonecases:  "PNG with transparent background · varies by model",
+  totebags:    "PNG with transparent background · 3600×3600 px recommended",
+  stickers:    "PNG with transparent background · 2000×2000 px recommended",
 };
 
 const NAME_SUGGESTIONS: Record<CategoryId, (brand?: string) => string> = {
-  tshirts:    (b) => b ? `${b} Unisex Tee` : "Classic Unisex T-Shirt",
-  hoodies:    (b) => b ? `${b} Pullover Hoodie` : "Premium Pullover Hoodie",
-  tanks:      (b) => b ? `${b} Tank Top` : "Everyday Tank Top",
-  mugs:       () => "Signature Coffee Mug",
-  posters:    () => "Art Print Poster",
-  phonecases: () => "Custom Phone Case",
-  totebags:   () => "Canvas Tote Bag",
-  stickers:   () => "Custom Sticker Pack",
+  tshirts:     (b) => b ? `${b} Unisex Tee` : "Classic Unisex T-Shirt",
+  hoodies:     (b) => b ? `${b} Pullover Hoodie` : "Premium Pullover Hoodie",
+  sweatshirts: (b) => b ? `${b} Crew Sweatshirt` : "Classic Crew Sweatshirt",
+  tanks:       (b) => b ? `${b} Tank Top` : "Everyday Tank Top",
+  longsleeves: (b) => b ? `${b} Long Sleeve Tee` : "Long Sleeve T-Shirt",
+  allover:     () => "All-Over Print Shirt",
+  hats:        () => "Custom Hat",
+  mugs:        () => "Signature Coffee Mug",
+  posters:     () => "Art Print Poster",
+  phonecases:  () => "Custom Phone Case",
+  totebags:    () => "Canvas Tote Bag",
+  stickers:    () => "Custom Sticker Pack",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -124,6 +137,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
   // Step 5
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   // Load catalog on mount
   useEffect(() => {
@@ -155,8 +169,9 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
     ? catalogProducts.filter((p) => {
         const cat = CATEGORIES.find((c) => c.id === selectedCategory);
         if (!cat) return false;
-        const t = (p.type || "").toUpperCase();
-        return cat.keywords.some((kw) => t.includes(kw));
+        // Use type_name (e.g. "T-Shirt") or title for matching — not the internal `type` code (e.g. "DTFILM")
+        const searchTarget = ((p.type_name || "") + " " + (p.title || "")).toUpperCase();
+        return (cat.keywords as readonly string[]).some((kw) => searchTarget.includes(kw));
       })
     : [];
 
@@ -231,17 +246,25 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create product");
 
+      const inStockVariants = variants.filter((v) => v.in_stock);
       onProductCreated({
         id: data.productId || uid(),
         name: productName.trim(),
         description: description.trim(),
         price: `$${price}`,
-        imageDataUrl: designUrl,
+        imageDataUrl: data.thumbnailUrl || designUrl || undefined,
         product_type: "physical",
         printful_sync_product_id: data.syncProductId,
         printful_catalog_product_id: selectedProduct.id,
-        printful_variant_ids: variants.filter((v) => v.in_stock).map((v) => v.id),
+        printful_variant_ids: inStockVariants.map((v) => v.id),
+        printful_variants: inStockVariants.map((v) => ({
+          id: v.id,
+          size: v.size,
+          color: v.color,
+          color_code: v.color_code,
+        })),
       });
+      setSuccess(true);
     } catch (e: unknown) {
       setError((e as Error)?.message || "Failed to create product. Please try again.");
     } finally {
@@ -308,8 +331,25 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
 
+          {/* ── SUCCESS ── */}
+          {success && (
+            <div style={{ textAlign: "center", padding: "40px 16px" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#1A1A1A", marginBottom: 6 }}>Product created!</div>
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>It&apos;s now in your store and ready to sell.</div>
+              <button
+                onClick={onClose}
+                style={{ padding: "10px 28px", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Done
+              </button>
+            </div>
+          )}
+
           {/* ── STEP 1: Product Type ── */}
-          {step === 1 && (
+          {!success && step === 1 && (
             <div>
               {!selectedCategory ? (
                 <>
@@ -329,7 +369,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E7E5E4"; }}
                         >
                           <span style={{ fontSize: 22 }}>
-                            {cat.id === "tshirts" ? "👕" : cat.id === "hoodies" ? "🧥" : cat.id === "tanks" ? "🎽" : cat.id === "mugs" ? "☕" : cat.id === "posters" ? "🖼️" : cat.id === "phonecases" ? "📱" : cat.id === "totebags" ? "👜" : "🏷️"}
+                            {cat.id === "tshirts" ? "👕" : cat.id === "hoodies" ? "🧥" : cat.id === "sweatshirts" ? "🧶" : cat.id === "tanks" ? "🎽" : cat.id === "longsleeves" ? "👔" : cat.id === "allover" ? "🎨" : cat.id === "hats" ? "🧢" : cat.id === "mugs" ? "☕" : cat.id === "posters" ? "🖼️" : cat.id === "phonecases" ? "📱" : cat.id === "totebags" ? "👜" : "🏷️"}
                           </span>
                           <span style={{ fontSize: 11, fontWeight: 500, color: "#1A1A1A", textAlign: "center", lineHeight: 1.3 }}>{cat.label}</span>
                         </button>
@@ -423,7 +463,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
           )}
 
           {/* ── STEP 2: Upload Design ── */}
-          {step === 2 && (
+          {!success && step === 2 && (
             <div>
               {selectedCategory && (
                 <div style={{ marginBottom: 14, fontSize: 12, color: "#888", background: "#FAFAF8", border: "1px solid #EEEDE9", borderRadius: 8, padding: "8px 12px" }}>
@@ -473,7 +513,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
           )}
 
           {/* ── STEP 3: Set Price ── */}
-          {step === 3 && (
+          {!success && step === 3 && (
             <div>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>Production Cost</div>
@@ -536,7 +576,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
           )}
 
           {/* ── STEP 4: Details ── */}
-          {step === 4 && (
+          {!success && step === 4 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", display: "block", marginBottom: 6 }}>Product Name</label>
@@ -577,7 +617,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 24px 20px", borderTop: "1px solid #F0EFED", flexShrink: 0, display: "flex", gap: 10 }}>
+        <div style={{ padding: "16px 24px 20px", borderTop: "1px solid #F0EFED", flexShrink: 0, display: success ? "none" : "flex", gap: 10 }}>
           {step > 1 && (
             <button
               onClick={() => { setStep((s) => (s - 1) as typeof step); setError(null); }}

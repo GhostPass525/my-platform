@@ -66,6 +66,7 @@ type Product = {
   printful_sync_product_id?: number;
   printful_catalog_product_id?: number;
   printful_variant_ids?: number[];
+  printful_variants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
