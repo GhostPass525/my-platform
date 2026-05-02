@@ -74,7 +74,7 @@ export async function createPrintfulProduct(
 ): Promise<{ sync_product: { id: number; external_id: string } }> {
   const externalId = `volcity_${userId}_${productId}`;
 
-  const response = await fetch(`${PRINTFUL_API}/sync/products`, {
+  const response = await fetch(`${PRINTFUL_API}/store/products`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
