@@ -11,13 +11,14 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const productId = parseInt(params.productId, 10);
+  const { productId: productIdStr } = await params;
+  const productId = parseInt(productIdStr, 10);
   if (isNaN(productId)) {
     return NextResponse.json({ error: 'Invalid product ID' }, { status: 400 });
   }

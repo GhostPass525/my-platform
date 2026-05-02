@@ -74,7 +74,9 @@ async function handlePackageShipped(data: Record<string, unknown>) {
 
   const stripeSessionId = externalId.replace("volcity_order_", "");
 
-  const { error } = await getSupabaseAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = getSupabaseAdmin() as any;
+  const { error } = await db
     .from("orders")
     .update({
       fulfillment_status: "shipped",
@@ -107,7 +109,9 @@ async function handleOrderFailed(data: Record<string, unknown>) {
 
   const stripeSessionId = externalId.replace("volcity_order_", "");
 
-  const { error } = await getSupabaseAdmin()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db2 = getSupabaseAdmin() as any;
+  const { error } = await db2
     .from("orders")
     .update({
       fulfillment_status: "failed",
