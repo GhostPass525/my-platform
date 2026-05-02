@@ -95,11 +95,25 @@ export async function POST(req: Request) {
       }
     }
 
-    // Look up the store owner
+    // Look up the store owner and site data
     let ownerId = "";
+    let printfulSyncProductId: string | null = null;
     if (publishId) {
-      const stored = await redis.get<string>(`site-owner:${publishId}`);
-      ownerId = stored ?? "";
+      const [storedOwner, storedSite] = await Promise.all([
+        redis.get<string>(`site-owner:${publishId}`),
+        redis.get<{ products?: Array<{ name: string; printful_sync_id?: number | string }> }>(`site:${publishId}`),
+      ]);
+      ownerId = storedOwner ?? "";
+      // Find the Printful sync product ID for the first physical cart item
+      if (storedSite?.products) {
+        const firstPhysical = cart.find((i) => !i.product_type || i.product_type === "physical");
+        if (firstPhysical) {
+          const match = storedSite.products.find((p) => p.name === firstPhysical.name && p.printful_sync_id);
+          if (match?.printful_sync_id) {
+            printfulSyncProductId = String(match.printful_sync_id);
+          }
+        }
+      }
     }
 
     // Look up the owner's connected Stripe account
@@ -165,6 +179,7 @@ export async function POST(req: Request) {
       "metadata[checkoutDataKey]": checkoutDataKey,
       "metadata[primaryProductName]": cart[0]?.name || "",
       "metadata[primaryProductType]": cart[0]?.product_type || "physical",
+      ...(printfulSyncProductId ? { "metadata[printful_sync_product_id]": printfulSyncProductId } : {}),
       ...lineItemParams,
     };
 

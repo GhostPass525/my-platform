@@ -26,15 +26,13 @@ type ConnectStatus = {
   blocked_checkout_count?: number;
 };
 
-type OrderItem = { product_name: string };
-
 type Order = {
   id: string;
-  total: number;
+  amount: number;
+  product_name?: string;
   customer_email: string;
   customer_name?: string;
   created_at: string;
-  order_items?: OrderItem[];
 };
 
 type OrdersData = {
@@ -42,8 +40,8 @@ type OrdersData = {
   stats: { totalRevenue: number; totalOrders: number; avgOrderValue: number };
 };
 
-function fmt(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+function fmt(dollars: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(dollars);
 }
 
 function timeAgo(iso: string): string {
@@ -70,7 +68,7 @@ function SalesChart({ orders }: { orders: Order[] }) {
         const od = new Date(o.created_at);
         return od.getDate() === d.getDate() && od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
       })
-      .reduce((sum, o) => sum + (o.total || 0), 0);
+      .reduce((sum, o) => sum + (o.amount || 0), 0);
     return { label, amount };
   });
 
@@ -321,11 +319,9 @@ export default function ConnectClient() {
 
   const productMap = new Map<string, { count: number; revenue: number }>();
   for (const o of orders) {
-    for (const item of o.order_items ?? []) {
-      const name = item.product_name || "Unknown";
-      const prev = productMap.get(name) ?? { count: 0, revenue: 0 };
-      productMap.set(name, { count: prev.count + 1, revenue: prev.revenue + (o.total || 0) });
-    }
+    const name = o.product_name || "Unknown";
+    const prev = productMap.get(name) ?? { count: 0, revenue: 0 };
+    productMap.set(name, { count: prev.count + 1, revenue: prev.revenue + (o.amount || 0) });
   }
   const topProducts = [...productMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
   const now = new Date();
@@ -906,7 +902,7 @@ export default function ConnectClient() {
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
                   <span style={{ flex: 1, fontSize: 13, color: "#555" }}>
                     New order from <strong style={{ color: "#1A1A1A", fontWeight: 500 }}>{name}</strong>
-                    {" "}— <strong style={{ color: "#1A1A1A", fontWeight: 500 }}>{fmt(o.total)}</strong>
+                    {" "}— <strong style={{ color: "#1A1A1A", fontWeight: 500 }}>{fmt(o.amount)}</strong>
                   </span>
                   <span style={{ fontSize: 12, color: "#AAA", flexShrink: 0 }}>{timeAgo(o.created_at)}</span>
                 </div>

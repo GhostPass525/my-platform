@@ -546,8 +546,8 @@ export default function DashboardClient({
   };
 
   const liveCount = projects.filter(p => p.status === 'live' || publishedIds.has(p.id)).length;
-  const totalSalesDollars = (initialRevenue / 100).toFixed(2);
-  const monthSalesDollars = (initialMonthRevenue / 100).toFixed(2);
+  const totalSalesDollars = initialRevenue.toFixed(2);
+  const monthSalesDollars = initialMonthRevenue.toFixed(2);
 
   const STATS = [
     { label: "BUSINESSES", value: String(projects.length), sub: projects.length === 1 ? "project" : "projects" },

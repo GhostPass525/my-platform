@@ -110,6 +110,9 @@ async function handleCheckoutComplete(
 ): Promise<boolean> {
 
   const publishId = session.metadata?.publishId || null;
+  const projectId = session.metadata?.projectId || null;
+  // Use publishId as site_id if available; fall back to projectId for store checkouts
+  const siteIdForOrder = publishId || projectId || null;
   const userId = session.metadata?.userId || null;
   const checkoutDataKey = session.metadata?.checkoutDataKey || null;
   const primaryProductName = session.metadata?.primaryProductName || null;
@@ -118,6 +121,8 @@ async function handleCheckoutComplete(
   console.log("[webhook] checkout.session.completed", {
     sessionId: session.id,
     publishId,
+    projectId,
+    siteIdForOrder,
     userId,
     checkoutDataKey,
     primaryProductName,
@@ -161,7 +166,7 @@ async function handleCheckoutComplete(
     .from("orders")
     .insert({
       user_id: userId || null,
-      site_id: publishId,
+      site_id: siteIdForOrder,
       customer_email: customerData.email || customerEmail,
       customer_name: customerData.fullName || null,
       customer_phone: customerData.phone || null,
@@ -188,17 +193,42 @@ async function handleCheckoutComplete(
   console.log("[webhook] Order inserted successfully for session:", session.id);
 
   // Auto-fulfill with Printful if the site has a connected Printful account
-  if (publishId && shippingAddress) {
+  if (siteIdForOrder && shippingAddress) {
     try {
       const { data: printfulConnection } = await getSupabaseAdmin()
         .from("printful_connections")
         .select("access_token")
-        .eq("site_id", publishId)
+        .eq("site_id", siteIdForOrder)
         .maybeSingle();
 
       if (printfulConnection) {
-        const printfulVariantId = session.metadata?.printful_variant_id || null;
-        if (printfulVariantId) {
+        // Resolve the Printful sync variant ID to use for fulfillment.
+        // Prefer an explicit variant ID in metadata; fall back to looking up
+        // the first variant of the sync product if only the product ID is known.
+        let syncVariantId: string | null = session.metadata?.printful_variant_id || null;
+
+        if (!syncVariantId) {
+          const syncProductId = session.metadata?.printful_sync_product_id || null;
+          if (syncProductId) {
+            const variantRes = await fetch(`https://api.printful.com/sync/products/${syncProductId}`, {
+              headers: { Authorization: `Bearer ${printfulConnection.access_token}` },
+            });
+            if (variantRes.ok) {
+              const variantData = await variantRes.json().catch(() => null);
+              const firstVariant = variantData?.result?.sync_variants?.[0];
+              if (firstVariant?.id) {
+                syncVariantId = String(firstVariant.id);
+                console.log("[webhook] Resolved Printful sync_variant_id:", syncVariantId, "from sync_product_id:", syncProductId);
+              } else {
+                console.warn("[webhook] Printful sync product has no variants, skipping auto-fulfill. product_id:", syncProductId);
+              }
+            } else {
+              console.warn("[webhook] Could not fetch Printful sync product variants for id:", syncProductId);
+            }
+          }
+        }
+
+        if (syncVariantId) {
           const fulfillRes = await fetch("https://api.printful.com/orders", {
             method: "POST",
             headers: {
@@ -219,7 +249,7 @@ async function handleCheckoutComplete(
               },
               items: [
                 {
-                  sync_variant_id: printfulVariantId,
+                  sync_variant_id: syncVariantId,
                   quantity: 1,
                 },
               ],
@@ -237,7 +267,7 @@ async function handleCheckoutComplete(
             console.error("[webhook] Printful order creation failed:", errData);
           }
         } else {
-          console.log("[webhook] Printful connected but no printful_variant_id in metadata — skipping auto-fulfill");
+          console.log("[webhook] Printful connected but no sync variant ID could be resolved — skipping auto-fulfill");
         }
       }
     } catch (fulfillErr) {

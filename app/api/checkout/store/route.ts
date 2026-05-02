@@ -99,6 +99,8 @@ export async function POST(req: Request) {
       cancel_url: cancelUrl,
       "metadata[projectId]": projectId,
       "metadata[userId]": ownerId,
+      "metadata[primaryProductName]": items[0]?.name || "",
+      "metadata[primaryProductType]": "physical",
     };
 
     items.forEach((item, i) => {

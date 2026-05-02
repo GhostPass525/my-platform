@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       client_id: process.env.PRINTFUL_CLIENT_ID,
       client_secret: process.env.PRINTFUL_CLIENT_SECRET,
       code,
-      redirect_url: 'https://www.volcity.to/api/printful/callback',
+      redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.volcity.to'}/api/printful/callback`,
     };
 
     console.log('[printful] Sending token exchange to https://www.printful.com/oauth/token');
