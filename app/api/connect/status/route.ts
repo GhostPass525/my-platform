@@ -47,7 +47,7 @@ export async function GET() {
 
     const { data: connectData } = await serviceSupabase
       .from("stripe_connect")
-      .select("connected_account_id, charges_enabled, payouts_enabled")
+      .select("connected_account_id, charges_enabled, payouts_enabled, activated_at")
       .eq("user_id", user.id)
       .single();
 
@@ -70,13 +70,21 @@ export async function GET() {
       charges_enabled = account.charges_enabled ?? false;
       payouts_enabled = account.payouts_enabled ?? false;
 
+      // Stamp activated_at the first time charges become enabled
+      const justActivated = charges_enabled && !connectData.charges_enabled;
+      const updatePayload: Record<string, unknown> = {
+        charges_enabled,
+        payouts_enabled,
+        updated_at: new Date().toISOString(),
+      };
+      if (justActivated && !connectData.activated_at) {
+        updatePayload.activated_at = new Date().toISOString();
+        console.log("[connect/status] account activated for user:", user.id);
+      }
+
       await serviceSupabase
         .from("stripe_connect")
-        .update({
-          charges_enabled,
-          payouts_enabled,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("user_id", user.id);
     } catch (stripeErr) {
       console.warn("[connect/status] Stripe account lookup failed (may not be set up yet):", (stripeErr as Error)?.message);

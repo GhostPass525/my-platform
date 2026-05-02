@@ -333,8 +333,8 @@ export default function ConnectClient() {
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Payments</h1>
-        <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Connect Stripe to accept payments and track your revenue</p>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Payouts</h1>
+        <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Set up your bank details to receive payments from your customers</p>
       </div>
 
       {/* Error banner */}
@@ -353,7 +353,7 @@ export default function ConnectClient() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          Your Stripe account is connected!
+          Payouts set up successfully!
         </div>
       )}
 
@@ -389,8 +389,8 @@ export default function ConnectClient() {
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", marginBottom: 4 }}>Create or connect a Stripe account</div>
-                <div style={{ fontSize: 13, color: "#78716c" }}>Sign up for Stripe — it only takes a few minutes.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", marginBottom: 4 }}>Create a Stripe account first</div>
+                <div style={{ fontSize: 13, color: "#78716c" }}>You need a free Stripe account to receive payouts — it only takes a few minutes.</div>
               </div>
               <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", textDecoration: "none", width: "fit-content" }}>
                 Sign up for Stripe
@@ -413,8 +413,8 @@ export default function ConnectClient() {
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Connect your Stripe account</div>
-                <div style={{ fontSize: 13, color: "#888" }}>Accept credit card payments from your customers. Volcity takes a <strong style={{ color: "#1A1A1A" }}>5% platform fee</strong> per sale.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Set up payouts</div>
+                <div style={{ fontSize: 13, color: "#888" }}>Enter your bank details to receive payments from your customers. Volcity takes a <strong style={{ color: "#1A1A1A" }}>5% platform fee</strong> per sale.</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
@@ -437,7 +437,7 @@ export default function ConnectClient() {
                 </div>
               )}
               <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}>
-                {onboarding ? <><SpinIcon /> Redirecting…</> : "Connect Stripe Account"}
+                {onboarding ? <><SpinIcon /> Redirecting…</> : "Set Up Payouts"}
               </button>
             </div>
           )}
@@ -452,8 +452,8 @@ export default function ConnectClient() {
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Finish setting up your account</div>
-              <div style={{ fontSize: 13, color: "#888" }}>Complete Stripe onboarding to start receiving payments.</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Finish setting up payouts</div>
+              <div style={{ fontSize: 13, color: "#888" }}>Complete your bank details to start receiving payments.</div>
             </div>
             <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}>
               {onboarding ? <><SpinIcon /> Redirecting…</> : "Complete Setup"}
@@ -470,8 +470,8 @@ export default function ConnectClient() {
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Connected to Stripe</div>
-                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>Your account is active and ready to accept payments.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Payouts Active</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>Your bank account is connected and ready to receive payments.</div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

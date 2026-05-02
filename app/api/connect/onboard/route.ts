@@ -90,6 +90,7 @@ export async function POST(req: Request) {
       "capabilities[card_payments][requested]": "true",
       "capabilities[transfers][requested]": "true",
       "metadata[userId]": user.id,
+      "metadata[volcity_user_id]": user.id,
     };
     if (user.email) {
       createParams.email = user.email;
@@ -115,6 +116,7 @@ export async function POST(req: Request) {
         {
           user_id: user.id,
           connected_account_id: accountId,
+          account_type: "express",
           charges_enabled: false,
           payouts_enabled: false,
           updated_at: new Date().toISOString(),
