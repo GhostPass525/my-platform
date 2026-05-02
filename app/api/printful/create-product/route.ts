@@ -56,8 +56,8 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({
-      syncProductId: result.sync_product.id,
-      externalId: result.sync_product.external_id,
+      syncProductId: result.id,
+      externalId: result.external_id,
       productId,
     });
   } catch (err: unknown) {

@@ -75,7 +75,7 @@ export async function createPrintfulProduct(
   productName: string,
   designUrl: string,
   variants: PrintfulVariantInput[]
-): Promise<{ sync_product: { id: number; external_id: string } }> {
+): Promise<{ id: number; external_id: string; name: string }> {
   const externalId = `volcity_${userId}_${productId}`;
 
   const response = await fetch(`${PRINTFUL_API}/store/products`, {
@@ -111,13 +111,13 @@ export async function createPrintfulProduct(
     throw new Error(`Printful createProduct failed: ${msg}`);
   }
 
-  const result = data.result as { sync_product?: { id: number; external_id: string } } | undefined;
-  if (!result?.sync_product?.id) {
+  const result = data.result as { id?: number; external_id?: string; name?: string } | undefined;
+  if (!result?.id) {
     console.error('[printful] createProduct unexpected response shape:', JSON.stringify(data));
     throw new Error(`Printful createProduct: unexpected response shape — ${JSON.stringify(data).slice(0, 300)}`);
   }
 
-  return result as { sync_product: { id: number; external_id: string } };
+  return result as { id: number; external_id: string; name: string };
 }
 
 // ── 2. Fulfill order ──────────────────────────────────────────────────────────
