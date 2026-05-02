@@ -4,8 +4,8 @@ import { createClient } from '@/utils/supabase/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const siteId = searchParams.get('siteId');
+  // siteId param accepted but ignored — connections are now per-user, not per-site
+  void request;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,14 +14,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let query = supabase
+  const { data: connection } = await supabase
     .from('printful_connections')
     .select('access_token')
-    .eq('user_id', user.id);
-
-  if (siteId) query = query.eq('site_id', siteId);
-
-  const { data: connection } = await query.maybeSingle();
+    .eq('user_id', user.id)
+    .maybeSingle();
 
   if (!connection) {
     return NextResponse.json({ error: 'Not connected to Printful' }, { status: 401 });

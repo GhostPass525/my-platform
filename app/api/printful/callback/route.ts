@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 
+function getServiceSupabase() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const siteId = searchParams.get('state') || null;
 
-  console.log('[printful] Callback hit — code present:', !!code, '| siteId:', siteId);
+  console.log('[printful] Callback hit — code present:', !!code);
 
   if (!code) {
     console.error('[printful] No code in callback params');
@@ -83,29 +90,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${APP_URL}/dashboard/connect?printful=error`);
     }
 
-    console.log('[printful] Saving connection for user:', user.id, '| site_id:', siteId);
+    console.log('[printful] Saving connection for user:', user.id);
 
-    const { error } = await supabase.from('printful_connections').upsert(
-      {
-        user_id: user.id,
-        site_id: siteId,
-        access_token: tokenData.access_token,
-        store_id: storeId,
-        store_name: storeName,
-        connected_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,site_id' }
-    );
+    // Use service role to bypass RLS for cleanup + insert
+    const db = getServiceSupabase();
+
+    // Delete ALL existing connections for this user — ensures exactly one row per user
+    // and prevents duplicate "Volcity store" entries in Printful's OAuth screen on future connects
+    const { error: deleteError } = await db
+      .from('printful_connections')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (deleteError) {
+      console.error('[printful] Failed to delete old connections:', JSON.stringify(deleteError));
+      // Non-fatal — proceed to insert anyway
+    } else {
+      console.log('[printful] Old connections cleaned up for user:', user.id);
+    }
+
+    const { error } = await db.from('printful_connections').insert({
+      user_id: user.id,
+      access_token: tokenData.access_token,
+      store_id: storeId,
+      store_name: storeName,
+      connected_at: new Date().toISOString(),
+    });
 
     if (error) {
-      console.error('[printful] Supabase upsert failed:', JSON.stringify(error));
+      console.error('[printful] Supabase insert failed:', JSON.stringify(error));
       return NextResponse.redirect(`${APP_URL}/dashboard/connect?printful=error`);
     }
 
     console.log('[printful] Connection saved successfully');
-    const params = new URLSearchParams({ printful: 'connected' });
-    if (siteId) params.set('siteId', siteId);
-    return NextResponse.redirect(`${APP_URL}/dashboard/connect?${params.toString()}`);
+    return NextResponse.redirect(`${APP_URL}/dashboard/connect?printful=connected`);
   } catch (error) {
     console.error('[printful] OAuth callback error:', error);
     return NextResponse.redirect(`${APP_URL}/dashboard/connect?printful=error`);

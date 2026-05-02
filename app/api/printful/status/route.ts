@@ -4,10 +4,9 @@ import { createClient } from '@/utils/supabase/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  // siteId param accepted but ignored — connections are now per-user, not per-site
+  void request;
   try {
-    const { searchParams } = new URL(request.url);
-    const siteId = searchParams.get('siteId');
-
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -15,16 +14,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ connected: false }, { status: 401 });
     }
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('printful_connections')
-      .select('store_id, store_name, connected_at, site_id')
-      .eq('user_id', user.id);
-
-    if (siteId) {
-      query = query.eq('site_id', siteId);
-    }
-
-    const { data, error } = await query.maybeSingle();
+      .select('store_id, store_name, connected_at')
+      .eq('user_id', user.id)
+      .maybeSingle();
 
     if (error) {
       console.error('[printful] Status query error:', error);
@@ -40,7 +34,6 @@ export async function GET(request: NextRequest) {
       store_id: data.store_id,
       store_name: data.store_name,
       connected_at: data.connected_at,
-      site_id: data.site_id,
     });
   } catch (err) {
     console.error('[printful] Unexpected error:', err);

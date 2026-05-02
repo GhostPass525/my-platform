@@ -134,7 +134,6 @@ export default function ConnectClient() {
   const searchParams = useSearchParams();
   const isConnected = searchParams.get("connected") === "1";
   const isRefresh = searchParams.get("refresh") === "1";
-  const siteId = searchParams.get("siteId") || "";
   const printfulParam = searchParams.get("printful");
 
   const [status, setStatus] = useState<ConnectStatus | null>(null);
@@ -196,10 +195,7 @@ export default function ConnectClient() {
   const fetchPrintfulStatus = useCallback(async () => {
     setLoadingPrintful(true);
     try {
-      const url = siteId
-        ? `/api/printful/status?siteId=${encodeURIComponent(siteId)}`
-        : "/api/printful/status";
-      const res = await fetch(url);
+      const res = await fetch("/api/printful/status");
       const data = await res.json().catch(() => null);
       if (res.ok && data) setPrintfulStatus(data);
     } catch {
@@ -207,7 +203,7 @@ export default function ConnectClient() {
     } finally {
       setLoadingPrintful(false);
     }
-  }, [siteId]);
+  }, []);
 
   const openImportModal = useCallback(async () => {
     setShowImportModal(true);
@@ -218,7 +214,7 @@ export default function ConnectClient() {
     // Fetch Printful sync products and user projects in parallel
     setLoadingPfProducts(true);
     const [pfRes, projRes] = await Promise.all([
-      fetch(`/api/printful/sync-products${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`),
+      fetch("/api/printful/sync-products"),
       fetch("/api/projects"),
     ]);
     setLoadingPfProducts(false);
@@ -237,7 +233,7 @@ export default function ConnectClient() {
         if (projects.length > 0) setImportProjectId(projects[0].id);
       }
     }
-  }, [siteId]);
+  }, []);
 
   const doImport = useCallback(async () => {
     if (!importProjectId || selectedPfIds.size === 0) return;
@@ -563,7 +559,7 @@ export default function ConnectClient() {
                 Import Products
               </button>
               <a
-                href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+                href={"/api/printful/connect"}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
               >
                 Reconnect Printful
@@ -601,7 +597,7 @@ export default function ConnectClient() {
               <span style={{ fontSize: 12, color: "#888" }}>Not connected</span>
             </div>
             <a
-              href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+              href={"/api/printful/connect"}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
             >
               Connect Printful Account
@@ -691,7 +687,7 @@ export default function ConnectClient() {
             </p>
             <div style={{ display: "flex", gap: 10 }}>
               <a
-                href={`/api/printful/connect${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}
+                href={"/api/printful/connect"}
                 style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", gap: 6 }}
               >
                 Connect Printful

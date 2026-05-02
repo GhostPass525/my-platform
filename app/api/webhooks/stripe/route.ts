@@ -192,13 +192,13 @@ async function handleCheckoutComplete(
 
   console.log("[webhook] Order inserted successfully for session:", session.id);
 
-  // Auto-fulfill with Printful if the site has a connected Printful account
-  if (siteIdForOrder && shippingAddress) {
+  // Auto-fulfill with Printful if the store owner has a connected Printful account
+  if (userId && shippingAddress) {
     try {
       const { data: printfulConnection } = await getSupabaseAdmin()
         .from("printful_connections")
         .select("access_token")
-        .eq("site_id", siteIdForOrder)
+        .eq("user_id", userId)
         .maybeSingle();
 
       if (printfulConnection) {

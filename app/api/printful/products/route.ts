@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const siteId = searchParams.get('siteId');
   const category = searchParams.get('category') || '';
 
   const supabase = await createClient();
@@ -15,14 +14,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let query = supabase
+  const { data: connection } = await supabase
     .from('printful_connections')
     .select('access_token')
-    .eq('user_id', user.id);
-
-  if (siteId) query = query.eq('site_id', siteId);
-
-  const { data: connection } = await query.maybeSingle();
+    .eq('user_id', user.id)
+    .maybeSingle();
 
   if (!connection) {
     return NextResponse.json({ error: 'Not connected to Printful' }, { status: 401 });
