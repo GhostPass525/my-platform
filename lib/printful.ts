@@ -5,6 +5,10 @@
 
 const PRINTFUL_API = 'https://api.printful.com';
 
+export function getPrintfulHeaders(): Record<string, string> {
+  return getHeaders();
+}
+
 function getHeaders(): Record<string, string> {
   const key = process.env.PRINTFUL_MASTER_API_KEY;
   if (!key) throw new Error('PRINTFUL_MASTER_API_KEY is not set');
@@ -91,13 +95,29 @@ export async function createPrintfulProduct(
     }),
   });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(`Printful createProduct failed: ${err?.result || response.status}`);
+  const responseText = await response.text();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(`Printful createProduct failed: non-JSON response (${response.status}): ${responseText.slice(0, 200)}`);
   }
 
-  const data = await response.json();
-  return data.result;
+  if (!response.ok) {
+    const msg = (data?.error as Record<string, unknown>)?.message
+      || (data as Record<string, unknown>)?.result
+      || response.status;
+    console.error('[printful] createProduct error response:', JSON.stringify(data));
+    throw new Error(`Printful createProduct failed: ${msg}`);
+  }
+
+  const result = data.result as { sync_product?: { id: number; external_id: string } } | undefined;
+  if (!result?.sync_product?.id) {
+    console.error('[printful] createProduct unexpected response shape:', JSON.stringify(data));
+    throw new Error(`Printful createProduct: unexpected response shape — ${JSON.stringify(data).slice(0, 300)}`);
+  }
+
+  return result as { sync_product: { id: number; external_id: string } };
 }
 
 // ── 2. Fulfill order ──────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Redis } from "@upstash/redis";
-import { fulfillOrder } from "@/lib/printful";
+import { fulfillOrder, getPrintfulHeaders } from "@/lib/printful";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -202,7 +202,7 @@ async function handleCheckoutComplete(
 
       if (!syncVariantId) {
         const variantRes = await fetch(`https://api.printful.com/sync/products/${syncProductId}`, {
-          headers: { Authorization: `Bearer ${process.env.PRINTFUL_MASTER_API_KEY}` },
+          headers: getPrintfulHeaders(),
         });
         if (variantRes.ok) {
           const variantData = await variantRes.json().catch(() => null);
