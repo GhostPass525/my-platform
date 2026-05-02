@@ -208,7 +208,7 @@ function injectInlineEditor(html: string): string {
       el.setAttribute('data-vc-orig',el.innerHTML);
       // Sync data-product-price if this is a price element
       var text=(el.innerText||el.textContent||'').trim();
-      var priceMatch=text.match(/\$?([\d,.]+)/);
+      var priceMatch=text.match(/\\$?([\\d,.]+)/);
       if(priceMatch){
         var cls=(el.className||'').toLowerCase();
         var isPrice=cls.includes('price')||!!el.closest('[class*="price"]');
@@ -2298,37 +2298,45 @@ export default function Home() {
       {showAddProductModal && (
         <AddProductModal
           userId={userId}
+          projectId={projectId}
           uploadDesign={(file) => uploadSiteImage(file, "product-design")}
           onProductCreated={(product: NewProduct) => {
             if (!site) return;
             const newProduct: Product = { ...product };
-            const updatedSite = { ...site, products: [...site.products, newProduct] };
+
+            // Update local state immediately (server already saved via create-product route)
+            const updatedSite = { ...site, products: [...(site.products ?? []), newProduct] };
             setSite(updatedSite);
             trackAction("Added a product");
             setShowAddProductModal(false);
+            console.log("[builder] onProductCreated: local state updated, products count:", updatedSite.products.length);
 
-            // Navigate preview to the Products page so the new product is immediately visible
+            // Navigate preview to Products page so new product is visible
             const productsPage = updatedSite.pages.find((p) => p.key === "products");
             if (productsPage) setActivePageId(productsPage.id);
 
-            // Immediately save to Supabase — don't wait 30s for autosave
+            // Fetch fresh site_json from server to confirm save and sync state
             if (projectId) {
-              console.log("[builder] saving product to site_json, products count:", updatedSite.products.length);
-              setSaveStatus("saving");
-              fetch(`/api/projects/${projectId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ site: updatedSite }),
-              })
-                .then((r) => {
-                  if (r.ok) {
+              console.log("[builder] fetching fresh site_json to confirm server save...");
+              fetch(`/api/projects/${projectId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.site) {
+                    const freshProducts = Array.isArray(d.site.products) ? d.site.products : [];
+                    console.log("[builder] server site_json confirmed, products count:", freshProducts.length);
+                    // Only sync products array to avoid overwriting unsaved HTML edits
+                    setSite((prev) => prev ? { ...prev, products: freshProducts } : prev);
                     setSaveStatus("saved");
                     setTimeout(() => setSaveStatus("idle"), 3000);
                   } else {
+                    console.warn("[builder] fresh site_json fetch returned no site:", d);
                     setSaveStatus("failed");
                   }
                 })
-                .catch(() => setSaveStatus("failed"));
+                .catch((err) => {
+                  console.error("[builder] failed to fetch fresh site_json:", err);
+                  setSaveStatus("failed");
+                });
             }
           }}
           onClose={() => setShowAddProductModal(false)}

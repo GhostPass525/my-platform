@@ -101,6 +101,7 @@ function uid() {
 
 type Props = {
   userId: string | null;
+  projectId?: string | null;
   onProductCreated: (product: NewProduct) => void;
   onClose: () => void;
   /** Upload a file to Supabase Storage, return the public URL. */
@@ -109,7 +110,7 @@ type Props = {
 
 const STEP_LABELS = ["Product Type", "Design", "Price", "Details", "Create"];
 
-export default function AddProductModal({ userId: _userId, onProductCreated, onClose, uploadDesign }: Props) {
+export default function AddProductModal({ userId: _userId, projectId, onProductCreated, onClose, uploadDesign }: Props) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1
@@ -233,6 +234,7 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
       .map((v) => ({ variantId: v.id, retailPrice }));
 
     try {
+      const inStockVariantsForBody = variants.filter((v) => v.in_stock);
       const res = await fetch("/api/printful/create-product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -241,12 +243,19 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
           description: description.trim(),
           designUrl,
           variantInputs,
+          projectId: projectId ?? undefined,
+          printfulCatalogProductId: selectedProduct?.id ?? undefined,
+          printfulVariants: inStockVariantsForBody.map((v) => ({
+            id: v.id,
+            size: v.size,
+            color: v.color,
+            color_code: v.color_code,
+          })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create product");
 
-      const inStockVariants = variants.filter((v) => v.in_stock);
       onProductCreated({
         id: data.productId || uid(),
         name: productName.trim(),
@@ -256,8 +265,8 @@ export default function AddProductModal({ userId: _userId, onProductCreated, onC
         product_type: "physical",
         printful_sync_product_id: data.syncProductId,
         printful_catalog_product_id: selectedProduct.id,
-        printful_variant_ids: inStockVariants.map((v) => v.id),
-        printful_variants: inStockVariants.map((v) => ({
+        printful_variant_ids: inStockVariantsForBody.map((v) => v.id),
+        printful_variants: inStockVariantsForBody.map((v) => ({
           id: v.id,
           size: v.size,
           color: v.color,
