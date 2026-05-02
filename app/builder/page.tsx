@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
+import AddProductModal, { type NewProduct } from "@/app/components/AddProductModal";
 import OnboardingTooltip from "@/app/components/OnboardingTooltip";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 import FloatingPanel from "@/app/components/FloatingPanel";
@@ -60,6 +61,11 @@ type Product = {
   product_type?: string;
   booking_method?: "email" | "calendly" | "custom";
   booking_url?: string;
+  // Printful fields (populated when product created via Add Product wizard)
+  description?: string;
+  printful_sync_product_id?: number;
+  printful_catalog_product_id?: number;
+  printful_variant_ids?: number[];
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -539,6 +545,7 @@ export default function Home() {
   const [generating, setGenerating] = useState(false);
   const [site, setSite] = useState<SiteSpec | null>(null);
   const [rightTab, setRightTab] = useState<"quick" | "content" | "design" | "pages" | "products" | "sections">("quick");
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [activePageId, setActivePageId] = useState<string>("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>("");
@@ -1438,9 +1445,10 @@ export default function Home() {
   };
 
   // ── Products ──────────────────────────────────────────────────
-  const addProduct = () => {
+  const addProduct = (product?: Partial<Product>) => {
     if (!site) return;
-    setSite({ ...site, products: [...site.products, { id: uid(), name: "New Product", price: "$00", product_type: "physical" }] });
+    const newProduct: Product = { id: uid(), name: "New Product", price: "$0", product_type: "physical", ...product };
+    setSite({ ...site, products: [...site.products, newProduct] });
     trackAction("Added a product");
   };
   const updateProduct = (id: string, patch: Partial<Product>) => {
@@ -1802,6 +1810,19 @@ export default function Home() {
               accent={theme.accent}
             />
           </div>
+          {site && !generating && (
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
+              <button
+                onClick={() => setShowAddProductModal(true)}
+                style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Add Physical Product
+              </button>
+            </div>
+          )}
 
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, scrollbarWidth: "thin" as const }}>
             {/* Builder welcome — shown once to new users */}
@@ -2269,6 +2290,19 @@ export default function Home() {
           projectCreatedAt={projectCreatedAt}
           stripeConnected={stripeOnboarded}
           onContinue={() => setShowLaunchMoment(false)}
+        />
+      )}
+
+      {/* Add Physical Product Modal */}
+      {showAddProductModal && (
+        <AddProductModal
+          userId={userId}
+          uploadDesign={(file) => uploadSiteImage(file, "product-design")}
+          onProductCreated={(product: NewProduct) => {
+            addProduct(product);
+            setShowAddProductModal(false);
+          }}
+          onClose={() => setShowAddProductModal(false)}
         />
       )}
 

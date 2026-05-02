@@ -45,7 +45,6 @@ function SalesChart({ orders }: { orders: Order[] }) {
     d.setDate(d.getDate() - (6 - i));
     return d;
   });
-
   const data = days.map((d) => {
     const label = d.toLocaleDateString("en-US", { weekday: "short" });
     const amount = orders
@@ -56,14 +55,10 @@ function SalesChart({ orders }: { orders: Order[] }) {
       .reduce((sum, o) => sum + (o.amount || 0), 0);
     return { label, amount };
   });
-
   const maxVal = Math.max(...data.map((d) => d.amount), 100);
   const hasData = data.some((d) => d.amount > 0);
-  const chartH = 96;
-  const barW = 36;
-  const gap = 12;
+  const chartH = 96; const barW = 36; const gap = 12;
   const totalW = data.length * (barW + gap) - gap;
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "center" }}>
@@ -75,44 +70,21 @@ function SalesChart({ orders }: { orders: Order[] }) {
               <g key={i}>
                 <rect x={x} y={0} width={barW} height={chartH} rx={6} fill="#EEEDE9" />
                 {barH > 0 && <rect x={x} y={chartH - barH} width={barW} height={barH} rx={6} fill="#0f172a" />}
-                <text x={x + barW / 2} y={chartH + 20} textAnchor="middle" fontSize={11} fill="#AAA" fontFamily="inherit">
-                  {d.label}
-                </text>
+                <text x={x + barW / 2} y={chartH + 20} textAnchor="middle" fontSize={11} fill="#AAA" fontFamily="inherit">{d.label}</text>
               </g>
             );
           })}
         </svg>
       </div>
-      {!hasData && (
-        <p style={{ textAlign: "center", fontSize: 13, color: "#AAA", marginTop: 12 }}>
-          Your sales chart will appear here
-        </p>
-      )}
+      {!hasData && <p style={{ textAlign: "center", fontSize: 13, color: "#AAA", marginTop: 12 }}>Your sales chart will appear here</p>}
     </div>
   );
 }
 
-const CARD: React.CSSProperties = {
-  background: "#fff",
-  borderRadius: 12,
-  border: "1px solid #e7e5e4",
-  padding: 24,
-  marginBottom: 16,
-};
-
-const SECTION_LABEL: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#AAA",
-  marginBottom: 16,
-};
-
+const CARD: React.CSSProperties = { background: "#fff", borderRadius: 12, border: "1px solid #e7e5e4", padding: 24, marginBottom: 16 };
+const LABEL: React.CSSProperties = { fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 16 };
 const SpinIcon = () => (
-  <svg style={{ animation: "spin 1s linear infinite" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12a9 9 0 11-6.219-8.56" />
-  </svg>
+  <svg style={{ animation: "spin 1s linear infinite" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56" /></svg>
 );
 
 export default function ConnectClient() {
@@ -150,8 +122,7 @@ export default function ConnectClient() {
       if (res.ok && data.url) {
         window.location.href = data.url;
       } else {
-        const msg = data?.error || "";
-        setError(msg.toLowerCase().includes("connect") ? "CONNECT_NOT_ENABLED" : msg || "Failed to start Stripe onboarding.");
+        setError(data?.error || "Failed to start payout setup.");
         setOnboarding(false);
       }
     } catch (e: unknown) {
@@ -172,14 +143,10 @@ export default function ConnectClient() {
   useEffect(() => {
     if (isConnected) {
       setShowBanner(true);
-      const bannerTimer = setTimeout(() => setShowBanner(false), 6000);
+      const t = setTimeout(() => setShowBanner(false), 6000);
       let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        await fetchStatus();
-        if (attempts >= 5) clearInterval(poll);
-      }, 2000);
-      return () => { clearTimeout(bannerTimer); clearInterval(poll); };
+      const poll = setInterval(async () => { attempts++; await fetchStatus(); if (attempts >= 5) clearInterval(poll); }, 2000);
+      return () => { clearTimeout(t); clearInterval(poll); };
     }
   }, [isConnected, fetchStatus]);
 
@@ -189,7 +156,6 @@ export default function ConnectClient() {
 
   const orders = ordersData?.orders ?? [];
   const stats = ordersData?.stats;
-
   const productMap = new Map<string, { count: number; revenue: number }>();
   for (const o of orders) {
     const name = o.product_name || "Unknown";
@@ -198,11 +164,10 @@ export default function ConnectClient() {
   }
   const topProducts = [...productMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
   const now = new Date();
-  const ordersThisMonth = orders.filter((o) => {
-    const d = new Date(o.created_at);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+  const ordersThisMonth = orders.filter((o) => { const d = new Date(o.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length;
   const recentOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
+
+  const isPayoutActive = status?.connected && status?.charges_enabled;
 
   return (
     <>
@@ -211,177 +176,109 @@ export default function ConnectClient() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Payouts</h1>
-        <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Set up your bank details to receive payments from your customers</p>
+        <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Manage how you receive money from sales</p>
       </div>
-
-      {/* Error banner */}
-      {error && error !== "CONNECT_NOT_ENABLED" && (
-        <div style={{ ...CARD, background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {error}
-        </div>
-      )}
 
       {/* Success banner */}
       {showBanner && (
         <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
           Payouts set up successfully!
         </div>
       )}
 
-      {/* ── Empty state callout ── */}
-      {!loading && !status?.connected && (
-        <div style={{ ...CARD, background: "#FAFAF9", border: "1px solid #E7E5E4", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 12, padding: "32px 24px", marginBottom: 16 }}>
-          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>No payout account connected</div>
-            <div style={{ fontSize: 13, color: "#888" }}>Connect Stripe to start accepting payments and receiving payouts directly to your bank account.</div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Stripe Connect Card ── */}
-      {loading ? (
-        <div style={CARD}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#AAA", fontSize: 13 }}>
-            <SpinIcon /> Loading account status…
-          </div>
-        </div>
-      ) : !status?.connected ? (
-        <div style={CARD}>
-          {error === "CONNECT_NOT_ENABLED" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f5f5f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#57534e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#0c0a09", marginBottom: 4 }}>Create a Stripe account first</div>
-                <div style={{ fontSize: 13, color: "#78716c" }}>You need a free Stripe account to receive payouts — it only takes a few minutes.</div>
-              </div>
-              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", textDecoration: "none", width: "fit-content" }}>
-                Sign up for Stripe
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              </a>
-              <div style={{ fontSize: 12, color: "#AAA" }}>
-                Already have an account?{" "}
-                <button onClick={() => { setError(null); startOnboarding(); }} style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "#888", cursor: "pointer", textDecoration: "underline" }}>
-                  Try connecting again
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Set up payouts</div>
-                <div style={{ fontSize: 13, color: "#888" }}>Enter your bank details to receive payments from your customers. Volcity takes a <strong style={{ color: "#1A1A1A" }}>5% platform fee</strong> per sale.</div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  "Customers can check out on your store",
-                  "Funds go directly to your Stripe account",
-                  "Volcity deducts 5% per transaction",
-                ].map((step, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888" }}>
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#AAA" }}>{i + 1}</div>
-                    {step}
-                  </div>
-                ))}
-              </div>
-              {(status?.blocked_checkout_count ?? 0) > 0 && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, background: "#FEF3C7", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", fontWeight: 500 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                  </svg>
-                  {status?.blocked_checkout_count} {status?.blocked_checkout_count === 1 ? "person" : "people"} tried to buy while payments were disabled
-                </div>
-              )}
-              <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}>
-                {onboarding ? <><SpinIcon /> Redirecting…</> : "Set Up Payouts"}
-              </button>
-            </div>
-          )}
-        </div>
-      ) : !status.charges_enabled ? (
-        <div style={{ ...CARD, background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>Finish setting up payouts</div>
-              <div style={{ fontSize: 13, color: "#888" }}>Complete your bank details to start receiving payments.</div>
-            </div>
-            <button onClick={startOnboarding} disabled={onboarding} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}>
-              {onboarding ? <><SpinIcon /> Redirecting…</> : "Complete Setup"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── Section 1: Payouts ── */}
+      <div style={CARD}>
+        <div style={LABEL}>Payouts</div>
+        {loading ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#AAA", fontSize: 13 }}><SpinIcon /> Loading…</div>
+        ) : isPayoutActive ? (
+          /* Active state */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Payouts Active</div>
-                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>Your bank account is connected and ready to receive payments.</div>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 1 }}>
+                  {status?.payouts_enabled ? "Weekly payouts to your bank account" : "Payouts pending — finish setup in Stripe"}
+                </div>
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { label: "Account ID", value: status.connected_account_id, mono: true },
-                { label: "Payments", value: "Enabled", green: true },
-                { label: "Payouts", value: status.payouts_enabled ? "Enabled" : "Pending", green: status.payouts_enabled, yellow: !status.payouts_enabled },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.7)", border: "1px solid #D1FAE5" }}>
-                  <span style={{ fontSize: 13, color: "#555" }}>{row.label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, fontFamily: row.mono ? "monospace" : "inherit", color: row.green ? "#16a34a" : row.yellow ? "#D97706" : "#1A1A1A" }}>
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <a href="https://dashboard.stripe.com/express" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}>
-              Manage Account
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
+            {error && (
+              <div style={{ fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
+            )}
+            <a
+              href="https://dashboard.stripe.com/express"
+              target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
+            >
+              Manage Settings
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
             </a>
           </div>
+        ) : status?.connected && !status.charges_enabled ? (
+          /* Incomplete setup */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ fontSize: 14, color: "#555" }}>Complete your bank details to start receiving payouts.</div>
+            <button
+              onClick={startOnboarding}
+              disabled={onboarding}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}
+            >
+              {onboarding ? <><SpinIcon /> Redirecting…</> : "Complete Setup"}
+            </button>
+          </div>
+        ) : (
+          /* Not set up */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ fontSize: 14, color: "#555" }}>
+              Set up payouts to receive money from sales. Volcity takes a <strong style={{ color: "#1A1A1A" }}>5% platform fee</strong> — you keep the rest.
+            </div>
+            {(status?.blocked_checkout_count ?? 0) > 0 && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 7, background: "#FEF3C7", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", fontWeight: 500 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                {status?.blocked_checkout_count} {status?.blocked_checkout_count === 1 ? "customer" : "customers"} couldn&apos;t check out while payments were disabled
+              </div>
+            )}
+            {error && (
+              <div style={{ fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
+            )}
+            <button
+              onClick={startOnboarding}
+              disabled={onboarding}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}
+            >
+              {onboarding ? <><SpinIcon /> Redirecting…</> : "Set Up Payouts"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 2: How It Works ── */}
+      <div style={CARD}>
+        <div style={LABEL}>How It Works</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {[
+            { n: "1", title: "Customer orders", body: "Someone buys a product from your store — we handle checkout and payment processing." },
+            { n: "2", title: "We print & ship", body: "Your order goes straight to print. The product ships directly to your customer — no inventory, no hassle." },
+            { n: "3", title: "You get paid", body: "After Stripe and Volcity fees, your profit is deposited weekly to your bank account." },
+          ].map(({ n, title, body }, i) => (
+            <div key={n} style={{ display: "flex", gap: 14, paddingBottom: i < 2 ? 20 : 0, marginBottom: i < 2 ? 20 : 0, borderBottom: i < 2 ? "1px solid #F0EFED" : "none" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#888" }}>{n}</div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", marginBottom: 3 }}>{title}</div>
+                <div style={{ fontSize: 13, color: "#888", lineHeight: 1.55 }}>{body}</div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* ── Stats Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        {loadingOrders ? (
-          [1, 2, 3].map((i) => (
-            <div key={i} style={{ ...CARD, marginBottom: 0, height: 86 }} />
-          ))
-        ) : (
+        {loadingOrders ? [1, 2, 3].map((i) => <div key={i} style={{ ...CARD, marginBottom: 0, height: 86 }} />) : (
           <>
             {[
               { label: "Total Earned", value: fmt(stats?.totalRevenue ?? 0), sub: `${stats?.totalOrders ?? 0} orders all time` },
@@ -389,7 +286,7 @@ export default function ConnectClient() {
               { label: "Avg Order", value: fmt(stats?.avgOrderValue ?? 0), sub: "per transaction" },
             ].map(({ label, value, sub }) => (
               <div key={label} style={{ ...CARD, marginBottom: 0 }}>
-                <div style={SECTION_LABEL}>{label}</div>
+                <div style={LABEL}>{label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A1A1A", letterSpacing: "-0.02em", lineHeight: 1.1 }}>{value}</div>
                 <div style={{ fontSize: 12, color: "#AAA", marginTop: 4 }}>{sub}</div>
               </div>
@@ -400,28 +297,19 @@ export default function ConnectClient() {
 
       {/* ── Sales Chart ── */}
       <div style={CARD}>
-        <div style={SECTION_LABEL}>Sales — Last 7 Days</div>
-        {loadingOrders ? (
-          <div style={{ height: 128, background: "#EEEDE9", borderRadius: 8 }} />
-        ) : (
-          <SalesChart orders={orders} />
-        )}
+        <div style={LABEL}>Sales — Last 7 Days</div>
+        {loadingOrders ? <div style={{ height: 128, background: "#EEEDE9", borderRadius: 8 }} /> : <SalesChart orders={orders} />}
       </div>
 
       {/* ── Best Sellers ── */}
       <div style={CARD}>
-        <div style={SECTION_LABEL}>Best Sellers</div>
+        <div style={LABEL}>Best Sellers</div>
         {loadingOrders ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[1, 2, 3].map((i) => <div key={i} style={{ height: 44, background: "#EEEDE9", borderRadius: 8 }} />)}
           </div>
         ) : topProducts.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEEDE9", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            </div>
             <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>Your best sellers will appear here once you start getting sales.</p>
           </div>
         ) : (
@@ -440,18 +328,13 @@ export default function ConnectClient() {
 
       {/* ── Recent Activity ── */}
       <div style={CARD}>
-        <div style={SECTION_LABEL}>Recent Activity</div>
+        <div style={LABEL}>Recent Activity</div>
         {loadingOrders ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[1, 2, 3, 4].map((i) => <div key={i} style={{ height: 32, background: "#EEEDE9", borderRadius: 8 }} />)}
           </div>
         ) : recentOrders.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEEDE9", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
             <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>Activity will appear here once you start getting orders.</p>
           </div>
         ) : (

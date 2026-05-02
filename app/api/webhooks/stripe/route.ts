@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Redis } from "@upstash/redis";
+import { fulfillOrder } from "@/lib/printful";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -192,82 +193,58 @@ async function handleCheckoutComplete(
 
   console.log("[webhook] Order inserted successfully for session:", session.id);
 
-  // Auto-fulfill with Printful if the store owner has a connected Printful account
-  if (userId && shippingAddress) {
+  // Auto-fulfill with Printful via the master account if the order has a Printful product
+  const syncProductId = session.metadata?.printful_sync_product_id || null;
+  if (syncProductId && shippingAddress) {
     try {
-      const { data: printfulConnection } = await getSupabaseAdmin()
-        .from("printful_connections")
-        .select("access_token")
-        .eq("user_id", userId)
-        .maybeSingle();
+      // Resolve sync variant ID from the sync product
+      let syncVariantId: string | null = session.metadata?.printful_variant_id || null;
 
-      if (printfulConnection) {
-        // Resolve the Printful sync variant ID to use for fulfillment.
-        // Prefer an explicit variant ID in metadata; fall back to looking up
-        // the first variant of the sync product if only the product ID is known.
-        let syncVariantId: string | null = session.metadata?.printful_variant_id || null;
-
-        if (!syncVariantId) {
-          const syncProductId = session.metadata?.printful_sync_product_id || null;
-          if (syncProductId) {
-            const variantRes = await fetch(`https://api.printful.com/sync/products/${syncProductId}`, {
-              headers: { Authorization: `Bearer ${printfulConnection.access_token}` },
-            });
-            if (variantRes.ok) {
-              const variantData = await variantRes.json().catch(() => null);
-              const firstVariant = variantData?.result?.sync_variants?.[0];
-              if (firstVariant?.id) {
-                syncVariantId = String(firstVariant.id);
-                console.log("[webhook] Resolved Printful sync_variant_id:", syncVariantId, "from sync_product_id:", syncProductId);
-              } else {
-                console.warn("[webhook] Printful sync product has no variants, skipping auto-fulfill. product_id:", syncProductId);
-              }
-            } else {
-              console.warn("[webhook] Could not fetch Printful sync product variants for id:", syncProductId);
-            }
+      if (!syncVariantId) {
+        const variantRes = await fetch(`https://api.printful.com/sync/products/${syncProductId}`, {
+          headers: { Authorization: `Bearer ${process.env.PRINTFUL_MASTER_API_KEY}` },
+        });
+        if (variantRes.ok) {
+          const variantData = await variantRes.json().catch(() => null);
+          const firstVariant = variantData?.result?.sync_variants?.[0];
+          if (firstVariant?.id) {
+            syncVariantId = String(firstVariant.id);
+          } else {
+            console.warn("[webhook] Printful sync product has no variants, skipping. product_id:", syncProductId);
           }
         }
+      }
 
-        if (syncVariantId) {
-          const fulfillRes = await fetch("https://api.printful.com/orders", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${printfulConnection.access_token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              recipient: {
-                name: customerData.fullName || customerEmail,
-                address1: shippingAddress.line1,
-                address2: shippingAddress.line2 || undefined,
-                city: shippingAddress.city,
-                state_code: shippingAddress.state,
-                zip: shippingAddress.zip,
-                country_code: shippingAddress.country,
-                email: customerData.email || customerEmail,
-                phone: customerData.phone || undefined,
-              },
-              items: [
-                {
-                  sync_variant_id: syncVariantId,
-                  quantity: 1,
-                },
-              ],
-            }),
-          });
+      if (syncVariantId) {
+        const printfulResult = await fulfillOrder({
+          id: session.id,
+          customer_name: customerData.fullName || customerEmail,
+          shipping_method: customerData.shippingMethod || "STANDARD",
+          shipping_address: {
+            line1: shippingAddress.line1,
+            line2: shippingAddress.line2,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            zip: shippingAddress.zip,
+            country: shippingAddress.country,
+          },
+          items: [{
+            printful_variant_id: syncVariantId,
+            fulfillment_type: "printful",
+            quantity: 1,
+          }],
+        });
 
-          if (fulfillRes.ok) {
-            await getSupabaseAdmin()
-              .from("orders")
-              .update({ fulfillment_status: "fulfilled", fulfillment_notes: "Auto-fulfilled via Printful" })
-              .eq("stripe_session_id", session.id);
-            console.log("[webhook] Printful order created for session:", session.id);
-          } else {
-            const errData = await fulfillRes.json().catch(() => ({}));
-            console.error("[webhook] Printful order creation failed:", errData);
-          }
-        } else {
-          console.log("[webhook] Printful connected but no sync variant ID could be resolved — skipping auto-fulfill");
+        if (printfulResult) {
+          await getSupabaseAdmin()
+            .from("orders")
+            .update({
+              fulfillment_status: "processing",
+              printful_order_id: String(printfulResult.id),
+              sent_to_printful_at: new Date().toISOString(),
+            })
+            .eq("stripe_session_id", session.id);
+          console.log("[webhook] Printful order created:", printfulResult.id, "for session:", session.id);
         }
       }
     } catch (fulfillErr) {

@@ -65,6 +65,7 @@ export type ShippingItem = {
 export async function createPrintfulProduct(
   userId: string,
   productId: string,
+  productName: string,
   designUrl: string,
   variants: PrintfulVariantInput[]
 ): Promise<{ sync_product: { id: number; external_id: string } }> {
@@ -75,7 +76,7 @@ export async function createPrintfulProduct(
     headers: getHeaders(),
     body: JSON.stringify({
       sync_product: {
-        name: externalId,
+        name: productName,
         external_id: externalId,
         thumbnail: designUrl,
       },
@@ -165,6 +166,49 @@ export async function getProductCost(catalogVariantId: number): Promise<number> 
 
   const data = await response.json();
   return parseFloat(data.result?.price ?? '0');
+}
+
+// ── 4a. Get catalog product with variants ────────────────────────────────────
+
+export type CatalogVariant = {
+  id: number;
+  name: string;
+  size: string;
+  color: string;
+  color_code?: string;
+  price: string;
+  currency: string;
+  in_stock: boolean;
+};
+
+export type CatalogProductDetail = {
+  id: number;
+  title: string;
+  type: string;
+  brand: string;
+  model: string;
+  thumbnail_url?: string;
+  image?: string;
+};
+
+/**
+ * Returns a single Printful catalog product with its full variant list.
+ * Used to populate variant selection and get pricing during product creation.
+ */
+export async function getCatalogProduct(
+  productId: number
+): Promise<{ product: CatalogProductDetail; variants: CatalogVariant[] }> {
+  const response = await fetch(`${PRINTFUL_API}/products/${productId}`, {
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(`Printful getCatalogProduct failed: ${err?.result || response.status}`);
+  }
+
+  const data = await response.json();
+  return data.result;
 }
 
 // ── 4. Get catalog products ───────────────────────────────────────────────────
