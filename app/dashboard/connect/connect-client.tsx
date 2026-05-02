@@ -3,21 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
-type PFProduct = {
-  id: number;
-  name: string;
-  thumbnail_url?: string;
-};
-
-type UserProject = { id: string; name: string };
-
-type PrintfulStatus = {
-  connected: boolean;
-  store_name?: string;
-  store_id?: string;
-  connected_at?: string;
-};
-
 type ConnectStatus = {
   connected: boolean;
   connected_account_id: string | null;
@@ -134,7 +119,6 @@ export default function ConnectClient() {
   const searchParams = useSearchParams();
   const isConnected = searchParams.get("connected") === "1";
   const isRefresh = searchParams.get("refresh") === "1";
-  const printfulParam = searchParams.get("printful");
 
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,22 +127,6 @@ export default function ConnectClient() {
   const [error, setError] = useState<string | null>(null);
   const [ordersData, setOrdersData] = useState<OrdersData | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [printfulStatus, setPrintfulStatus] = useState<PrintfulStatus | null>(null);
-  const [loadingPrintful, setLoadingPrintful] = useState(true);
-  const [showPrintfulBanner, setShowPrintfulBanner] = useState(false);
-  const [printfulError, setPrintfulError] = useState(false);
-  const [showPrintfulPrompt, setShowPrintfulPrompt] = useState(false);
-
-  // Import modal state
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [pfProducts, setPfProducts] = useState<PFProduct[]>([]);
-  const [loadingPfProducts, setLoadingPfProducts] = useState(false);
-  const [selectedPfIds, setSelectedPfIds] = useState<Set<number>>(new Set());
-  const [userProjects, setUserProjects] = useState<UserProject[]>([]);
-  const [importProjectId, setImportProjectId] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ added: number } | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -192,97 +160,14 @@ export default function ConnectClient() {
     }
   }, []);
 
-  const fetchPrintfulStatus = useCallback(async () => {
-    setLoadingPrintful(true);
-    try {
-      const res = await fetch("/api/printful/status");
-      const data = await res.json().catch(() => null);
-      if (res.ok && data) setPrintfulStatus(data);
-    } catch {
-      // silently ignore
-    } finally {
-      setLoadingPrintful(false);
-    }
-  }, []);
-
-  const openImportModal = useCallback(async () => {
-    setShowImportModal(true);
-    setSelectedPfIds(new Set());
-    setImportResult(null);
-    setImportError(null);
-
-    // Fetch Printful sync products and user projects in parallel
-    setLoadingPfProducts(true);
-    const [pfRes, projRes] = await Promise.all([
-      fetch("/api/printful/sync-products"),
-      fetch("/api/projects"),
-    ]);
-    setLoadingPfProducts(false);
-
-    if (pfRes.ok) {
-      const d = await pfRes.json();
-      setPfProducts(d.products ?? []);
-    } else {
-      setImportError("Failed to load Printful products. Check your connection.");
-    }
-
-    if (projRes.ok) {
-      const projects = await projRes.json().catch(() => []);
-      if (Array.isArray(projects)) {
-        setUserProjects(projects as UserProject[]);
-        if (projects.length > 0) setImportProjectId(projects[0].id);
-      }
-    }
-  }, []);
-
-  const doImport = useCallback(async () => {
-    if (!importProjectId || selectedPfIds.size === 0) return;
-    setImporting(true);
-    setImportError(null);
-    try {
-      const products = pfProducts
-        .filter((p) => selectedPfIds.has(p.id))
-        .map((p) => ({ printfulId: p.id, name: p.name, thumbnailUrl: p.thumbnail_url }));
-
-      const res = await fetch("/api/printful/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: importProjectId, products }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setImportResult({ added: data.added ?? 0 });
-      } else {
-        setImportError(data?.error || "Import failed. Please try again.");
-      }
-    } catch {
-      setImportError("Network error. Please try again.");
-    } finally {
-      setImporting(false);
-    }
-  }, [importProjectId, selectedPfIds, pfProducts]);
-
   useEffect(() => {
     fetchStatus();
-    fetchPrintfulStatus();
     fetch("/api/orders")
       .then((r) => r.json())
       .then((d) => setOrdersData(d))
       .catch(() => {})
       .finally(() => setLoadingOrders(false));
-  }, [fetchStatus, fetchPrintfulStatus]);
-
-  useEffect(() => {
-    if (printfulParam === "connected") {
-      setShowPrintfulBanner(true);
-      const t = setTimeout(() => setShowPrintfulBanner(false), 6000);
-      fetchPrintfulStatus();
-      return () => clearTimeout(t);
-    }
-    if (printfulParam === "error") {
-      setPrintfulError(true);
-    }
-  }, [printfulParam, fetchPrintfulStatus]);
+  }, [fetchStatus]);
 
   useEffect(() => {
     if (isConnected) {
@@ -297,14 +182,6 @@ export default function ConnectClient() {
       return () => { clearTimeout(bannerTimer); clearInterval(poll); };
     }
   }, [isConnected, fetchStatus]);
-
-  // Show Printful prompt after Stripe connects (if Printful not yet connected)
-  useEffect(() => {
-    if (isConnected && !loadingPrintful && printfulStatus && !printfulStatus.connected) {
-      const t = setTimeout(() => setShowPrintfulPrompt(true), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [isConnected, loadingPrintful, printfulStatus]);
 
   useEffect(() => {
     if (isRefresh && !loading && status && !status.charges_enabled) startOnboarding();
@@ -358,16 +235,16 @@ export default function ConnectClient() {
       )}
 
       {/* ── Empty state callout ── */}
-      {!loading && !loadingPrintful && !status?.connected && !printfulStatus?.connected && (
+      {!loading && !status?.connected && (
         <div style={{ ...CARD, background: "#FAFAF9", border: "1px solid #E7E5E4", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 12, padding: "32px 24px", marginBottom: 16 }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>No integrations connected</div>
-            <div style={{ fontSize: 13, color: "#888" }}>Connect Stripe to accept payments, and Printful to sell physical products without holding inventory.</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 4 }}>No payout account connected</div>
+            <div style={{ fontSize: 13, color: "#888" }}>Connect Stripe to start accepting payments and receiving payouts directly to your bank account.</div>
           </div>
         </div>
       )}
@@ -498,117 +375,6 @@ export default function ConnectClient() {
         </div>
       )}
 
-      {/* ── Printful Card ── */}
-      {showPrintfulBanner && (
-        <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-          Printful account connected!
-        </div>
-      )}
-      {printfulError && (
-        <div style={{ ...CARD, background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          Failed to connect Printful. Please try again.
-        </div>
-      )}
-
-      <div style={CARD}>
-        {loadingPrintful ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#AAA", fontSize: 13 }}>
-            <SpinIcon /> Loading Printful status…
-          </div>
-        ) : printfulStatus?.connected ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Printful Connected</div>
-                <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{printfulStatus.store_name || "Store connected"}</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { label: "Store", value: printfulStatus.store_name || "—" },
-                { label: "Store ID", value: printfulStatus.store_id || "—", mono: true },
-                { label: "Fulfillment", value: "Active", green: true },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, background: "#FAFAF8", border: "1px solid #EEEDE9" }}>
-                  <span style={{ fontSize: 13, color: "#555" }}>{row.label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, fontFamily: row.mono ? "monospace" : "inherit", color: row.green ? "#16a34a" : "#1A1A1A" }}>
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                onClick={openImportModal}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#4F46E5", color: "#fff", border: "none", cursor: "pointer", width: "fit-content" }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Import Products
-              </button>
-              <a
-                href={"/api/printful/connect"}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
-              >
-                Reconnect Printful
-              </a>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Printful</div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: "#6B7280", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 4, padding: "2px 6px" }}>Optional</span>
-              </div>
-              <div style={{ fontSize: 13, color: "#888" }}>Automatically print and ship products when orders come in. Great for t-shirts, mugs, phone cases &mdash; no inventory needed.</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[
-                "Customer places an order on your store",
-                "Printful auto-fulfills and ships directly to them",
-                "You keep the profit margin",
-              ].map((step, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#888" }}>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#AAA" }}>{i + 1}</div>
-                  {step}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 6, background: "#EEEDE9", width: "fit-content" }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#AAA" }} />
-              <span style={{ fontSize: 12, color: "#888" }}>Not connected</span>
-            </div>
-            <a
-              href={"/api/printful/connect"}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
-            >
-              Connect Printful Account
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </a>
-          </div>
-        )}
-      </div>
-
       {/* ── Stats Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         {loadingOrders ? (
@@ -671,207 +437,6 @@ export default function ConnectClient() {
           </div>
         )}
       </div>
-
-      {/* ── Printful Post-Stripe Prompt ── */}
-      {showPrintfulPrompt && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}>
-          <div style={{ width: "100%", maxWidth: 440, background: "#fff", borderRadius: 20, boxShadow: "0 24px 60px rgba(0,0,0,0.2)", padding: "28px 28px 24px", margin: 16 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
-              </svg>
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#1A1A1A", marginBottom: 8 }}>Sell physical products?</div>
-            <p style={{ fontSize: 13, color: "#888", lineHeight: 1.65, marginBottom: 20 }}>
-              Connect Printful to automatically print and ship products when orders come in — no inventory required. Perfect for t-shirts, mugs, phone cases, and more.
-            </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <a
-                href={"/api/printful/connect"}
-                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", gap: 6 }}
-              >
-                Connect Printful
-              </a>
-              <button
-                onClick={() => setShowPrintfulPrompt(false)}
-                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid #E7E5E4", background: "#fff", color: "#888", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-              >
-                I&apos;ll handle fulfillment myself
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Import Printful Products Modal ── */}
-      {showImportModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-          <div style={{ width: "100%", maxWidth: 540, background: "#fff", borderRadius: 20, boxShadow: "0 24px 60px rgba(0,0,0,0.2)", margin: 16, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
-            {/* Modal header */}
-            <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ fontSize: 17, fontWeight: 700, color: "#1A1A1A" }}>Import Printful Products</div>
-                <button onClick={() => setShowImportModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#AAA", padding: 4, display: "flex" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-              <p style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>Select which products to add to your store</p>
-
-              {/* Project selector */}
-              {userProjects.length > 1 && !importResult && (
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", display: "block", marginBottom: 6 }}>Import to store</label>
-                  <select
-                    value={importProjectId}
-                    onChange={(e) => setImportProjectId(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #E7E5E4", fontSize: 13, color: "#1A1A1A", background: "#fff", outline: "none" }}
-                  >
-                    {userProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Modal body */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "0 24px" }}>
-              {importResult ? (
-                <div style={{ textAlign: "center", padding: "32px 0" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#F0FDF4", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 6 }}>
-                    {importResult.added === 0 ? "Already imported" : `${importResult.added} product${importResult.added === 1 ? "" : "s"} imported!`}
-                  </div>
-                  <p style={{ fontSize: 13, color: "#888" }}>
-                    {importResult.added === 0
-                      ? "These products were already in your store."
-                      : "Open your store in the builder to set prices and publish."}
-                  </p>
-                </div>
-              ) : loadingPfProducts ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, padding: "16px 0" }}>
-                  {[1,2,3,4].map((i) => (
-                    <div key={i} style={{ height: 100, background: "#F5F4F2", borderRadius: 10, animation: "pulse 1.5s ease-in-out infinite" }} />
-                  ))}
-                </div>
-              ) : importError && pfProducts.length === 0 ? (
-                <div style={{ padding: "24px 0", textAlign: "center", fontSize: 13, color: "#991B1B" }}>{importError}</div>
-              ) : pfProducts.length === 0 ? (
-                <div style={{ padding: "32px 0", textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: "#AAA" }}>No products found in your Printful store.</p>
-                  <a href="https://www.printful.com/dashboard/sync" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#4F46E5", textDecoration: "underline" }}>
-                    Add products in Printful
-                  </a>
-                </div>
-              ) : (
-                <div style={{ padding: "8px 0" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, color: "#888" }}>{pfProducts.length} product{pfProducts.length !== 1 ? "s" : ""} in your Printful store</span>
-                    <button
-                      onClick={() => {
-                        if (selectedPfIds.size === pfProducts.length) {
-                          setSelectedPfIds(new Set());
-                        } else {
-                          setSelectedPfIds(new Set(pfProducts.map((p) => p.id)));
-                        }
-                      }}
-                      style={{ fontSize: 12, color: "#4F46E5", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                    >
-                      {selectedPfIds.size === pfProducts.length ? "Deselect all" : "Select all"}
-                    </button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                    {pfProducts.map((p) => {
-                      const selected = selectedPfIds.has(p.id);
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            setSelectedPfIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(p.id)) next.delete(p.id);
-                              else next.add(p.id);
-                              return next;
-                            });
-                          }}
-                          style={{
-                            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8,
-                            padding: 10, borderRadius: 10, border: `2px solid ${selected ? "#4F46E5" : "#E7E5E4"}`,
-                            background: selected ? "#EEF2FF" : "#FAFAF8", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s",
-                          }}
-                        >
-                          {p.thumbnail_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.thumbnail_url} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }} />
-                          ) : (
-                            <div style={{ width: "100%", aspectRatio: "1", background: "#EEEDE9", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" />
-                              </svg>
-                            </div>
-                          )}
-                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", width: "100%", gap: 6 }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: "#1A1A1A", lineHeight: 1.4, flex: 1 }}>{p.name}</span>
-                            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${selected ? "#4F46E5" : "#CCC"}`, background: selected ? "#4F46E5" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {selected && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {importError && (
-                    <div style={{ marginTop: 12, fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{importError}</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Modal footer */}
-            <div style={{ padding: "16px 24px 24px", flexShrink: 0, borderTop: "1px solid #F0EFED" }}>
-              {importResult ? (
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => setShowImportModal(false)}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                  >
-                    Done
-                  </button>
-                  {importResult.added > 0 && (
-                    <a
-                      href={importProjectId ? `/?project=${importProjectId}` : "/"}
-                      style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid #E7E5E4", background: "#fff", color: "#1A1A1A", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
-                    >
-                      Open in Builder
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={doImport}
-                    disabled={importing || selectedPfIds.size === 0 || !importProjectId}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#4F46E5", color: "#fff", fontSize: 13, fontWeight: 600, cursor: importing || selectedPfIds.size === 0 ? "not-allowed" : "pointer", opacity: importing || selectedPfIds.size === 0 ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-                  >
-                    {importing && <SpinIcon />}
-                    {importing ? "Importing…" : selectedPfIds.size === 0 ? "Select products" : `Import ${selectedPfIds.size} product${selectedPfIds.size === 1 ? "" : "s"}`}
-                  </button>
-                  <button
-                    onClick={() => setShowImportModal(false)}
-                    style={{ flex: 0, padding: "10px 16px", borderRadius: 10, border: "1px solid #E7E5E4", background: "#fff", color: "#888", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Recent Activity ── */}
       <div style={CARD}>
