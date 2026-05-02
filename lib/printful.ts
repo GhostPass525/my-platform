@@ -5,13 +5,16 @@
 
 const PRINTFUL_API = 'https://api.printful.com';
 
-function getHeaders() {
+function getHeaders(): Record<string, string> {
   const key = process.env.PRINTFUL_MASTER_API_KEY;
   if (!key) throw new Error('PRINTFUL_MASTER_API_KEY is not set');
-  return {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${key}`,
     'Content-Type': 'application/json',
   };
+  const storeId = process.env.PRINTFUL_STORE_ID;
+  if (storeId) headers['X-PF-Store-Id'] = storeId;
+  return headers;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
