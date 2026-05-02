@@ -2300,8 +2300,36 @@ export default function Home() {
           userId={userId}
           uploadDesign={(file) => uploadSiteImage(file, "product-design")}
           onProductCreated={(product: NewProduct) => {
-            addProduct(product);
+            if (!site) return;
+            const newProduct: Product = { ...product };
+            const updatedSite = { ...site, products: [...site.products, newProduct] };
+            setSite(updatedSite);
+            trackAction("Added a product");
             setShowAddProductModal(false);
+
+            // Navigate preview to the Products page so the new product is immediately visible
+            const productsPage = updatedSite.pages.find((p) => p.key === "products");
+            if (productsPage) setActivePageId(productsPage.id);
+
+            // Immediately save to Supabase — don't wait 30s for autosave
+            if (projectId) {
+              console.log("[builder] saving product to site_json, products count:", updatedSite.products.length);
+              setSaveStatus("saving");
+              fetch(`/api/projects/${projectId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ site: updatedSite }),
+              })
+                .then((r) => {
+                  if (r.ok) {
+                    setSaveStatus("saved");
+                    setTimeout(() => setSaveStatus("idle"), 3000);
+                  } else {
+                    setSaveStatus("failed");
+                  }
+                })
+                .catch(() => setSaveStatus("failed"));
+            }
           }}
           onClose={() => setShowAddProductModal(false)}
         />

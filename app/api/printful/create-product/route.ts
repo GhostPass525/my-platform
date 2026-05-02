@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { createPrintfulProduct, type PrintfulVariantInput } from '@/lib/printful';
+import { createPrintfulProduct, getPrintfulHeaders, type PrintfulVariantInput } from '@/lib/printful';
 import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -55,11 +55,30 @@ export async function POST(req: Request) {
       variantInputs
     );
 
+    // Fetch the sync product to get the generated mockup thumbnail
+    let thumbnailUrl: string | null = result.thumbnail_url || null;
+    if (!thumbnailUrl) {
+      try {
+        const detailRes = await fetch(`https://api.printful.com/store/products/${result.id}`, {
+          headers: getPrintfulHeaders(),
+        });
+        if (detailRes.ok) {
+          const detail = await detailRes.json();
+          thumbnailUrl = detail?.result?.sync_product?.thumbnail_url
+            || detail?.result?.thumbnail_url
+            || null;
+          console.log('[printful/create-product] fetched thumbnail_url:', thumbnailUrl);
+        }
+      } catch (thumbErr) {
+        console.warn('[printful/create-product] could not fetch thumbnail:', thumbErr);
+      }
+    }
+
     return NextResponse.json({
       syncProductId: result.id,
       externalId: result.external_id,
       productId,
-      thumbnailUrl: result.thumbnail_url || null,
+      thumbnailUrl,
     });
   } catch (err: unknown) {
     console.error('[printful/create-product]', err);
