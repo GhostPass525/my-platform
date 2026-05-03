@@ -177,10 +177,18 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [designUrl, setDesignUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Step 2 — tab
+  const [designMode, setDesignMode] = useState<"upload" | "ai">("upload");
   // Step 2 — mockup preview
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [previewMockupUrls, setPreviewMockupUrls] = useState<string[]>([]);
   const [previewUploadedUrl, setPreviewUploadedUrl] = useState<string | null>(null);
+  // Step 2 — AI generation
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiStyle, setAiStyle] = useState("minimalist");
+  const [aiState, setAiState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [aiGeneratedUrls, setAiGeneratedUrls] = useState<string[]>([]);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Step 3
   const [price, setPrice] = useState(0);
@@ -280,10 +288,10 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
 
   // Generate and display a real Printful mockup preview (button-triggered)
   async function handlePreviewMockup() {
-    if (!designFile || !selectedProduct || variants.length === 0) return;
+    if ((!designFile && !previewUploadedUrl) || !selectedProduct || variants.length === 0) return;
     setPreviewState("loading");
     try {
-      const uploadUrl = previewUploadedUrl || await uploadDesign(designFile);
+      const uploadUrl = previewUploadedUrl || await uploadDesign(designFile!);
       if (!previewUploadedUrl) setPreviewUploadedUrl(uploadUrl);
       const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
       const nat = designNaturalSize ?? { w: 1, h: 1 };
@@ -302,6 +310,49 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     } catch {
       setPreviewState("error");
     }
+  }
+
+  // AI design generation
+  async function handleGenerateDesign() {
+    if (!aiPrompt.trim()) return;
+    setAiState("loading");
+    setAiError(null);
+    setAiGeneratedUrls([]);
+    try {
+      const res = await fetch("/api/ai/generate-design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt.trim(), style: aiStyle }),
+      });
+      const data = await res.json();
+      if (data.comingSoon) {
+        setAiError("AI generation coming soon! Upload your own design for now.");
+        setAiState("error");
+        return;
+      }
+      if (!res.ok || !Array.isArray(data.imageUrls) || data.imageUrls.length === 0) {
+        throw new Error(data.error || "Generation failed");
+      }
+      setAiGeneratedUrls(data.imageUrls);
+      setAiState("done");
+    } catch (e: unknown) {
+      setAiError((e as Error)?.message || "Generation failed. Please try again.");
+      setAiState("error");
+    }
+  }
+
+  // Select an AI-generated image as the design
+  function selectAiImage(url: string) {
+    setDesignPreview(url);
+    setPreviewUploadedUrl(url);
+    setDesignFile(null);
+    setDesignNaturalSize(null);
+    setPreviewState("idle");
+    setPreviewMockupUrls([]);
+    // Load natural dimensions for position calculations
+    const img = new Image();
+    img.onload = () => setDesignNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = url;
   }
 
   // Generate mockups in background — doesn't block navigation
@@ -331,11 +382,11 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
 
   // Upload design and advance; reuse preview upload/mockups if already generated
   async function handleUploadAndNext() {
-    if (!designFile) return;
+    if (!designFile && !previewUploadedUrl) return;
     setUploading(true);
     setError(null);
     try {
-      const url = previewUploadedUrl || await uploadDesign(designFile);
+      const url = previewUploadedUrl || await uploadDesign(designFile!);
       setDesignUrl(url);
       setStep(3);
       if (previewMockupUrls.length > 0) {
@@ -611,129 +662,288 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
             </div>
           )}
 
-          {/* ── STEP 2: Upload Design ── */}
+          {/* ── STEP 2: Design ── */}
           {!success && step === 2 && (
             <div>
-              {selectedCategory && (
-                <div style={{ marginBottom: 14, fontSize: 12, color: "#888", background: "#FAFAF8", border: "1px solid #EEEDE9", borderRadius: 8, padding: "8px 12px" }}>
-                  <strong style={{ color: "#555" }}>Design requirements:</strong> {DESIGN_REQS[selectedCategory]}
+              {/* Tab toggle */}
+              <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1.5px solid #E7E5E4", borderRadius: 10, overflow: "hidden" }}>
+                {([ { id: "upload", label: "Upload Design" }, { id: "ai", label: "Generate with AI" } ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setDesignMode(tab.id)}
+                    style={{ flex: 1, padding: "9px 0", border: "none", background: designMode === tab.id ? "#0f172a" : "#FAFAF8", color: designMode === tab.id ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── UPLOAD tab ── */}
+              {designMode === "upload" && (
+                <div>
+                  {selectedCategory && (
+                    <div style={{ marginBottom: 14, fontSize: 12, color: "#888", background: "#FAFAF8", border: "1px solid #EEEDE9", borderRadius: 8, padding: "8px 12px" }}>
+                      <strong style={{ color: "#555" }}>Design requirements:</strong> {DESIGN_REQS[selectedCategory]}
+                    </div>
+                  )}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }}
+                  />
+                  {!designFile && !previewUploadedUrl ? (
+                    <div
+                      onClick={() => fileRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFileChange(f); }}
+                      style={{ border: "2px dashed #E7E5E4", borderRadius: 12, padding: "48px 24px", textAlign: "center", cursor: "pointer", transition: "border-color 0.15s" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#0f172a"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#E7E5E4"; }}
+                    >
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 12px" }}>
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A", marginBottom: 4 }}>Upload your design</div>
+                      <div style={{ fontSize: 12, color: "#AAA" }}>PNG, JPG or WebP · max 25 MB · drag & drop or click</div>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Design / mockup preview area */}
+                      {previewState === "idle" && (
+                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
+                          {designPreview && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={designPreview} alt="Design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                          )}
+                        </div>
+                      )}
+                      {previewState === "loading" && (
+                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                          </svg>
+                          <div style={{ fontSize: 13, color: "#888" }}>Generating mockup… this takes ~30 seconds</div>
+                        </div>
+                      )}
+                      {previewState === "done" && previewMockupUrls.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
+                          {previewMockupUrls.length > 1 && (
+                            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                              {previewMockupUrls.slice(0, 4).map((url, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img key={i} src={url} alt={`Angle ${i + 1}`} style={{ width: 58, height: 58, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4" }} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {previewState === "error" && (
+                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ flex: 1 }}>Preview generation failed. You can still proceed.</span>
+                          <button onClick={handlePreviewMockup} style={{ background: "none", border: "1px solid #D97706", borderRadius: 6, color: "#92400E", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile?.name ?? "AI-generated design"}</span>
+                        <button onClick={() => { setDesignFile(null); setDesignPreview(null); setPreviewUploadedUrl(null); setPreviewState("idle"); setPreviewMockupUrls([]); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px", flexShrink: 0 }}>
+                          Change
+                        </button>
+                      </div>
+
+                      {/* Placement presets */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setDesignPlacement(preset.id)}
+                              style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Scale slider */}
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
+                          Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={40} max={90} step={5}
+                          value={designScale}
+                          onChange={(e) => setDesignScale(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#0f172a" }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}>
+                          <span>Small</span><span>Large</span>
+                        </div>
+                      </div>
+
+                      {/* Preview Mockup button */}
+                      <button
+                        onClick={handlePreviewMockup}
+                        disabled={previewState === "loading" || !selectedProduct || variants.length === 0}
+                        style={{
+                          width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a",
+                          background: previewState === "loading" ? "#F5F4F2" : "#fff",
+                          color: previewState === "loading" ? "#AAA" : "#0f172a",
+                          fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }}
-              />
-              {!designFile ? (
-                <div
-                  onClick={() => fileRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFileChange(f); }}
-                  style={{ border: "2px dashed #E7E5E4", borderRadius: 12, padding: "48px 24px", textAlign: "center", cursor: "pointer", transition: "border-color 0.15s" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#0f172a"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#E7E5E4"; }}
-                >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 12px" }}>
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A", marginBottom: 4 }}>Upload your design</div>
-                  <div style={{ fontSize: 12, color: "#AAA" }}>PNG, JPG or WebP · max 25 MB · drag & drop or click</div>
-                </div>
-              ) : (
+
+              {/* ── AI GENERATE tab ── */}
+              {designMode === "ai" && (
                 <div>
-                  {/* Design / mockup preview area */}
-                  {previewState === "idle" && (
-                    <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
-                      {designPreview && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={designPreview} alt="Design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                  {/* If AI image already selected, show it with placement controls */}
+                  {designPreview && previewUploadedUrl && !designFile ? (
+                    <div>
+                      {previewState === "idle" && (
+                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={designPreview} alt="Generated design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {previewState === "loading" && (
-                    <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
-                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                      </svg>
-                      <div style={{ fontSize: 13, color: "#888" }}>Generating mockup… this takes ~30 seconds</div>
-                    </div>
-                  )}
-                  {previewState === "done" && previewMockupUrls.length > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
-                      {previewMockupUrls.length > 1 && (
-                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                          {previewMockupUrls.slice(0, 4).map((url, i) => (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img key={i} src={url} alt={`Angle ${i + 1}`} style={{ width: 58, height: 58, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4" }} />
+                      {previewState === "loading" && (
+                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                          </svg>
+                          <div style={{ fontSize: 13, color: "#888" }}>Generating mockup…</div>
+                        </div>
+                      )}
+                      {previewState === "done" && previewMockupUrls.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
+                        </div>
+                      )}
+                      {previewState === "error" && (
+                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ flex: 1 }}>Preview failed. You can still proceed.</span>
+                          <button onClick={handlePreviewMockup} style={{ background: "none", border: "1px solid #D97706", borderRadius: 6, color: "#92400E", fontSize: 11, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
+                        <span>AI-generated design selected</span>
+                        <button onClick={() => { setDesignPreview(null); setPreviewUploadedUrl(null); setPreviewState("idle"); setPreviewMockupUrls([]); setAiState("done"); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px" }}>
+                          Change
+                        </button>
+                      </div>
+
+                      {/* Placement presets */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
+                            <button key={preset.id} onClick={() => setDesignPlacement(preset.id)} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                              {preset.label}
+                            </button>
                           ))}
+                        </div>
+                      </div>
+
+                      {/* Scale slider */}
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
+                          Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
+                        </div>
+                        <input type="range" min={40} max={90} step={5} value={designScale} onChange={(e) => setDesignScale(Number(e.target.value))} style={{ width: "100%", accentColor: "#0f172a" }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}><span>Small</span><span>Large</span></div>
+                      </div>
+
+                      <button onClick={handlePreviewMockup} disabled={previewState === "loading" || !selectedProduct || variants.length === 0} style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a", background: previewState === "loading" ? "#F5F4F2" : "#fff", color: previewState === "loading" ? "#AAA" : "#0f172a", fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer" }}>
+                        {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Prompt input */}
+                      <div style={{ marginBottom: 12 }}>
+                        <input
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && aiPrompt.trim() && aiState !== "loading") handleGenerateDesign(); }}
+                          placeholder="e.g., minimalist mountain sunset logo, vintage surf shop badge"
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #E7E5E4", fontSize: 13, color: "#1A1A1A", background: "#fff", outline: "none", boxSizing: "border-box" }}
+                        />
+                      </div>
+
+                      {/* Style selector */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Style</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {([ { id: "minimalist", label: "Minimalist" }, { id: "vintage", label: "Vintage" }, { id: "bold", label: "Bold" }, { id: "illustrated", label: "Illustrated" }, { id: "abstract", label: "Abstract" } ] as const).map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => setAiStyle(s.id)}
+                              style={{ padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${aiStyle === s.id ? "#0f172a" : "#E7E5E4"}`, background: aiStyle === s.id ? "#0f172a" : "#FAFAF8", color: aiStyle === s.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Generate button */}
+                      <button
+                        onClick={handleGenerateDesign}
+                        disabled={!aiPrompt.trim() || aiState === "loading"}
+                        style={{ width: "100%", padding: "11px 0", borderRadius: 10, border: "none", background: !aiPrompt.trim() || aiState === "loading" ? "#E5E7EB" : "#0f172a", color: !aiPrompt.trim() || aiState === "loading" ? "#9CA3AF" : "#fff", fontSize: 13, fontWeight: 600, cursor: !aiPrompt.trim() || aiState === "loading" ? "not-allowed" : "pointer", marginBottom: 14 }}
+                      >
+                        {aiState === "loading" ? "Generating design… (10–20 seconds)" : "Generate Design"}
+                      </button>
+
+                      {/* Error */}
+                      {aiState === "error" && aiError && (
+                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 12, color: "#991B1B" }}>
+                          {aiError}
+                        </div>
+                      )}
+
+                      {/* Generated results */}
+                      {aiState === "done" && aiGeneratedUrls.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>
+                            Click an image to select it
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                            {aiGeneratedUrls.map((url, i) => (
+                              <button
+                                key={i}
+                                onClick={() => selectAiImage(url)}
+                                style={{ padding: 0, border: "2px solid #E7E5E4", borderRadius: 10, overflow: "hidden", cursor: "pointer", background: "none", transition: "border-color 0.15s" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#0f172a"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E7E5E4"; }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt={`Generated option ${i + 1}`} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+                              </button>
+                            ))}
+                          </div>
+                          <button onClick={handleGenerateDesign} style={{ width: "100%", padding: "9px 0", borderRadius: 10, border: "1.5px solid #E7E5E4", background: "#FAFAF8", color: "#555", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                            Regenerate
+                          </button>
                         </div>
                       )}
                     </div>
                   )}
-                  {previewState === "error" && (
-                    <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E" }}>
-                      Preview generation failed. You can still set placement and proceed.
-                    </div>
-                  )}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile.name}</span>
-                    <button onClick={() => { setDesignFile(null); setDesignPreview(null); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px", flexShrink: 0 }}>
-                      Change
-                    </button>
-                  </div>
-
-                  {/* Placement presets */}
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
-                        <button
-                          key={preset.id}
-                          onClick={() => setDesignPlacement(preset.id)}
-                          style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Scale slider */}
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
-                      Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={40} max={90} step={5}
-                      value={designScale}
-                      onChange={(e) => setDesignScale(Number(e.target.value))}
-                      style={{ width: "100%", accentColor: "#0f172a" }}
-                    />
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}>
-                      <span>Small</span><span>Large</span>
-                    </div>
-                  </div>
-
-                  {/* Preview Mockup button */}
-                  <button
-                    onClick={handlePreviewMockup}
-                    disabled={previewState === "loading" || !selectedProduct || variants.length === 0}
-                    style={{
-                      width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a",
-                      background: previewState === "loading" ? "#F5F4F2" : "#fff",
-                      color: previewState === "loading" ? "#AAA" : "#0f172a",
-                      fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
-                  </button>
                 </div>
               )}
+
               {error && <div style={{ marginTop: 12, fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{error}</div>}
             </div>
           )}
@@ -900,8 +1110,8 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
             {step === 2 && (
               <button
                 onClick={handleUploadAndNext}
-                disabled={!designFile || uploading}
-                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: !designFile || uploading ? "#E5E7EB" : "#0f172a", color: !designFile || uploading ? "#9CA3AF" : "#fff", fontSize: 13, fontWeight: 600, cursor: !designFile || uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                disabled={(!designFile && !previewUploadedUrl) || uploading}
+                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: (!designFile && !previewUploadedUrl) || uploading ? "#E5E7EB" : "#0f172a", color: (!designFile && !previewUploadedUrl) || uploading ? "#9CA3AF" : "#fff", fontSize: 13, fontWeight: 600, cursor: (!designFile && !previewUploadedUrl) || uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
               >
                 {uploading ? "Uploading…" : "Next — Set Price"}
               </button>

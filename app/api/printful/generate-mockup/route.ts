@@ -39,14 +39,15 @@ export async function POST(req: Request) {
 
   const headers = getPrintfulHeaders();
 
+  console.log('[generate-mockup] request body:', JSON.stringify({ productId, variantIds: variantIds.slice(0, 3), designImageUrl, scale, placementPreset, position }));
+
   // ── Step 1: Get printfiles ────────────────────────────────────────────────
   console.log('[generate-mockup] Step 1: fetching printfiles for product', productId);
   const printfilesRes = await fetch(`${PRINTFUL_API}/mockup-generator/printfiles/${productId}`, { headers });
   if (!printfilesRes.ok) {
-    const err = await printfilesRes.json().catch(() => ({}));
-    const msg = (err as Record<string, unknown>)?.result as string || String(printfilesRes.status);
-    console.error('[generate-mockup] printfiles fetch failed:', msg);
-    return NextResponse.json({ error: `Failed to get printfiles: ${msg}` }, { status: 502 });
+    const errBody = await printfilesRes.text().catch(() => '');
+    console.error('[generate-mockup] printfiles fetch failed:', printfilesRes.status, errBody);
+    return NextResponse.json({ error: `Failed to get printfiles: ${printfilesRes.status} ${errBody.slice(0, 200)}` }, { status: 502 });
   }
 
   const pfData = await printfilesRes.json();
@@ -83,9 +84,29 @@ export async function POST(req: Request) {
     const areaWidth  = pf?.width  ?? 1800;
     const areaHeight = pf?.height ?? 2400;
 
+    console.log(`[generate-mockup] placement "${placement}": printfile area ${areaWidth}×${areaHeight} (printfile_id=${pfId})`);
+
     // Use client-provided position for the primary (front) placement; compute for others
     if (position && idx === 0) {
-      return { placement, image_url: designImageUrl, position };
+      // Scale/clamp position to match actual printfile dimensions
+      const scaleX = areaWidth  / (position.area_width  || 1800);
+      const scaleY = areaHeight / (position.area_height || 2400);
+      const scaledPosition = (scaleX === 1 && scaleY === 1) ? position : {
+        area_width:  areaWidth,
+        area_height: areaHeight,
+        width:  Math.round(position.width  * scaleX),
+        height: Math.round(position.height * scaleY),
+        top:    Math.round(position.top    * scaleY),
+        left:   Math.round(position.left   * scaleX),
+      };
+      // Clamp to ensure within bounds
+      const clampedPosition = {
+        ...scaledPosition,
+        top:  Math.max(0, Math.min(scaledPosition.top,  areaHeight - scaledPosition.height)),
+        left: Math.max(0, Math.min(scaledPosition.left, areaWidth  - scaledPosition.width)),
+      };
+      console.log(`[generate-mockup] using client position (scaled ${scaleX.toFixed(2)}x,${scaleY.toFixed(2)}y):`, JSON.stringify(clampedPosition));
+      return { placement, image_url: designImageUrl, position: clampedPosition };
     }
 
     // Fallback: compute from placementPreset + scale
@@ -116,24 +137,36 @@ export async function POST(req: Request) {
     };
   });
 
+  const taskBody = { variant_ids: variantIds.slice(0, 3), files };
   console.log('[generate-mockup] Step 2: creating task, placements:', placements, 'variants:', variantIds.slice(0, 3));
+  console.log('[generate-mockup] create-task body:', JSON.stringify(taskBody));
 
-  // ── Step 2: Create mockup task ────────────────────────────────────────────
-  const taskRes = await fetch(`${PRINTFUL_API}/mockup-generator/create-task/${productId}`, {
+  // ── Step 2: Create mockup task (with one retry) ───────────────────────────
+  const createTask = async () => fetch(`${PRINTFUL_API}/mockup-generator/create-task/${productId}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      variant_ids: variantIds.slice(0, 3), // 3 variants → 3 colour mockups
-      files,
-    }),
+    body: JSON.stringify(taskBody),
   });
 
+  let taskRes = await createTask();
   if (!taskRes.ok) {
-    const err = await taskRes.json().catch(() => ({}));
-    const msg = ((err as Record<string, unknown>)?.result as string)
-      || ((err as Record<string, unknown>)?.error as Record<string, unknown>)?.message as string
-      || String(taskRes.status);
-    console.error('[generate-mockup] create-task failed:', msg);
+    const errBody = await taskRes.text().catch(() => '');
+    console.warn('[generate-mockup] create-task failed (attempt 1):', taskRes.status, errBody.slice(0, 300));
+    // Wait 3s and retry once
+    await new Promise(r => setTimeout(r, 3000));
+    taskRes = await createTask();
+  }
+
+  if (!taskRes.ok) {
+    const errBody = await taskRes.text().catch(() => '');
+    console.error('[generate-mockup] create-task failed (attempt 2):', taskRes.status, errBody.slice(0, 300));
+    let msg = String(taskRes.status);
+    try {
+      const errJson = JSON.parse(errBody);
+      msg = (errJson as Record<string, unknown>)?.result as string
+        || ((errJson as Record<string, unknown>)?.error as Record<string, unknown>)?.message as string
+        || msg;
+    } catch { /* ignore */ }
     return NextResponse.json({ error: `Failed to create mockup task: ${msg}` }, { status: 502 });
   }
 
@@ -146,16 +179,17 @@ export async function POST(req: Request) {
 
   console.log('[generate-mockup] Step 3: polling task_key', taskKey);
 
-  // ── Step 3: Poll until completed (max 30 s) ───────────────────────────────
-  for (let i = 0; i < 15; i++) {
-    await new Promise(r => setTimeout(r, 2000));
+  // ── Step 3: Poll until completed (max 60 s, 3 s interval) ────────────────
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 3000));
 
     const pollRes = await fetch(
       `${PRINTFUL_API}/mockup-generator/task?task_key=${encodeURIComponent(taskKey)}`,
       { headers }
     );
     if (!pollRes.ok) {
-      console.warn('[generate-mockup] poll attempt', i + 1, 'returned', pollRes.status);
+      const pollErrBody = await pollRes.text().catch(() => '');
+      console.warn('[generate-mockup] poll attempt', i + 1, 'returned', pollRes.status, pollErrBody.slice(0, 200));
       continue;
     }
 
@@ -178,9 +212,11 @@ export async function POST(req: Request) {
     }
 
     if (status === 'failed') {
-      return NextResponse.json({ error: 'Printful mockup generation failed' }, { status: 502 });
+      const failReason = (pollData.result as Record<string, unknown>)?.error as string || 'unknown reason';
+      console.error('[generate-mockup] task failed:', failReason);
+      return NextResponse.json({ error: `Printful mockup generation failed: ${failReason}` }, { status: 502 });
     }
   }
 
-  return NextResponse.json({ error: 'Mockup generation timed out after 30 s' }, { status: 504 });
+  return NextResponse.json({ error: 'Mockup generation timed out after 60 s' }, { status: 504 });
 }
