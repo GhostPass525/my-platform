@@ -263,7 +263,7 @@ document.addEventListener('click',function(e){
 </script>`;
 }
 
-function IframeStore({ html, title, products }: { html: string; title: string; products?: Product[] }) {
+function IframeStore({ html, title }: { html: string; title: string; products?: Product[] }) {
   const ref = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const iframe = ref.current;
@@ -271,21 +271,12 @@ function IframeStore({ html, title, products }: { html: string; title: string; p
     const doc = iframe.contentDocument;
     if (!doc) return;
 
-    let finalHtml = html;
-    const printfulProducts = (products || []).filter(
-      (p) => p.printful_variants && p.printful_variants.length > 0
-    );
-    if (printfulProducts.length > 0) {
-      const injection = buildVariantModalInjection(printfulProducts);
-      finalHtml = finalHtml.includes('</body>')
-        ? finalHtml.replace('</body>', injection + '</body>')
-        : finalHtml + injection;
-    }
-
+    // cart.js (loaded inside the generated HTML) handles all Printful product interactions
+    // via the Amazon-style PDP. No separate injection needed.
     doc.open();
-    doc.write(finalHtml);
+    doc.write(html);
     doc.close();
-  }, [html, products]);
+  }, [html]);
   return (
     <iframe
       ref={ref}

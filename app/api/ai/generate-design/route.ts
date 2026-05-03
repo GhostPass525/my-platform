@@ -57,56 +57,21 @@ Return ONLY the image generation prompt, nothing else. Keep it under 120 words.`
     enhancedPrompt = `Flat graphic design artwork: ${prompt.trim()}, ${styleDesc}, isolated on plain white background, print-ready, centered composition, high contrast, clean edges. No clothing, no products, no mockups.`;
   }
 
-  // Wrap in a hard constraint shell that DALL-E always sees
-  const buildDallePrompt = (base: string, variant: string) => {
+  // Hard constraint shell — applies to every generation attempt
+  const buildPrompt = (base: string, variant: string) => {
     const variantSuffix = variant === 'alt' ? ' Alternative composition of the same concept.' : '';
-    return `Flat print-ready graphic design artwork on a plain white background. ONLY show the design/logo/illustration itself — do NOT show any t-shirt, hoodie, clothing, fabric, product, mockup, mannequin, or person. The image must contain ONLY the isolated artwork centered on white.
+    return `Flat print-ready graphic design artwork on a completely transparent background. ONLY the design/logo/illustration itself — NO t-shirt, hoodie, clothing, fabric, product, mockup, mannequin, or person. Isolated artwork only, fully transparent background, centered, high contrast.
 
-Design: ${base}${variantSuffix}
-
-Important: isolated artwork on white background only. No products. No clothing. No mockups.`;
+Design: ${base}${variantSuffix}`;
   };
 
-  // Generate 2 images in parallel with DALL-E 3
   const openaiHeaders: Record<string, string> = {
     Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
     'Content-Type': 'application/json',
   };
 
-  const generateOne = async (seed: string): Promise<string> => {
-    const res = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: openaiHeaders,
-      body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt: buildDallePrompt(enhancedPrompt, seed),
-        n: 1,
-        size: '1024x1024',
-        quality: 'standard',
-        response_format: 'url',
-      }),
-    });
-    const data = await res.json() as { data?: Array<{ url: string }>; error?: { message: string } };
-    if (!res.ok || !data.data?.[0]?.url) {
-      throw new Error(data.error?.message || `DALL-E error ${res.status}`);
-    }
-    return data.data[0].url;
-  };
-
-  let dalleUrls: string[];
-  try {
-    dalleUrls = await Promise.all([generateOne('primary'), generateOne('alt')]);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[generate-design] DALL-E generation failed:', msg);
-    return NextResponse.json({ error: `Image generation failed: ${msg}` }, { status: 502 });
-  }
-
-  // Download and re-upload to Supabase Storage for persistence (DALL-E URLs expire)
-  const uploadToStorage = async (imageUrl: string): Promise<string> => {
-    const resp = await fetch(imageUrl);
-    const arrayBuffer = await resp.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+  // Upload a PNG buffer directly to Supabase Storage; returns public URL
+  const uploadBuffer = async (buffer: Buffer): Promise<string> => {
     const filename = `ai-design/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
     const { error } = await supabase.storage
       .from('product-design')
@@ -116,12 +81,60 @@ Important: isolated artwork on white background only. No products. No clothing. 
     return publicUrl;
   };
 
+  // Try gpt-image-1 (supports transparent background) then fall back to DALL-E 3
+  const generateOne = async (seed: string): Promise<Buffer> => {
+    const prompt = buildPrompt(enhancedPrompt, seed);
+
+    // Attempt 1: gpt-image-1 with native transparency
+    const r1 = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: openaiHeaders,
+      body: JSON.stringify({
+        model: 'gpt-image-1',
+        prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'medium',
+        background: 'transparent',
+        output_format: 'png',
+      }),
+    });
+    const d1 = await r1.json() as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message: string } };
+    if (r1.ok && d1.data?.[0]?.b64_json) {
+      console.log('[generate-design] gpt-image-1 success (transparent)');
+      return Buffer.from(d1.data[0].b64_json, 'base64');
+    }
+    console.warn('[generate-design] gpt-image-1 failed, falling back to DALL-E 3:', d1.error?.message || r1.status);
+
+    // Fallback: DALL-E 3 (no native transparency, but best available)
+    const r2 = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: openaiHeaders,
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
+        response_format: 'b64_json',
+      }),
+    });
+    const d2 = await r2.json() as { data?: Array<{ b64_json?: string }>; error?: { message: string } };
+    if (!r2.ok || !d2.data?.[0]?.b64_json) {
+      throw new Error(d2.error?.message || `Generation failed (${r2.status})`);
+    }
+    console.log('[generate-design] DALL-E 3 fallback success');
+    return Buffer.from(d2.data[0].b64_json, 'base64');
+  };
+
   let imageUrls: string[];
   try {
-    imageUrls = await Promise.all(dalleUrls.map(uploadToStorage));
-  } catch (err) {
-    console.warn('[generate-design] Supabase upload failed, using DALL-E URLs:', err);
-    imageUrls = dalleUrls;
+    const [buf1, buf2] = await Promise.all([generateOne('primary'), generateOne('alt')]);
+    imageUrls = await Promise.all([uploadBuffer(buf1), uploadBuffer(buf2)]);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[generate-design] generation failed:', msg);
+    return NextResponse.json({ error: `Image generation failed: ${msg}` }, { status: 502 });
   }
 
   // Track usage
