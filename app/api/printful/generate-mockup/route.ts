@@ -24,11 +24,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string };
+  type PositionObj = { area_width: number; area_height: number; width: number; height: number; top: number; left: number };
+  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string; position?: PositionObj };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { productId, variantIds, designImageUrl, scale, placementPreset } = body;
+  const { productId, variantIds, designImageUrl, scale, placementPreset, position } = body;
   if (!productId || !Array.isArray(variantIds) || variantIds.length === 0 || !designImageUrl) {
     return NextResponse.json(
       { error: 'productId, variantIds, and designImageUrl are required' },
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
   );
 
   // ── Build files array for the task ───────────────────────────────────────
-  const files = placements.map(placement => {
+  const files = placements.map((placement, idx) => {
     const vp = (pfResult.variant_printfiles ?? []).find(
       v => v.placement === placement && variantIds.includes(v.variant_id)
     );
@@ -82,8 +83,13 @@ export async function POST(req: Request) {
     const areaWidth  = pf?.width  ?? 1800;
     const areaHeight = pf?.height ?? 2400;
 
-    const scaleRatio = Math.min(Math.max(scale ?? 65, 40), 90) / 100;
+    // Use client-provided position for the primary (front) placement; compute for others
+    if (position && idx === 0) {
+      return { placement, image_url: designImageUrl, position };
+    }
 
+    // Fallback: compute from placementPreset + scale
+    const scaleRatio = Math.min(Math.max(scale ?? 65, 40), 90) / 100;
     let designW: number, designH: number, top: number, left: number;
     if (placementPreset === 'left-chest') {
       designW = Math.round(areaWidth * Math.min(scaleRatio, 0.35));
@@ -99,7 +105,7 @@ export async function POST(req: Request) {
       // center (default)
       designW = Math.round(areaWidth * scaleRatio);
       designH = designW;
-      top  = Math.round((areaHeight - designW) / 2);
+      top  = Math.round((areaHeight - designH) / 2);
       left = Math.round((areaWidth  - designW) / 2);
     }
 

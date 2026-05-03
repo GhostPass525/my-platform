@@ -92,6 +92,67 @@ const NAME_SUGGESTIONS: Record<CategoryId, (brand?: string) => string> = {
   stickers:    () => "Custom Sticker Pack",
 };
 
+// ── Placement zones & preview helpers ─────────────────────────────────────────
+
+/** Printful print-area coordinate zones (1800×2400 canvas) per preset. */
+const PLACEMENT_ZONES = {
+  'center':     { zoneTop: 450,  zoneLeft: 0,   zoneW: 1800, zoneH: 1800 },
+  'top-center': { zoneTop: 150,  zoneLeft: 0,   zoneW: 1800, zoneH: 1200 },
+  'left-chest': { zoneTop: 250,  zoneLeft: 100, zoneW: 500,  zoneH: 500  },
+} as const;
+
+/** Approximate print-area bounds inside a product thumbnail (as % of image). */
+const PRINT_AREAS: Partial<Record<string, { top: string; left: string; width: string; height: string }>> = {
+  tshirts:     { top: "22%", left: "20%", width: "60%", height: "58%" },
+  hoodies:     { top: "24%", left: "22%", width: "56%", height: "52%" },
+  sweatshirts: { top: "22%", left: "20%", width: "60%", height: "56%" },
+  tanks:       { top: "18%", left: "22%", width: "56%", height: "60%" },
+  longsleeves: { top: "22%", left: "20%", width: "60%", height: "58%" },
+  allover:     { top: "10%", left: "10%", width: "80%", height: "80%" },
+  hats:        { top: "20%", left: "15%", width: "70%", height: "60%" },
+  mugs:        { top: "20%", left: "10%", width: "80%", height: "60%" },
+  posters:     { top: "5%",  left: "5%",  width: "90%", height: "90%" },
+  phonecases:  { top: "10%", left: "18%", width: "64%", height: "78%" },
+  totebags:    { top: "15%", left: "18%", width: "64%", height: "66%" },
+  stickers:    { top: "10%", left: "10%", width: "80%", height: "80%" },
+};
+
+/** Compute Printful position object from placement preset, scale, and image aspect ratio. */
+function computePrintfulPosition(
+  placement: 'center' | 'top-center' | 'left-chest',
+  scale: number,
+  naturalW: number,
+  naturalH: number,
+): { area_width: number; area_height: number; width: number; height: number; top: number; left: number } {
+  const AREA_W = 1800, AREA_H = 2400;
+  const ratio = naturalH > 0 && naturalW > 0 ? naturalH / naturalW : 1;
+  const zone = PLACEMENT_ZONES[placement];
+
+  const designW = Math.round(zone.zoneW * (scale / 100));
+  const designH = Math.round(designW * ratio);
+
+  let top: number, left: number;
+  if (placement === 'center') {
+    top  = zone.zoneTop + Math.round((zone.zoneH - designH) / 2);
+    left = zone.zoneLeft + Math.round((zone.zoneW - designW) / 2);
+  } else if (placement === 'top-center') {
+    top  = zone.zoneTop;
+    left = zone.zoneLeft + Math.round((zone.zoneW - designW) / 2);
+  } else {
+    top  = zone.zoneTop;
+    left = zone.zoneLeft;
+  }
+
+  return {
+    area_width:  AREA_W,
+    area_height: AREA_H,
+    width:  designW,
+    height: designH,
+    top:  Math.max(0, Math.min(top,  AREA_H - designH)),
+    left: Math.max(0, Math.min(left, AREA_W - designW)),
+  };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -143,6 +204,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   // Step 2 — placement controls
   const [designPlacement, setDesignPlacement] = useState<'center' | 'top-center' | 'left-chest'>('center');
   const [designScale, setDesignScale] = useState(65);
+  const [designNaturalSize, setDesignNaturalSize] = useState<{ w: number; h: number } | null>(null);
 
   // Mockup generation (runs in background during step 3)
   const [mockupUrls, setMockupUrls] = useState<string[]>([]);
@@ -217,18 +279,28 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     if (!file) return;
     setDesignFile(file);
     setDesignUrl(null);
+    setDesignNaturalSize(null);
     const url = URL.createObjectURL(file);
     setDesignPreview(url);
+    // Capture natural dimensions for aspect-ratio-aware position calculation
+    const img = new Image();
+    img.onload = () => setDesignNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = url;
   }
 
   // Generate mockups in background — doesn't block navigation
-  async function generateMockups(imageUrl: string, productId: number, varIds: number[], placement: string, scale: number) {
+  async function generateMockups(
+    imageUrl: string,
+    productId: number,
+    varIds: number[],
+    position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number },
+  ) {
     setMockupState("generating");
     try {
       const res = await fetch("/api/printful/generate-mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl, placementPreset: placement, scale }),
+        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl, position }),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) {
@@ -253,7 +325,9 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       // Fire-and-forget — user can set price while mockups generate
       if (selectedProduct && variants.length > 0) {
         const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-        generateMockups(url, selectedProduct.id, inStockIds, designPlacement, designScale);
+        const nat = designNaturalSize ?? { w: 1, h: 1 };
+        const position = computePrintfulPosition(designPlacement, designScale, nat.w, nat.h);
+        generateMockups(url, selectedProduct.id, inStockIds, position);
       }
     } catch (e: unknown) {
       setError((e as Error)?.message || "Upload failed. Please try again.");
@@ -329,6 +403,13 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   }
 
   // ── Render helpers ────────────────────────────────────────────────────────
+
+  // Live placement preview values (Step 2)
+  const printArea = PRINT_AREAS[selectedCategory ?? ""] ?? { top: "22%", left: "20%", width: "60%", height: "56%" };
+  const previewPos = computePrintfulPosition(designPlacement, designScale, designNaturalSize?.w ?? 1, designNaturalSize?.h ?? 1);
+  const previewDesignTop  = `${(previewPos.top  / previewPos.area_height) * 100}%`;
+  const previewDesignLeft = `${(previewPos.left / previewPos.area_width)  * 100}%`;
+  const previewDesignW    = `${(previewPos.width / previewPos.area_width)  * 100}%`;
 
   const breakdown = price > 0 && price >= minPrice
     ? calculateProfitBreakdown(price, maxVariantCost, 0)
@@ -550,11 +631,28 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                 </div>
               ) : (
                 <div>
-                  <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, textAlign: "center", padding: 16 }}>
-                    {designPreview && (
+                  {/* Live placement preview — design overlaid on product thumbnail */}
+                  <div style={{ position: "relative", height: 230, borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, overflow: "hidden" }}>
+                    {selectedProduct?.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={designPreview} alt="Design preview" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                      <img src={selectedProduct.thumbnail_url} alt="Product" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+                    ) : (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56 }}>👕</div>
                     )}
+                    {/* Print area overlay — design positioned within it */}
+                    {designPreview && (
+                      <div style={{ position: "absolute", top: printArea.top, left: printArea.left, width: printArea.width, height: printArea.height }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={designPreview}
+                          alt="Design"
+                          style={{ position: "absolute", top: previewDesignTop, left: previewDesignLeft, width: previewDesignW, height: "auto" }}
+                        />
+                      </div>
+                    )}
+                    <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.45)", color: "#fff", fontSize: 10, fontWeight: 500, padding: "3px 8px", borderRadius: 4, pointerEvents: "none" }}>
+                      Live Preview
+                    </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile.name}</span>

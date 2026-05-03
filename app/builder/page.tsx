@@ -270,7 +270,14 @@ function injectInlineEditor(html: string): string {
 // Clones the mandatory card structure from the generate prompt so existing CSS applies.
 function injectProductCardIntoHtml(
   html: string,
-  product: { id: string; name: string; description?: string; price: string; imageDataUrl?: string }
+  product: {
+    id: string;
+    name: string;
+    description?: string;
+    price: string;
+    imageDataUrl?: string;
+    printful_variants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
+  }
 ): string {
   // Find the last opening tag of a product card
   const cardOpenRe = /<div[^>]*(?:class="[^"]*product-card[^"]*"|data-product-card)[^>]*>/g;
@@ -309,7 +316,11 @@ function injectProductCardIntoHtml(
     ? `<div class="product-image-placeholder" style="padding:0;overflow:hidden;"><img src="${esc(product.imageDataUrl)}" alt="${esc(product.name)}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`
     : `<div class="product-image-placeholder">${esc(product.name)}</div>`;
 
-  const cardHtml = `\n<div class="product-card" data-product-card>\n  ${imageHtml}\n  <div class="product-info">\n    <h3 class="product-name">${esc(product.name)}</h3>\n    <p class="product-desc">${esc(product.description || "")}</p>\n    <div class="product-price">${priceDisplay}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc(product.id)}" data-product-name="${esc(product.name)}" data-product-price="${priceCents}">Add to Cart — ${priceDisplay}</button>\n  </div>\n</div>`;
+  const variantsAttr = product.printful_variants && product.printful_variants.length > 0
+    ? ` data-printful="true" data-variants='${JSON.stringify(product.printful_variants).replace(/'/g, "&#39;")}'`
+    : "";
+
+  const cardHtml = `\n<div class="product-card" data-product-card${variantsAttr}>\n  ${imageHtml}\n  <div class="product-info">\n    <h3 class="product-name">${esc(product.name)}</h3>\n    <p class="product-desc">${esc(product.description || "")}</p>\n    <div class="product-price">${priceDisplay}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc(product.id)}" data-product-name="${esc(product.name)}" data-product-price="${priceCents}" data-product-image="${esc(product.imageDataUrl || "")}">Add to Cart — ${priceDisplay}</button>\n  </div>\n</div>`;
 
   console.log("[injectProductCard] inserting card after position", pos, "in HTML of length", html.length);
   return html.slice(0, pos) + cardHtml + html.slice(pos);
@@ -2472,6 +2483,7 @@ export default function Home() {
                   description: newProduct.description,
                   price: newProduct.price,
                   imageDataUrl: newProduct.imageDataUrl,
+                  printful_variants: newProduct.product_type === "physical" ? newProduct.printful_variants : undefined,
                 })
               : site.generatedHtml;
 
