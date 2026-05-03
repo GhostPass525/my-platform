@@ -239,6 +239,55 @@ function injectInlineEditor(html: string): string {
     : html + editorCode;
 }
 
+// Inject a new product card into the generated HTML after the last existing product card.
+// Clones the mandatory card structure from the generate prompt so existing CSS applies.
+function injectProductCardIntoHtml(
+  html: string,
+  product: { id: string; name: string; description?: string; price: string; imageDataUrl?: string }
+): string {
+  // Find the last opening tag of a product card
+  const cardOpenRe = /<div[^>]*(?:class="[^"]*product-card[^"]*"|data-product-card)[^>]*>/g;
+  let lastMatch: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = cardOpenRe.exec(html)) !== null) lastMatch = m;
+
+  if (!lastMatch) {
+    console.warn("[injectProductCard] no existing product-card found in HTML — skipping inject");
+    return html;
+  }
+
+  // Walk forward to find the balanced closing </div> for this card
+  let depth = 1;
+  let pos = lastMatch.index + lastMatch[0].length;
+  while (depth > 0 && pos < html.length) {
+    const nextOpen = html.indexOf("<div", pos);
+    const nextClose = html.indexOf("</div>", pos);
+    if (nextClose === -1) break;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth++;
+      pos = nextOpen + 4;
+    } else {
+      depth--;
+      pos = nextClose + 6; // advance past </div>
+    }
+  }
+
+  // Build the new card using the same class structure the generate prompt enforces
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const priceNum = parseFloat(product.price.replace(/[^0-9.]/g, "")) || 0;
+  const priceCents = Math.round(priceNum * 100);
+  const priceDisplay = product.price.startsWith("$") ? product.price : `$${product.price}`;
+
+  const imageHtml = product.imageDataUrl
+    ? `<div class="product-image-placeholder" style="padding:0;overflow:hidden;"><img src="${esc(product.imageDataUrl)}" alt="${esc(product.name)}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`
+    : `<div class="product-image-placeholder">${esc(product.name)}</div>`;
+
+  const cardHtml = `\n<div class="product-card" data-product-card>\n  ${imageHtml}\n  <div class="product-info">\n    <h3 class="product-name">${esc(product.name)}</h3>\n    <p class="product-desc">${esc(product.description || "")}</p>\n    <div class="product-price">${priceDisplay}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc(product.id)}" data-product-name="${esc(product.name)}" data-product-price="${priceCents}">Add to Cart — ${priceDisplay}</button>\n  </div>\n</div>`;
+
+  console.log("[injectProductCard] inserting card after position", pos, "in HTML of length", html.length);
+  return html.slice(0, pos) + cardHtml + html.slice(pos);
+}
+
 // Strip any base64/blob strings that may have slipped into site data before saving.
 // These are large and will cause 413 errors — images must be uploaded to Storage first.
 function sanitizeSiteJson(data: unknown): unknown {
@@ -1415,7 +1464,8 @@ export default function Home() {
         return;
       }
 
-      const url = `${window.location.origin}/s/${data.id}`;
+      const origin = window.location.hostname === "localhost" ? window.location.origin : "https://volcity.to";
+      const url = `${origin}/s/${data.id}`;
       console.log("[publish] published successfully:", url);
       trackAction("Published store");
       const storageKey = projectId ?? data.id;
@@ -2304,37 +2354,54 @@ export default function Home() {
             if (!site) return;
             const newProduct: Product = { ...product };
 
-            // Update local state immediately (server already saved via create-product route)
-            const updatedSite = { ...site, products: [...(site.products ?? []), newProduct] };
+            // Inject a product card into the HTML so the preview updates immediately
+            const newHtml = site.generatedHtml
+              ? injectProductCardIntoHtml(site.generatedHtml, {
+                  id: newProduct.id,
+                  name: newProduct.name,
+                  description: newProduct.description,
+                  price: newProduct.price,
+                  imageDataUrl: newProduct.imageDataUrl,
+                })
+              : site.generatedHtml;
+
+            console.log("[builder] onProductCreated: injected card into HTML, html changed:", newHtml !== site.generatedHtml);
+
+            const updatedSite = {
+              ...site,
+              products: [...(site.products ?? []), newProduct],
+              generatedHtml: newHtml,
+            };
             setSite(updatedSite);
             trackAction("Added a product");
             setShowAddProductModal(false);
-            console.log("[builder] onProductCreated: local state updated, products count:", updatedSite.products.length);
 
-            // Navigate preview to Products page so new product is visible
+            // Navigate preview to Products page
             const productsPage = updatedSite.pages.find((p) => p.key === "products");
             if (productsPage) setActivePageId(productsPage.id);
 
-            // Fetch fresh site_json from server to confirm save and sync state
+            // Immediately save the updated HTML + products array to Supabase
             if (projectId) {
-              console.log("[builder] fetching fresh site_json to confirm server save...");
-              fetch(`/api/projects/${projectId}`)
-                .then((r) => r.json())
-                .then((d) => {
-                  if (d.site) {
-                    const freshProducts = Array.isArray(d.site.products) ? d.site.products : [];
-                    console.log("[builder] server site_json confirmed, products count:", freshProducts.length);
-                    // Only sync products array to avoid overwriting unsaved HTML edits
-                    setSite((prev) => prev ? { ...prev, products: freshProducts } : prev);
+              console.log("[builder] saving updated generatedHtml + products to Supabase...");
+              setSaveStatus("saving");
+              fetch(`/api/projects/${projectId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ site: sanitizeSiteJson(updatedSite) }),
+              })
+                .then(async (r) => {
+                  if (r.ok) {
+                    console.log("[builder] save confirmed ✓ products count:", updatedSite.products.length);
                     setSaveStatus("saved");
                     setTimeout(() => setSaveStatus("idle"), 3000);
                   } else {
-                    console.warn("[builder] fresh site_json fetch returned no site:", d);
+                    const err = await r.json().catch(() => ({}));
+                    console.error("[builder] PATCH failed:", r.status, err);
                     setSaveStatus("failed");
                   }
                 })
                 .catch((err) => {
-                  console.error("[builder] failed to fetch fresh site_json:", err);
+                  console.error("[builder] PATCH threw:", err);
                   setSaveStatus("failed");
                 });
             }
