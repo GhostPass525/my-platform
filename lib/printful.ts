@@ -85,7 +85,8 @@ export async function createPrintfulProduct(
       sync_product: {
         name: productName,
         external_id: externalId,
-        thumbnail: designUrl,
+        // thumbnail omitted — Printful auto-generates one from the design files
+        // (Printful rejects URLs longer than 250 chars, which Supabase Storage URLs exceed)
       },
       sync_variants: variants.map((v) => ({
         variant_id: v.variantId,
