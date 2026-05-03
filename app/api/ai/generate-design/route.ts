@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
   const styleDesc = STYLE_MODIFIERS[style] ?? STYLE_MODIFIERS.minimalist;
 
-  // Use Claude to enhance the prompt for t-shirt design
+  // Use Claude to enhance the prompt — must output ONLY the flat artwork, never a product
   const anthropic = new Anthropic();
   let enhancedPrompt: string;
   try {
@@ -40,9 +40,13 @@ export async function POST(req: Request) {
       max_tokens: 200,
       messages: [{
         role: 'user',
-        content: `Create a concise image generation prompt for a t-shirt/apparel design based on: "${prompt.trim()}"
+        content: `Create an image generation prompt for a print-ready flat graphic design based on: "${prompt.trim()}"
 Style: ${styleDesc}
-Requirements: suitable for printing on clothing, centered composition, works on transparent background, high contrast, no text unless explicitly mentioned, clean edges.
+CRITICAL RULES:
+- Output ONLY the artwork/logo/illustration itself on a plain white background
+- NEVER include any clothing, t-shirts, hoodies, fabric, product mockups, mannequins, or people wearing anything
+- The design must be isolated flat artwork suitable for screen printing
+- Centered composition, high contrast, clean edges
 Return ONLY the image generation prompt, nothing else. Keep it under 120 words.`,
       }],
     });
@@ -50,8 +54,18 @@ Return ONLY the image generation prompt, nothing else. Keep it under 120 words.`
     console.log('[generate-design] enhanced prompt:', enhancedPrompt);
   } catch (err) {
     console.warn('[generate-design] Claude enhancement failed, using fallback:', err);
-    enhancedPrompt = `${prompt.trim()}, ${styleDesc}, suitable for t-shirt printing, centered composition, high contrast, isolated on white background`;
+    enhancedPrompt = `Flat graphic design artwork: ${prompt.trim()}, ${styleDesc}, isolated on plain white background, print-ready, centered composition, high contrast, clean edges. No clothing, no products, no mockups.`;
   }
+
+  // Wrap in a hard constraint shell that DALL-E always sees
+  const buildDallePrompt = (base: string, variant: string) => {
+    const variantSuffix = variant === 'alt' ? ' Alternative composition of the same concept.' : '';
+    return `Flat print-ready graphic design artwork on a plain white background. ONLY show the design/logo/illustration itself — do NOT show any t-shirt, hoodie, clothing, fabric, product, mockup, mannequin, or person. The image must contain ONLY the isolated artwork centered on white.
+
+Design: ${base}${variantSuffix}
+
+Important: isolated artwork on white background only. No products. No clothing. No mockups.`;
+  };
 
   // Generate 2 images in parallel with DALL-E 3
   const openaiHeaders: Record<string, string> = {
@@ -60,15 +74,12 @@ Return ONLY the image generation prompt, nothing else. Keep it under 120 words.`
   };
 
   const generateOne = async (seed: string): Promise<string> => {
-    const fullPrompt = seed === 'alt'
-      ? `${enhancedPrompt}, alternative angle or composition`
-      : enhancedPrompt;
     const res = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: openaiHeaders,
       body: JSON.stringify({
         model: 'dall-e-3',
-        prompt: fullPrompt,
+        prompt: buildDallePrompt(enhancedPrompt, seed),
         n: 1,
         size: '1024x1024',
         quality: 'standard',
