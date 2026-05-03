@@ -30,7 +30,12 @@ export type NewProduct = {
   name: string;
   description: string;
   price: string;
+  /** First mockup URL (or uploaded design URL as fallback) — used as card image. */
   imageDataUrl?: string;
+  /** Original uploaded design URL — required for Printful order fulfillment. */
+  design_url?: string;
+  /** All generated mockup URLs (front, back, etc.) — used as product image gallery. */
+  mockup_urls?: string[];
   product_type: "physical";
   printful_sync_product_id: number;
   printful_catalog_product_id: number;
@@ -135,6 +140,10 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
 
+  // Mockup generation (runs in background during step 3)
+  const [mockupUrls, setMockupUrls] = useState<string[]>([]);
+  const [mockupState, setMockupState] = useState<"idle" | "generating" | "done" | "error">("idle");
+
   // Step 5
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +192,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const minPrice = calculateMinimumPrice(maxVariantCost);
   const suggestedPrice = Math.ceil(maxVariantCost * 2.5);
 
-  // Auto-set name/price when product + variants are ready
+  // Auto-set name/price when product + variants are ready; reset mockups on product change
   useEffect(() => {
     if (selectedProduct && variants.length > 0) {
       const cat = selectedCategory;
@@ -193,6 +202,9 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       }
       setPrice(suggestedPrice || minPrice);
     }
+    // Reset mockups whenever the selected product changes
+    setMockupUrls([]);
+    setMockupState("idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProduct, variants]);
 
@@ -205,7 +217,27 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     setDesignPreview(url);
   }
 
-  // Upload design and advance
+  // Generate mockups in background — doesn't block navigation
+  async function generateMockups(imageUrl: string, productId: number, varIds: number[]) {
+    setMockupState("generating");
+    try {
+      const res = await fetch("/api/printful/generate-mockup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) {
+        throw new Error(data.error || "No mockups returned");
+      }
+      setMockupUrls(data.mockupUrls);
+      setMockupState("done");
+    } catch {
+      setMockupState("error");
+    }
+  }
+
+  // Upload design and advance; trigger mockup generation in background
   async function handleUploadAndNext() {
     if (!designFile) return;
     setUploading(true);
@@ -214,6 +246,11 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       const url = await uploadDesign(designFile);
       setDesignUrl(url);
       setStep(3);
+      // Fire-and-forget — user can set price while mockups generate
+      if (selectedProduct && variants.length > 0) {
+        const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
+        generateMockups(url, selectedProduct.id, inStockIds);
+      }
     } catch (e: unknown) {
       setError((e as Error)?.message || "Upload failed. Please try again.");
     } finally {
@@ -251,17 +288,23 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
             color: v.color,
             color_code: v.color_code,
           })),
+          mockupUrls: mockupUrls.length > 0 ? mockupUrls : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create product");
+
+      // Prefer generated mockup; fall back to Printful thumbnail, then raw design
+      const primaryImage = mockupUrls[0] || data.thumbnailUrl || designUrl || undefined;
 
       onProductCreated({
         id: data.productId || uid(),
         name: productName.trim(),
         description: description.trim(),
         price: `$${price}`,
-        imageDataUrl: data.thumbnailUrl || designUrl || undefined,
+        imageDataUrl: primaryImage,
+        design_url: designUrl || undefined,
+        mockup_urls: mockupUrls.length > 0 ? mockupUrls : undefined,
         product_type: "physical",
         printful_sync_product_id: data.syncProductId,
         printful_catalog_product_id: selectedProduct.id,
@@ -524,6 +567,42 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
           {/* ── STEP 3: Set Price ── */}
           {!success && step === 3 && (
             <div>
+              {/* Mockup preview — shows while user sets price */}
+              {mockupState === "generating" && (
+                <div style={{ marginBottom: 16, padding: "16px 0", borderRadius: 12, background: "#F5F4F2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  </svg>
+                  <div style={{ fontSize: 12, color: "#AAA" }}>Generating product mockup…</div>
+                </div>
+              )}
+              {mockupState === "done" && mockupUrls.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>
+                    Product Preview
+                  </div>
+                  {/* Primary mockup — large */}
+                  <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #E7E5E4", background: "#F8F7F5", textAlign: "center", padding: "12px 12px 6px", marginBottom: mockupUrls.length > 1 ? 8 : 0 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={mockupUrls[0]} alt="Product mockup" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                  </div>
+                  {/* Additional angles — thumbnails */}
+                  {mockupUrls.length > 1 && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {mockupUrls.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={i} src={url} alt={`Mockup ${i + 1}`}
+                          style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4", cursor: "pointer", flexShrink: 0 }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {mockupState === "error" && (
+                <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E" }}>
+                  Couldn&apos;t generate preview. Your design will still print correctly.
+                </div>
+              )}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>Production Cost</div>
                 <div style={{ fontSize: 14, color: "#555" }}>

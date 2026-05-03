@@ -63,6 +63,8 @@ type Product = {
   booking_url?: string;
   // Printful fields (populated when product created via Add Product wizard)
   description?: string;
+  design_url?: string;
+  mockup_urls?: string[];
   printful_sync_product_id?: number;
   printful_catalog_product_id?: number;
   printful_variant_ids?: number[];

@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     projectId?: string;
     printfulCatalogProductId?: number;
     printfulVariants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
+    mockupUrls?: string[];
   };
 
   try {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { productName, designUrl, variantInputs, description, projectId, printfulCatalogProductId, printfulVariants } = body;
+  const { productName, designUrl, variantInputs, description, projectId, printfulCatalogProductId, printfulVariants, mockupUrls } = body;
 
   if (!productName || !designUrl || !Array.isArray(variantInputs) || variantInputs.length === 0) {
     return NextResponse.json(
@@ -115,12 +116,16 @@ export async function POST(req: Request) {
           console.log('[create-product] Step 4: current products count in DB:', currentProducts.length);
 
           // Build new product object matching the Product type in the builder
+          // Prefer generated mockup URL as the display image; keep design_url for fulfillment
+          const clientMockups = Array.isArray(mockupUrls) && mockupUrls.length > 0 ? mockupUrls : null;
           const newProduct = {
             id: productId,
             name: productName,
             description: description || '',
             price: `$${variantInputs[0]?.retailPrice ?? '0'}`,
-            imageDataUrl: thumbnailUrl || designUrl,
+            imageDataUrl: clientMockups?.[0] || thumbnailUrl || designUrl,
+            design_url: designUrl,
+            mockup_urls: clientMockups ?? undefined,
             product_type: 'physical',
             printful_sync_product_id: result.id,
             printful_catalog_product_id: printfulCatalogProductId ?? null,
