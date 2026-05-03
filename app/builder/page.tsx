@@ -277,6 +277,7 @@ function injectProductCardIntoHtml(
     price: string;
     imageDataUrl?: string;
     printful_variants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
+    mockup_urls?: string[];
   }
 ): string {
   // Find the last opening tag of a product card
@@ -319,8 +320,14 @@ function injectProductCardIntoHtml(
   const variantsAttr = product.printful_variants && product.printful_variants.length > 0
     ? ` data-printful="true" data-variants='${JSON.stringify(product.printful_variants).replace(/'/g, "&#39;")}'`
     : "";
+  const mockupAttr = product.mockup_urls && product.mockup_urls.length > 0
+    ? ` data-mockup-urls='${JSON.stringify(product.mockup_urls).replace(/'/g, "&#39;")}'`
+    : "";
+  const descAttr = product.description
+    ? ` data-description="${esc(product.description)}"`
+    : "";
 
-  const cardHtml = `\n<div class="product-card" data-product-card${variantsAttr}>\n  ${imageHtml}\n  <div class="product-info">\n    <h3 class="product-name">${esc(product.name)}</h3>\n    <p class="product-desc">${esc(product.description || "")}</p>\n    <div class="product-price">${priceDisplay}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc(product.id)}" data-product-name="${esc(product.name)}" data-product-price="${priceCents}" data-product-image="${esc(product.imageDataUrl || "")}">Add to Cart — ${priceDisplay}</button>\n  </div>\n</div>`;
+  const cardHtml = `\n<div class="product-card" data-product-card${variantsAttr}${mockupAttr}${descAttr}>\n  ${imageHtml}\n  <div class="product-info">\n    <h3 class="product-name">${esc(product.name)}</h3>\n    <p class="product-desc">${esc(product.description || "")}</p>\n    <div class="product-price">${priceDisplay}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc(product.id)}" data-product-name="${esc(product.name)}" data-product-price="${priceCents}" data-product-image="${esc(product.imageDataUrl || "")}">Add to Cart — ${priceDisplay}</button>\n  </div>\n</div>`;
 
   console.log("[injectProductCard] inserting card after position", pos, "in HTML of length", html.length);
   return html.slice(0, pos) + cardHtml + html.slice(pos);
@@ -2484,6 +2491,7 @@ export default function Home() {
                   price: newProduct.price,
                   imageDataUrl: newProduct.imageDataUrl,
                   printful_variants: newProduct.product_type === "physical" ? newProduct.printful_variants : undefined,
+                  mockup_urls: newProduct.product_type === "physical" ? newProduct.mockup_urls : undefined,
                 })
               : site.generatedHtml;
 

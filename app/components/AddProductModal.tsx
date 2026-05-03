@@ -101,22 +101,6 @@ const PLACEMENT_ZONES = {
   'left-chest': { zoneTop: 250,  zoneLeft: 100, zoneW: 500,  zoneH: 500  },
 } as const;
 
-/** Approximate print-area bounds inside a product thumbnail (as % of image). */
-const PRINT_AREAS: Partial<Record<string, { top: string; left: string; width: string; height: string }>> = {
-  tshirts:     { top: "22%", left: "20%", width: "60%", height: "58%" },
-  hoodies:     { top: "24%", left: "22%", width: "56%", height: "52%" },
-  sweatshirts: { top: "22%", left: "20%", width: "60%", height: "56%" },
-  tanks:       { top: "18%", left: "22%", width: "56%", height: "60%" },
-  longsleeves: { top: "22%", left: "20%", width: "60%", height: "58%" },
-  allover:     { top: "10%", left: "10%", width: "80%", height: "80%" },
-  hats:        { top: "20%", left: "15%", width: "70%", height: "60%" },
-  mugs:        { top: "20%", left: "10%", width: "80%", height: "60%" },
-  posters:     { top: "5%",  left: "5%",  width: "90%", height: "90%" },
-  phonecases:  { top: "10%", left: "18%", width: "64%", height: "78%" },
-  totebags:    { top: "15%", left: "18%", width: "64%", height: "66%" },
-  stickers:    { top: "10%", left: "10%", width: "80%", height: "80%" },
-};
-
 /** Compute Printful position object from placement preset, scale, and image aspect ratio. */
 function computePrintfulPosition(
   placement: 'center' | 'top-center' | 'left-chest',
@@ -193,6 +177,10 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [designUrl, setDesignUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Step 2 — mockup preview
+  const [previewState, setPreviewState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [previewMockupUrls, setPreviewMockupUrls] = useState<string[]>([]);
+  const [previewUploadedUrl, setPreviewUploadedUrl] = useState<string | null>(null);
 
   // Step 3
   const [price, setPrice] = useState(0);
@@ -280,12 +268,40 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     setDesignFile(file);
     setDesignUrl(null);
     setDesignNaturalSize(null);
+    setPreviewState("idle");
+    setPreviewMockupUrls([]);
+    setPreviewUploadedUrl(null);
     const url = URL.createObjectURL(file);
     setDesignPreview(url);
-    // Capture natural dimensions for aspect-ratio-aware position calculation
     const img = new Image();
     img.onload = () => setDesignNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
     img.src = url;
+  }
+
+  // Generate and display a real Printful mockup preview (button-triggered)
+  async function handlePreviewMockup() {
+    if (!designFile || !selectedProduct || variants.length === 0) return;
+    setPreviewState("loading");
+    try {
+      const uploadUrl = previewUploadedUrl || await uploadDesign(designFile);
+      if (!previewUploadedUrl) setPreviewUploadedUrl(uploadUrl);
+      const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
+      const nat = designNaturalSize ?? { w: 1, h: 1 };
+      const position = computePrintfulPosition(designPlacement, designScale, nat.w, nat.h);
+      const res = await fetch("/api/printful/generate-mockup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, variantIds: inStockIds, designImageUrl: uploadUrl, position }),
+      });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) {
+        throw new Error(data.error || "No mockups returned");
+      }
+      setPreviewMockupUrls(data.mockupUrls);
+      setPreviewState("done");
+    } catch {
+      setPreviewState("error");
+    }
   }
 
   // Generate mockups in background — doesn't block navigation
@@ -313,17 +329,20 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     }
   }
 
-  // Upload design and advance; trigger mockup generation in background
+  // Upload design and advance; reuse preview upload/mockups if already generated
   async function handleUploadAndNext() {
     if (!designFile) return;
     setUploading(true);
     setError(null);
     try {
-      const url = await uploadDesign(designFile);
+      const url = previewUploadedUrl || await uploadDesign(designFile);
       setDesignUrl(url);
       setStep(3);
-      // Fire-and-forget — user can set price while mockups generate
-      if (selectedProduct && variants.length > 0) {
+      if (previewMockupUrls.length > 0) {
+        // Reuse the mockups the user already previewed
+        setMockupUrls(previewMockupUrls);
+        setMockupState("done");
+      } else if (selectedProduct && variants.length > 0) {
         const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
         const nat = designNaturalSize ?? { w: 1, h: 1 };
         const position = computePrintfulPosition(designPlacement, designScale, nat.w, nat.h);
@@ -403,13 +422,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   }
 
   // ── Render helpers ────────────────────────────────────────────────────────
-
-  // Live placement preview values (Step 2)
-  const printArea = PRINT_AREAS[selectedCategory ?? ""] ?? { top: "22%", left: "20%", width: "60%", height: "56%" };
-  const previewPos = computePrintfulPosition(designPlacement, designScale, designNaturalSize?.w ?? 1, designNaturalSize?.h ?? 1);
-  const previewDesignTop  = `${(previewPos.top  / previewPos.area_height) * 100}%`;
-  const previewDesignLeft = `${(previewPos.left / previewPos.area_width)  * 100}%`;
-  const previewDesignW    = `${(previewPos.width / previewPos.area_width)  * 100}%`;
 
   const breakdown = price > 0 && price >= minPrice
     ? calculateProfitBreakdown(price, maxVariantCost, 0)
@@ -631,29 +643,42 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                 </div>
               ) : (
                 <div>
-                  {/* Live placement preview — design overlaid on product thumbnail */}
-                  <div style={{ position: "relative", height: 230, borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, overflow: "hidden" }}>
-                    {selectedProduct?.thumbnail_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={selectedProduct.thumbnail_url} alt="Product" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
-                    ) : (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56 }}>👕</div>
-                    )}
-                    {/* Print area overlay — design positioned within it */}
-                    {designPreview && (
-                      <div style={{ position: "absolute", top: printArea.top, left: printArea.left, width: printArea.width, height: printArea.height }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={designPreview}
-                          alt="Design"
-                          style={{ position: "absolute", top: previewDesignTop, left: previewDesignLeft, width: previewDesignW, height: "auto" }}
-                        />
-                      </div>
-                    )}
-                    <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.45)", color: "#fff", fontSize: 10, fontWeight: 500, padding: "3px 8px", borderRadius: 4, pointerEvents: "none" }}>
-                      Live Preview
+                  {/* Design / mockup preview area */}
+                  {previewState === "idle" && (
+                    <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
+                      {designPreview && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={designPreview} alt="Design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                      )}
                     </div>
-                  </div>
+                  )}
+                  {previewState === "loading" && (
+                    <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                      </svg>
+                      <div style={{ fontSize: 13, color: "#888" }}>Generating mockup… this takes ~30 seconds</div>
+                    </div>
+                  )}
+                  {previewState === "done" && previewMockupUrls.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
+                      {previewMockupUrls.length > 1 && (
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          {previewMockupUrls.slice(0, 4).map((url, i) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={i} src={url} alt={`Angle ${i + 1}`} style={{ width: 58, height: 58, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4" }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {previewState === "error" && (
+                    <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E" }}>
+                      Preview generation failed. You can still set placement and proceed.
+                    </div>
+                  )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile.name}</span>
                     <button onClick={() => { setDesignFile(null); setDesignPreview(null); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px", flexShrink: 0 }}>
@@ -678,7 +703,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                   </div>
 
                   {/* Scale slider */}
-                  <div>
+                  <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
                       Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
                     </div>
@@ -693,6 +718,20 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                       <span>Small</span><span>Large</span>
                     </div>
                   </div>
+
+                  {/* Preview Mockup button */}
+                  <button
+                    onClick={handlePreviewMockup}
+                    disabled={previewState === "loading" || !selectedProduct || variants.length === 0}
+                    style={{
+                      width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a",
+                      background: previewState === "loading" ? "#F5F4F2" : "#fff",
+                      color: previewState === "loading" ? "#AAA" : "#0f172a",
+                      fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
+                  </button>
                 </div>
               )}
               {error && <div style={{ marginTop: 12, fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{error}</div>}
