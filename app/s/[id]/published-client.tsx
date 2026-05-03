@@ -54,6 +54,9 @@ type Product = {
   booking_method?: "email" | "calendly" | "custom";
   booking_url?: string;
   description?: string;
+  design_url?: string;
+  mockup_urls?: string[];
+  printful_variant_ids?: number[];
   printful_variants?: PrintfulVariant[];
 };
 
@@ -108,6 +111,7 @@ type CartItem = {
   product_type?: string;
   selectedSize?: string;
   selectedColor?: string;
+  printful_variant_id?: number;
 };
 
 type CustomerData = {
@@ -212,7 +216,7 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
   const subtotal  = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
 
-  const addToCart = (p: Product, opts?: { selectedSize?: string; selectedColor?: string }) => {
+  const addToCart = (p: Product, opts?: { selectedSize?: string; selectedColor?: string; printful_variant_id?: number }) => {
     const price = parsePriceDollars(p.price);
     const image = p.imageUrl || p.imageDataUrl;
     const variantSuffix = (opts?.selectedSize || opts?.selectedColor)
@@ -232,6 +236,7 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
         product_type: p.product_type || "physical",
         selectedSize: opts?.selectedSize,
         selectedColor: opts?.selectedColor,
+        printful_variant_id: opts?.printful_variant_id,
       }];
     });
     setCartOpen(true);
@@ -275,7 +280,15 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publishId,
-          cart: cart.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity, product_type: i.product_type })),
+          cart: cart.map((i) => ({
+            name: i.name,
+            price: i.price,
+            quantity: i.quantity,
+            product_type: i.product_type,
+            selectedSize: i.selectedSize,
+            selectedColor: i.selectedColor,
+            printful_variant_id: i.printful_variant_id,
+          })),
           customerData,
         }),
       });
@@ -1017,15 +1030,32 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
   product: Product;
   theme: Theme;
   onClose: () => void;
-  onAddToCart: (opts: { selectedSize?: string; selectedColor?: string }) => void;
+  onAddToCart: (opts: { selectedSize?: string; selectedColor?: string; printful_variant_id?: number }) => void;
 }) {
-  const variants = product.printful_variants || [];
-  const sizes    = [...new Set(variants.map((v) => v.size))].filter(Boolean);
-  const colors   = [...new Map(variants.map((v) => [v.color, v])).values()].filter((v) => v.color);
-  const [selectedSize,  setSelectedSize]  = useState(sizes[0]  || "");
-  const [selectedColor, setSelectedColor] = useState(colors[0]?.color || "");
-  const img = product.imageUrl || product.imageDataUrl;
+  const variants    = product.printful_variants || [];
+  const sizes       = [...new Set(variants.map((v) => v.size))].filter(Boolean);
+  const colors      = [...new Map(variants.map((v) => [v.color, v])).values()].filter((v) => v.color);
+  const mockupUrls  = product.mockup_urls?.length ? product.mockup_urls : null;
+  const fallbackImg = product.imageUrl || product.imageDataUrl;
+
+  const [selectedSize,       setSelectedSize]       = useState(sizes[0]   || "");
+  const [selectedColor,      setSelectedColor]      = useState(colors[0]?.color || "");
+  const [selectedMockupIdx,  setSelectedMockupIdx]  = useState(0);
+
   const hasVariants = sizes.length > 0 || colors.length > 0;
+  const mainImg     = mockupUrls ? mockupUrls[selectedMockupIdx] : fallbackImg;
+
+  // Find the matching Printful variant ID for selected size + color
+  const matchingVariant = variants.find(
+    (v) => v.size === selectedSize && v.color === selectedColor
+  ) ?? (selectedSize ? variants.find((v) => v.size === selectedSize) : null)
+    ?? (selectedColor ? variants.find((v) => v.color === selectedColor) : null);
+
+  // Filter available sizes for the selected color (and vice versa)
+  const availableSizes  = selectedColor ? [...new Set(variants.filter((v) => v.color === selectedColor).map((v) => v.size))] : sizes;
+  const availableColors = selectedSize  ? [...new Map(variants.filter((v) => v.size === selectedSize).map((v) => [v.color, v])).values()] : colors;
+
+  const canAddToCart = !hasVariants || ((!sizes.length || !!selectedSize) && (!colors.length || !!selectedColor));
 
   return (
     <div
@@ -1043,11 +1073,11 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
 
         {/* Body */}
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {/* Image */}
+          {/* Main image */}
           <div style={{ aspectRatio: "1", background: "#F5F4F2", overflow: "hidden" }}>
-            {img ? (
+            {mainImg ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={img} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={mainImg} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
               <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1056,6 +1086,20 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
               </div>
             )}
           </div>
+
+          {/* Mockup thumbnail strip */}
+          {mockupUrls && mockupUrls.length > 1 && (
+            <div style={{ display: "flex", gap: 8, padding: "10px 16px 0", overflowX: "auto" }}>
+              {mockupUrls.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i} src={url} alt={`View ${i + 1}`}
+                  onClick={() => setSelectedMockupIdx(i)}
+                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0, cursor: "pointer", border: selectedMockupIdx === i ? `2px solid ${theme.accent}` : "2px solid transparent", opacity: selectedMockupIdx === i ? 1 : 0.6, transition: "opacity 0.15s" }}
+                />
+              ))}
+            </div>
+          )}
 
           <div style={{ padding: "20px 20px 24px" }}>
             {/* Price */}
@@ -1073,7 +1117,7 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
                   Color: <span style={{ color: "#1A1A1A", textTransform: "none", letterSpacing: 0 }}>{selectedColor}</span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {colors.map((v) => (
+                  {availableColors.map((v) => (
                     <button
                       key={v.color}
                       title={v.color}
@@ -1090,7 +1134,7 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Size</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {sizes.map((s) => (
+                  {availableSizes.map((s) => (
                     <button
                       key={s}
                       onClick={() => setSelectedSize(s)}
@@ -1105,10 +1149,15 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
 
             {/* Add to cart */}
             <button
-              onClick={() => onAddToCart(hasVariants ? { selectedSize: selectedSize || undefined, selectedColor: selectedColor || undefined } : {})}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: theme.accent, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              disabled={!canAddToCart}
+              onClick={() => onAddToCart({
+                selectedSize:       selectedSize  || undefined,
+                selectedColor:      selectedColor || undefined,
+                printful_variant_id: matchingVariant?.id,
+              })}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: canAddToCart ? theme.accent : "#E5E7EB", color: canAddToCart ? "#fff" : "#9CA3AF", fontSize: 14, fontWeight: 600, cursor: canAddToCart ? "pointer" : "not-allowed" }}
             >
-              Add to cart
+              {canAddToCart ? "Add to cart" : "Select size & color"}
             </button>
           </div>
         </div>

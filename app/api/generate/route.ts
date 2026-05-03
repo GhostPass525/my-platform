@@ -22,7 +22,7 @@ function tryParseJSON(text: string) {
 }
 
 async function generateSiteMetadata(messages: Array<{ role: string; content: string }>) {
-  const systemPrompt = `You are Inflection Point.
+  const systemPrompt = `You are Volcity.
 
 Generate a first-version landing page blueprint from the conversation.
 

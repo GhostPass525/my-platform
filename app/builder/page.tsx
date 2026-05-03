@@ -232,6 +232,31 @@ function injectInlineEditor(html: string): string {
   });
 
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',makeEditable);}else{makeEditable();}
+
+  // ── Delete-product overlays (builder-only) ───────────────────────────────
+  function addDeleteOverlays(){
+    var cards=document.querySelectorAll('[data-product-card],.product-card');
+    Array.prototype.forEach.call(cards,function(card){
+      if(card.getAttribute('data-vc-has-delete'))return;
+      card.setAttribute('data-vc-has-delete','1');
+      if(window.getComputedStyle(card).position==='static')card.style.position='relative';
+      var btn=document.createElement('button');
+      btn.setAttribute('type','button');
+      btn.style.cssText='position:absolute;top:6px;right:6px;z-index:20;width:24px;height:24px;border-radius:50%;background:rgba(239,68,68,0.92);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;color:#fff;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+      btn.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();e.preventDefault();
+        var addBtn=card.querySelector('[data-add-to-cart]');
+        var pid=addBtn?addBtn.getAttribute('data-product-id')||'':'';
+        var pname=addBtn?addBtn.getAttribute('data-product-name')||'this product':'this product';
+        window.parent.postMessage({type:'VOLCITY_DELETE_PRODUCT',productId:pid,productName:pname},'*');
+      });
+      card.appendChild(btn);
+      card.addEventListener('mouseenter',function(){btn.style.display='flex';});
+      card.addEventListener('mouseleave',function(){btn.style.display='none';});
+    });
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',addDeleteOverlays);}else{addDeleteOverlays();}
 })();
 </script>
 <!-- VOLCITY_EDITOR_END -->`;
@@ -288,6 +313,45 @@ function injectProductCardIntoHtml(
 
   console.log("[injectProductCard] inserting card after position", pos, "in HTML of length", html.length);
   return html.slice(0, pos) + cardHtml + html.slice(pos);
+}
+
+// Remove the product card that contains a button with data-product-id matching `productId`.
+function removeProductCardFromHtml(html: string, productId: string): string {
+  const escaped = productId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pidRe = new RegExp(`data-product-id="${escaped}"`);
+  const btnMatch = pidRe.exec(html);
+  if (!btnMatch) {
+    console.warn("[removeProductCard] product-id not found:", productId);
+    return html;
+  }
+
+  // Walk backward through card opening tags to find the one enclosing this button
+  const cardOpenRe = /<div[^>]*(?:class="[^"]*product-card[^"]*"|data-product-card)[^>]*>/g;
+  let cardStart = -1;
+  let cardOpenEnd = -1;
+  let m: RegExpExecArray | null;
+  while ((m = cardOpenRe.exec(html)) !== null) {
+    if (m.index < btnMatch.index) { cardStart = m.index; cardOpenEnd = m.index + m[0].length; }
+    else break;
+  }
+  if (cardStart === -1) {
+    console.warn("[removeProductCard] enclosing product-card not found");
+    return html;
+  }
+
+  // Find the balanced closing </div>
+  let depth = 1;
+  let pos = cardOpenEnd;
+  while (depth > 0 && pos < html.length) {
+    const nextOpen  = html.indexOf("<div", pos);
+    const nextClose = html.indexOf("</div>", pos);
+    if (nextClose === -1) break;
+    if (nextOpen !== -1 && nextOpen < nextClose) { depth++; pos = nextOpen + 4; }
+    else { depth--; pos = nextClose + 6; }
+  }
+
+  console.log("[removeProductCard] removing card for productId:", productId, "at", cardStart, "–", pos);
+  return html.slice(0, cardStart) + html.slice(pos);
 }
 
 // Strip any base64/blob strings that may have slipped into site data before saving.
@@ -598,6 +662,7 @@ export default function Home() {
   const [site, setSite] = useState<SiteSpec | null>(null);
   const [rightTab, setRightTab] = useState<"quick" | "content" | "design" | "pages" | "products" | "sections">("quick");
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ productId: string; productName: string } | null>(null);
   const [activePageId, setActivePageId] = useState<string>("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>("");
@@ -799,9 +864,13 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site?.generatedHtml, projectId]);
 
-  // Listen for inline edits posted from the iframe
+  // Listen for inline edits and delete-product messages posted from the iframe
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
+      if (event.data?.type === "VOLCITY_DELETE_PRODUCT") {
+        setDeleteConfirmInfo({ productId: event.data.productId ?? "", productName: event.data.productName ?? "this product" });
+        return;
+      }
       if (event.data?.type !== "VOLCITY_CONTENT_EDIT") return;
       const rawHtml: string = event.data.html ?? "";
       // Strip the injected editor before storing so published stores don't get it
@@ -886,6 +955,26 @@ export default function Home() {
   // Track recent builder actions (max 3)
   const trackAction = (label: string) => {
     setRecentActions((prev) => [label, ...prev].slice(0, 3));
+  };
+
+  // Delete a product: remove card from generatedHtml + remove from products array + save
+  const deleteProduct = async (productId: string) => {
+    if (!site) return;
+    const newHtml = site.generatedHtml ? removeProductCardFromHtml(site.generatedHtml, productId) : site.generatedHtml;
+    const newProducts = (site.products ?? []).filter((p) => p.id !== productId);
+    const updatedSite = { ...site, generatedHtml: newHtml, products: newProducts };
+    setSite(updatedSite);
+    trackAction("Deleted a product");
+    if (projectId) {
+      setSaveStatus("saving");
+      fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: sanitizeSiteJson(updatedSite) }),
+      })
+        .then((r) => { if (r.ok) { setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 3000); } else setSaveStatus("failed"); })
+        .catch(() => setSaveStatus("failed"));
+    }
   };
 
   // ── Opening message ───────────────────────────────────────────
@@ -2344,6 +2433,25 @@ export default function Home() {
           stripeConnected={stripeOnboarded}
           onContinue={() => setShowLaunchMoment(false)}
         />
+      )}
+
+      {/* Delete product confirmation */}
+      {deleteConfirmInfo && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "24px", maxWidth: 340, width: "100%", margin: 16, boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", marginBottom: 6 }}>Delete product?</div>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 20, lineHeight: 1.5 }}>
+              &ldquo;{deleteConfirmInfo.productName}&rdquo; will be removed from your store. This can&apos;t be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setDeleteConfirmInfo(null)} style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "1px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", color: "#555" }}>Cancel</button>
+              <button
+                onClick={() => { deleteProduct(deleteConfirmInfo.productId); setDeleteConfirmInfo(null); }}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >Delete</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add Physical Product Modal */}
