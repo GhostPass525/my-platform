@@ -140,6 +140,10 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
 
+  // Step 2 — placement controls
+  const [designPlacement, setDesignPlacement] = useState<'center' | 'top-center' | 'left-chest'>('center');
+  const [designScale, setDesignScale] = useState(65);
+
   // Mockup generation (runs in background during step 3)
   const [mockupUrls, setMockupUrls] = useState<string[]>([]);
   const [mockupState, setMockupState] = useState<"idle" | "generating" | "done" | "error">("idle");
@@ -218,13 +222,13 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   }
 
   // Generate mockups in background — doesn't block navigation
-  async function generateMockups(imageUrl: string, productId: number, varIds: number[]) {
+  async function generateMockups(imageUrl: string, productId: number, varIds: number[], placement: string, scale: number) {
     setMockupState("generating");
     try {
       const res = await fetch("/api/printful/generate-mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl }),
+        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl, placementPreset: placement, scale }),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) {
@@ -249,7 +253,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       // Fire-and-forget — user can set price while mockups generate
       if (selectedProduct && variants.length > 0) {
         const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-        generateMockups(url, selectedProduct.id, inStockIds);
+        generateMockups(url, selectedProduct.id, inStockIds, designPlacement, designScale);
       }
     } catch (e: unknown) {
       setError((e as Error)?.message || "Upload failed. Please try again.");
@@ -552,11 +556,44 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                       <img src={designPreview} alt="Design preview" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
                     )}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile.name}</span>
                     <button onClick={() => { setDesignFile(null); setDesignPreview(null); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px", flexShrink: 0 }}>
                       Change
                     </button>
+                  </div>
+
+                  {/* Placement presets */}
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => setDesignPlacement(preset.id)}
+                          style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Scale slider */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
+                      Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={40} max={90} step={5}
+                      value={designScale}
+                      onChange={(e) => setDesignScale(Number(e.target.value))}
+                      style={{ width: "100%", accentColor: "#0f172a" }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}>
+                      <span>Small</span><span>Large</span>
+                    </div>
                   </div>
                 </div>
               )}

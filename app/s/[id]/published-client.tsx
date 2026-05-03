@@ -159,17 +159,133 @@ function parsePriceDollars(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function IframeStore({ html, title }: { html: string; title: string }) {
+function buildVariantModalInjection(products: Product[]): string {
+  const data = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    price: p.price,
+    description: p.description || '',
+    mockup_urls: p.mockup_urls || [],
+    printful_variants: p.printful_variants || [],
+  }));
+  // Escape </script> in serialized JSON so the browser HTML parser doesn't close the tag early
+  const dataJson = JSON.stringify(data).replace(/<\/script>/gi, '<\\/script>');
+
+  return `<style>
+#vc-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;padding:16px;box-sizing:border-box}
+#vc-modal{width:100%;max-width:480px;background:#fff;border-radius:20px;box-shadow:0 32px 80px rgba(0,0,0,.22);overflow:hidden;max-height:85vh;display:flex;flex-direction:column}
+.vc-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #F0EFED;flex-shrink:0}
+.vc-ttl{font-size:15px;font-weight:600;color:#1A1A1A;font-family:system-ui,sans-serif}
+.vc-cls{background:none;border:none;cursor:pointer;color:#AAA;font-size:18px;line-height:1;padding:4px}
+.vc-body{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+.vc-img{width:100%;max-height:200px;object-fit:contain;border-radius:12px;background:#F5F4F2}
+.vc-price{font-size:22px;font-weight:700;color:#1A1A1A;font-family:system-ui,sans-serif}
+.vc-desc{font-size:13px;color:#666;line-height:1.6;margin:0;font-family:system-ui,sans-serif}
+.vc-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#AAA;font-family:system-ui,sans-serif;margin-bottom:6px}
+.vc-swatches{display:flex;flex-wrap:wrap;gap:8px}
+.vc-sw{width:28px;height:28px;border-radius:50%;border:2px solid rgba(0,0,0,.12);cursor:pointer;flex-shrink:0}
+.vc-sw.sel{border:3px solid #0f172a!important}
+.vc-szs{display:flex;flex-wrap:wrap;gap:6px}
+.vc-sz{padding:6px 12px;border-radius:7px;border:1.5px solid #E5E7EB;background:#fff;color:#1A1A1A;font-size:13px;cursor:pointer;font-family:system-ui,sans-serif}
+.vc-sz.sel{border-color:#0f172a;background:#0f172a;color:#fff}
+.vc-btn{width:100%;padding:12px 0;border-radius:10px;border:none;background:#0f172a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif}
+.vc-btn:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed}
+</style>
+<script>
+(function(){
+var P=${dataJson};
+var skip=false;
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(btn,prod){
+  var vars=prod.printful_variants||[];
+  if(!vars.length)return;
+  var sizes=[];
+  vars.forEach(function(v){if(v.size&&sizes.indexOf(v.size)<0)sizes.push(v.size);});
+  var cm=[];
+  vars.forEach(function(v){if(v.color&&!cm.find(function(c){return c.color===v.color;}))cm.push(v);});
+  var ss=sizes[0]||'',sc=cm[0]?cm[0].color:'';
+  var ov=document.createElement('div');ov.id='vc-overlay';
+  var can=(!sizes.length||!!ss)&&(!cm.length||!!sc);
+  var imgH=prod.mockup_urls&&prod.mockup_urls[0]?'<img src="'+esc(prod.mockup_urls[0])+'" class="vc-img" alt="'+esc(prod.name)+'" />':'';
+  var descH=prod.description?'<p class="vc-desc">'+esc(prod.description)+'</p>':'';
+  var colH=cm.length?'<div><div class="vc-lbl">Color: <span id="vc-cl">'+esc(sc)+'</span></div><div class="vc-swatches">'+cm.map(function(v){return'<button class="vc-sw'+(v.color===sc?' sel':'')+'" title="'+esc(v.color)+'" style="background:'+(v.color_code||'#ccc')+'" data-c="'+esc(v.color)+'"></button>';}).join('')+'</div></div>':'';
+  var szH=sizes.length?'<div><div class="vc-lbl">Size</div><div class="vc-szs">'+sizes.map(function(s){return'<button class="vc-sz'+(s===ss?' sel':'')+'" data-s="'+esc(s)+'">'+esc(s)+'</button>';}).join('')+'</div></div>':'';
+  ov.innerHTML='<div id="vc-modal"><div class="vc-hdr"><span class="vc-ttl">'+esc(prod.name)+'</span><button class="vc-cls" id="vc-x">&#10005;</button></div><div class="vc-body">'+imgH+'<div class="vc-price">'+esc(prod.price)+'</div>'+descH+colH+szH+'<button class="vc-btn" id="vc-add"'+(can?'':' disabled')+'>'+(can?'Add to Cart \u2014 '+esc(prod.price):'Select size & color')+'</button></div></div>';
+  document.body.appendChild(ov);
+  function rm(){ov.remove();}
+  ov.addEventListener('click',function(e){if(e.target===ov)rm();});
+  document.getElementById('vc-x').addEventListener('click',rm);
+  function upd(){
+    var ok=(!sizes.length||!!ss)&&(!cm.length||!!sc);
+    var ab=document.getElementById('vc-add');
+    if(ab){ab.disabled=!ok;ab.textContent=ok?'Add to Cart \u2014 '+prod.price:'Select size & color';}
+  }
+  ov.querySelectorAll('.vc-sw').forEach(function(sw){
+    sw.addEventListener('click',function(){
+      sc=sw.getAttribute('data-c');
+      ov.querySelectorAll('.vc-sw').forEach(function(x){x.classList.remove('sel');});
+      sw.classList.add('sel');
+      var cl=document.getElementById('vc-cl');if(cl)cl.textContent=sc;
+      upd();
+    });
+  });
+  ov.querySelectorAll('.vc-sz').forEach(function(sb){
+    sb.addEventListener('click',function(){
+      ss=sb.getAttribute('data-s');
+      ov.querySelectorAll('.vc-sz').forEach(function(x){x.classList.remove('sel');});
+      sb.classList.add('sel');
+      upd();
+    });
+  });
+  document.getElementById('vc-add').addEventListener('click',function(){
+    rm();
+    var mv=vars.find(function(v){return v.size===ss&&v.color===sc;})
+      ||(ss?vars.find(function(v){return v.size===ss;}):null)
+      ||(sc?vars.find(function(v){return v.color===sc;}):null)
+      ||vars[0];
+    var sfx=[ss,sc].filter(Boolean).join(' / ');
+    if(sfx)btn.setAttribute('data-product-name',prod.name+' \u2014 '+sfx);
+    if(mv)btn.setAttribute('data-variant-id',String(mv.id));
+    skip=true;btn.click();
+  });
+}
+document.addEventListener('click',function(e){
+  if(skip){skip=false;return;}
+  var btn=e.target&&e.target.closest?e.target.closest('[data-add-to-cart]'):null;
+  if(!btn)return;
+  var pid=btn.getAttribute('data-product-id');
+  var prod=P.find(function(p){return p.id===pid;});
+  if(!prod||!prod.printful_variants||!prod.printful_variants.length)return;
+  e.stopImmediatePropagation();e.preventDefault();
+  show(btn,prod);
+},true);
+})();
+</script>`;
+}
+
+function IframeStore({ html, title, products }: { html: string; title: string; products?: Product[] }) {
   const ref = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const iframe = ref.current;
     if (!iframe) return;
     const doc = iframe.contentDocument;
     if (!doc) return;
+
+    let finalHtml = html;
+    const printfulProducts = (products || []).filter(
+      (p) => p.printful_variants && p.printful_variants.length > 0
+    );
+    if (printfulProducts.length > 0) {
+      const injection = buildVariantModalInjection(printfulProducts);
+      finalHtml = finalHtml.includes('</body>')
+        ? finalHtml.replace('</body>', injection + '</body>')
+        : finalHtml + injection;
+    }
+
     doc.open();
-    doc.write(html);
+    doc.write(finalHtml);
     doc.close();
-  }, [html]);
+  }, [html, products]);
   return (
     <iframe
       ref={ref}
@@ -181,7 +297,7 @@ function IframeStore({ html, title }: { html: string; title: string }) {
 
 export default function PublishedClient({ site }: { site: SiteSpec }) {
   if (site.generatedHtml) {
-    return <IframeStore html={site.generatedHtml} title={site.brandName || "Store"} />;
+    return <IframeStore html={site.generatedHtml} title={site.brandName || "Store"} products={site.products} />;
   }
   return <FullStoreTemplate site={site} />;
 }
@@ -303,37 +419,19 @@ function FullStoreTemplate({ site }: { site: SiteSpec }) {
     <>
       <style>{`html, body { min-height: 100%; width: 100%; margin: 0; padding: 0; }`}</style>
       {site.activeLayout ? (
-        <>
-          <StoreLayout
-            layoutId={site.activeLayout as LayoutId}
-            site={site as any}
-            activePageId={activePageId || pages[0]?.id}
-            onSelectPage={(id) => {
-              setActivePageId(id);
-              const pg = pages.find((p) => p.id === id);
-              if (pg) setActiveKey(pg.key);
-            }}
-            onAddToCart={addToCart}
-            cartCount={cartCount}
-            onOpenCart={() => setCartOpen(true)}
-          />
-          {/* Floating cart button */}
-          <button
-            onClick={() => setCartOpen(true)}
-            style={{ position: "fixed", bottom: 24, right: 24, zIndex: 40, height: 52, width: 52, borderRadius: "50%", background: t.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
-          >
-            {cartCount > 0 && (
-              <span style={{ position: "absolute", top: -4, right: -4, height: 18, minWidth: 18, borderRadius: 9, background: "#EF4444", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
-                {cartCount}
-              </span>
-            )}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 01-8 0" />
-            </svg>
-          </button>
-        </>
+        <StoreLayout
+          layoutId={site.activeLayout as LayoutId}
+          site={site as any}
+          activePageId={activePageId || pages[0]?.id}
+          onSelectPage={(id) => {
+            setActivePageId(id);
+            const pg = pages.find((p) => p.id === id);
+            if (pg) setActiveKey(pg.key);
+          }}
+          onAddToCart={addToCart}
+          cartCount={cartCount}
+          onOpenCart={() => setCartOpen(true)}
+        />
       ) : (
       <div className="min-h-screen" style={{ background: t.bg, color: t.text, fontFamily: fontStack(site.font) }}>
 

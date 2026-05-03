@@ -24,11 +24,11 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string };
+  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { productId, variantIds, designImageUrl } = body;
+  const { productId, variantIds, designImageUrl, scale, placementPreset } = body;
   if (!productId || !Array.isArray(variantIds) || variantIds.length === 0 || !designImageUrl) {
     return NextResponse.json(
       { error: 'productId, variantIds, and designImageUrl are required' },
@@ -81,15 +81,32 @@ export async function POST(req: Request) {
 
     const areaWidth  = pf?.width  ?? 1800;
     const areaHeight = pf?.height ?? 2400;
-    // Centre design at 80% of print-area width
-    const designSize = Math.round(areaWidth * 0.8);
-    const top  = Math.round((areaHeight - designSize) / 2);
-    const left = Math.round((areaWidth  - designSize) / 2);
+
+    const scaleRatio = Math.min(Math.max(scale ?? 65, 40), 90) / 100;
+
+    let designW: number, designH: number, top: number, left: number;
+    if (placementPreset === 'left-chest') {
+      designW = Math.round(areaWidth * Math.min(scaleRatio, 0.35));
+      designH = designW;
+      top  = Math.round(areaHeight * 0.08);
+      left = Math.round(areaWidth  * 0.08);
+    } else if (placementPreset === 'top-center') {
+      designW = Math.round(areaWidth * scaleRatio);
+      designH = designW;
+      top  = Math.round(areaHeight * 0.05);
+      left = Math.round((areaWidth - designW) / 2);
+    } else {
+      // center (default)
+      designW = Math.round(areaWidth * scaleRatio);
+      designH = designW;
+      top  = Math.round((areaHeight - designW) / 2);
+      left = Math.round((areaWidth  - designW) / 2);
+    }
 
     return {
       placement,
       image_url: designImageUrl,
-      position: { area_width: areaWidth, area_height: areaHeight, width: designSize, height: designSize, top, left },
+      position: { area_width: areaWidth, area_height: areaHeight, width: designW, height: designH, top, left },
     };
   });
 
