@@ -69,14 +69,27 @@ export type ShippingItem = {
  * Creates a sync product on Volcity's master Printful account.
  * Uses external_id pattern: volcity_${userId}_${productId}
  */
+export type PlacementFile = {
+  placement: string; // e.g. 'front', 'back'
+  url: string;
+};
+
 export async function createPrintfulProduct(
   userId: string,
   productId: string,
   productName: string,
   designUrl: string,
-  variants: PrintfulVariantInput[]
+  variants: PrintfulVariantInput[],
+  /** Optional: per-placement design files (front, back, etc.) — overrides designUrl when provided */
+  placementFiles?: PlacementFile[]
 ): Promise<{ id: number; external_id: string; name: string; thumbnail_url?: string }> {
   const externalId = `volcity_${userId}_${productId}`;
+
+  // Build the files array for each variant. If placementFiles are provided, use those;
+  // otherwise fall back to the single designUrl as the default/front file.
+  const variantFiles = placementFiles && placementFiles.length > 0
+    ? placementFiles.map(pf => ({ url: pf.url, type: pf.placement }))
+    : [{ url: designUrl, type: 'default' }];
 
   const response = await fetch(`${PRINTFUL_API}/store/products`, {
     method: 'POST',
@@ -91,7 +104,7 @@ export async function createPrintfulProduct(
       sync_variants: variants.map((v) => ({
         variant_id: v.variantId,
         retail_price: v.retailPrice,
-        files: [{ url: designUrl, type: 'default' }],
+        files: variantFiles,
       })),
     }),
   });

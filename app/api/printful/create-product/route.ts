@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { createPrintfulProduct, getPrintfulHeaders, type PrintfulVariantInput } from '@/lib/printful';
+import { createPrintfulProduct, getPrintfulHeaders, type PrintfulVariantInput, type PlacementFile } from '@/lib/printful';
 import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     printfulCatalogProductId?: number;
     printfulVariants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
     mockupUrls?: string[];
+    placementFiles?: PlacementFile[];
   };
 
   try {
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { productName, designUrl, variantInputs, description, projectId, printfulCatalogProductId, printfulVariants, mockupUrls } = body;
+  const { productName, designUrl, variantInputs, description, projectId, printfulCatalogProductId, printfulVariants, mockupUrls, placementFiles } = body;
 
   if (!productName || !designUrl || !Array.isArray(variantInputs) || variantInputs.length === 0) {
     return NextResponse.json(
@@ -58,7 +59,8 @@ export async function POST(req: Request) {
       productId,
       productName,
       designUrl,
-      variantInputs
+      variantInputs,
+      placementFiles,
     );
     console.log('[create-product] Step 2: Printful product created', { id: result.id, external_id: result.external_id });
 

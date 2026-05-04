@@ -43,6 +43,18 @@ export type NewProduct = {
   printful_variants: Array<{ id: number; size: string; color: string; color_code?: string }>;
 };
 
+/** Per-placement design state for the drag/resize editor. */
+type PlacementDesign = {
+  file: File | null;
+  previewUrl: string | null;   // local blob URL or AI URL — for display
+  uploadedUrl: string | null;  // Supabase Storage URL — for Printful
+  natW: number;
+  natH: number;
+  xPct: number;  // left edge as fraction of printfile width  [0..1]
+  yPct: number;  // top  edge as fraction of printfile height [0..1]
+  wPct: number;  // design width as fraction of printfile width [0..1]
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
@@ -92,51 +104,6 @@ const NAME_SUGGESTIONS: Record<CategoryId, (brand?: string) => string> = {
   stickers:    () => "Custom Sticker Pack",
 };
 
-// ── Placement zones & preview helpers ─────────────────────────────────────────
-
-/** Printful print-area coordinate zones (1800×2400 canvas) per preset. */
-const PLACEMENT_ZONES = {
-  'center':     { zoneTop: 450,  zoneLeft: 0,   zoneW: 1800, zoneH: 1800 },
-  'top-center': { zoneTop: 150,  zoneLeft: 0,   zoneW: 1800, zoneH: 1200 },
-  'left-chest': { zoneTop: 250,  zoneLeft: 100, zoneW: 500,  zoneH: 500  },
-} as const;
-
-/** Compute Printful position object from placement preset, scale, and image aspect ratio. */
-function computePrintfulPosition(
-  placement: 'center' | 'top-center' | 'left-chest',
-  scale: number,
-  naturalW: number,
-  naturalH: number,
-): { area_width: number; area_height: number; width: number; height: number; top: number; left: number } {
-  const AREA_W = 1800, AREA_H = 2400;
-  const ratio = naturalH > 0 && naturalW > 0 ? naturalH / naturalW : 1;
-  const zone = PLACEMENT_ZONES[placement];
-
-  const designW = Math.round(zone.zoneW * (scale / 100));
-  const designH = Math.round(designW * ratio);
-
-  let top: number, left: number;
-  if (placement === 'center') {
-    top  = zone.zoneTop + Math.round((zone.zoneH - designH) / 2);
-    left = zone.zoneLeft + Math.round((zone.zoneW - designW) / 2);
-  } else if (placement === 'top-center') {
-    top  = zone.zoneTop;
-    left = zone.zoneLeft + Math.round((zone.zoneW - designW) / 2);
-  } else {
-    top  = zone.zoneTop;
-    left = zone.zoneLeft;
-  }
-
-  return {
-    area_width:  AREA_W,
-    area_height: AREA_H,
-    width:  designW,
-    height: designH,
-    top:  Math.max(0, Math.min(top,  AREA_H - designH)),
-    left: Math.max(0, Math.min(left, AREA_W - designW)),
-  };
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -145,6 +112,25 @@ function fmt(n: number) {
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function makeDefaultDesign(): PlacementDesign {
+  return { file: null, previewUrl: null, uploadedUrl: null, natW: 1, natH: 1, xPct: 0.1, yPct: 0.1, wPct: 0.8 };
+}
+
+/** Convert per-placement design state to Printful position object. */
+function designToPosition(d: PlacementDesign, printArea: { width: number; height: number }) {
+  const asp = d.natH > 0 && d.natW > 0 ? d.natH / d.natW : 1;
+  const w = Math.round(d.wPct * printArea.width);
+  const h = Math.round(w * asp);
+  return {
+    area_width: printArea.width,
+    area_height: printArea.height,
+    width: w,
+    height: h,
+    top:  Math.max(0, Math.min(Math.round(d.yPct * printArea.height), printArea.height - h)),
+    left: Math.max(0, Math.min(Math.round(d.xPct * printArea.width),  printArea.width  - w)),
+  };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -171,18 +157,20 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [variants, setVariants] = useState<CatalogVariant[]>([]);
   const [loadingVariants, setLoadingVariants] = useState(false);
 
-  // Step 2
+  // Step 2 — multi-placement designs
   const fileRef = useRef<HTMLInputElement>(null);
-  const [designFile, setDesignFile] = useState<File | null>(null);
-  const [designPreview, setDesignPreview] = useState<string | null>(null);
-  const [designUrl, setDesignUrl] = useState<string | null>(null);
+  const [designs, setDesigns] = useState<Record<string, PlacementDesign>>({ front: makeDefaultDesign() });
+  const [placements, setPlacements] = useState<string[]>(['front']);
+  const [placementLabels, setPlacementLabels] = useState<Record<string, string>>({ front: 'Front' });
+  const [printAreas, setPrintAreas] = useState<Record<string, { width: number; height: number }>>({ front: { width: 1800, height: 2400 } });
+  const [activePlacement, setActivePlacement] = useState<string>('front');
+  const [loadingPrintfiles, setLoadingPrintfiles] = useState(false);
   const [uploading, setUploading] = useState(false);
-  // Step 2 — tab
+  // Step 2 — tab (upload / AI)
   const [designMode, setDesignMode] = useState<"upload" | "ai">("upload");
   // Step 2 — mockup preview
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [previewMockupUrls, setPreviewMockupUrls] = useState<string[]>([]);
-  const [previewUploadedUrl, setPreviewUploadedUrl] = useState<string | null>(null);
   // Step 2 — AI generation
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiStyle, setAiStyle] = useState("minimalist");
@@ -197,11 +185,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
 
-  // Step 2 — placement controls
-  const [designPlacement, setDesignPlacement] = useState<'center' | 'top-center' | 'left-chest'>('center');
-  const [designScale, setDesignScale] = useState(65);
-  const [designNaturalSize, setDesignNaturalSize] = useState<{ w: number; h: number } | null>(null);
-
   // Mockup generation (runs in background during step 3)
   const [mockupUrls, setMockupUrls] = useState<string[]>([]);
   const [mockupState, setMockupState] = useState<"idle" | "generating" | "done" | "error">("idle");
@@ -210,6 +193,16 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Design editor drag state
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{
+    type: 'move' | 'resize-se' | 'resize-sw' | 'resize-ne' | 'resize-nw';
+    pointerId: number;
+    startX: number; startY: number;
+    startXPct: number; startYPct: number; startWPct: number;
+    placement: string;
+  } | null>(null);
 
   // Load catalog on mount
   useEffect(() => {
@@ -220,19 +213,35 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       .finally(() => setLoadingCatalog(false));
   }, []);
 
-  // Load variants when product selected
+  // Load variants + printfiles when product selected
   const loadVariants = useCallback(async (product: CatalogProduct) => {
     setLoadingVariants(true);
+    setLoadingPrintfiles(true);
     try {
-      const res = await fetch(`/api/printful/catalog/${product.id}`);
-      if (res.ok) {
-        const d = await res.json();
+      const [varRes, pfRes] = await Promise.all([
+        fetch(`/api/printful/catalog/${product.id}`),
+        fetch(`/api/printful/printfiles?productId=${product.id}`),
+      ]);
+      if (varRes.ok) {
+        const d = await varRes.json();
         setVariants(Array.isArray(d.variants) ? d.variants : []);
+      }
+      if (pfRes.ok) {
+        const pf = await pfRes.json();
+        const newPlacements: string[] = pf.placements?.length > 0 ? pf.placements : ['front'];
+        const newLabels: Record<string, string> = pf.placementLabels ?? { front: 'Front' };
+        const newPrintAreas: Record<string, { width: number; height: number }> = pf.printAreas ?? { front: { width: 1800, height: 2400 } };
+        setPlacements(newPlacements);
+        setPlacementLabels(newLabels);
+        setPrintAreas(newPrintAreas);
+        setActivePlacement(newPlacements[0]);
+        setDesigns(Object.fromEntries(newPlacements.map(p => [p, makeDefaultDesign()])));
       }
     } catch {
       setVariants([]);
     } finally {
       setLoadingVariants(false);
+      setLoadingPrintfiles(false);
     }
   }, []);
 
@@ -241,7 +250,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     ? catalogProducts.filter((p) => {
         const cat = CATEGORIES.find((c) => c.id === selectedCategory);
         if (!cat) return false;
-        // Use type_name (e.g. "T-Shirt") or title for matching — not the internal `type` code (e.g. "DTFILM")
         const searchTarget = ((p.type_name || "") + " " + (p.title || "")).toUpperCase();
         return (cat.keywords as readonly string[]).some((kw) => searchTarget.includes(kw));
       })
@@ -264,42 +272,123 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       }
       setPrice(suggestedPrice || minPrice);
     }
-    // Reset mockups whenever the selected product changes
     setMockupUrls([]);
     setMockupState("idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProduct, variants]);
 
-  // Handle file selection
-  function handleFileChange(file: File) {
-    if (!file) return;
-    setDesignFile(file);
-    setDesignUrl(null);
-    setDesignNaturalSize(null);
-    setPreviewState("idle");
-    setPreviewMockupUrls([]);
-    setPreviewUploadedUrl(null);
-    const url = URL.createObjectURL(file);
-    setDesignPreview(url);
-    const img = new Image();
-    img.onload = () => setDesignNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-    img.src = url;
+  // ── Design editor pointer handlers ────────────────────────────────────────
+
+  function onDesignPointerDown(e: React.PointerEvent, type: 'move' | 'resize-se' | 'resize-sw' | 'resize-ne' | 'resize-nw') {
+    e.stopPropagation();
+    const d = designs[activePlacement];
+    if (!d) return;
+    dragStateRef.current = {
+      type,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startXPct: d.xPct,
+      startYPct: d.yPct,
+      startWPct: d.wPct,
+      placement: activePlacement,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
-  // Generate and display a real Printful mockup preview (button-triggered)
+  function onEditorPointerMove(e: React.PointerEvent) {
+    const drag = dragStateRef.current;
+    const container = editorContainerRef.current;
+    if (!drag || !container) return;
+    const rect = container.getBoundingClientRect();
+    const cw = rect.width;
+    const printArea = printAreas[drag.placement] ?? { width: 1800, height: 2400 };
+    const ch = cw * (printArea.height / printArea.width);
+    const dxPct = (e.clientX - drag.startX) / cw;
+    const dyPct = (e.clientY - drag.startY) / ch;
+
+    setDesigns(prev => {
+      const d = prev[drag.placement];
+      if (!d) return prev;
+      const asp = d.natH > 0 && d.natW > 0 ? d.natH / d.natW : 1;
+      const dsgHFrac = d.wPct * asp * (printArea.width / printArea.height);
+
+      if (drag.type === 'move') {
+        return {
+          ...prev,
+          [drag.placement]: {
+            ...d,
+            xPct: Math.max(0, Math.min(1 - d.wPct,    drag.startXPct + dxPct)),
+            yPct: Math.max(0, Math.min(1 - dsgHFrac,   drag.startYPct + dyPct)),
+          },
+        };
+      }
+      // Resize — all corner handles resize width; SE/NE grow right, NW/SW grow left (also shift x)
+      if (drag.type === 'resize-se' || drag.type === 'resize-ne') {
+        const newW = Math.max(0.1, Math.min(1 - drag.startXPct, drag.startWPct + dxPct));
+        return { ...prev, [drag.placement]: { ...d, wPct: newW } };
+      }
+      if (drag.type === 'resize-sw' || drag.type === 'resize-nw') {
+        const newW = Math.max(0.1, Math.min(drag.startXPct + drag.startWPct, drag.startWPct - dxPct));
+        const newX = drag.startXPct + drag.startWPct - newW;
+        return { ...prev, [drag.placement]: { ...d, wPct: newW, xPct: Math.max(0, newX) } };
+      }
+      return prev;
+    });
+  }
+
+  function onEditorPointerUp() {
+    dragStateRef.current = null;
+  }
+
+  // ── Design upload / AI handlers ───────────────────────────────────────────
+
+  function handleFileChange(file: File) {
+    if (!file) return;
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      setDesigns(prev => ({
+        ...prev,
+        [activePlacement]: { ...makeDefaultDesign(), file, previewUrl: blobUrl, natW: img.naturalWidth, natH: img.naturalHeight },
+      }));
+    };
+    img.src = blobUrl;
+    setPreviewState("idle");
+    setPreviewMockupUrls([]);
+  }
+
+  function selectAiImage(url: string) {
+    const img = new Image();
+    img.onload = () => {
+      setDesigns(prev => ({
+        ...prev,
+        [activePlacement]: { ...makeDefaultDesign(), previewUrl: url, uploadedUrl: url, natW: img.naturalWidth, natH: img.naturalHeight },
+      }));
+    };
+    img.src = url;
+    setPreviewState("idle");
+    setPreviewMockupUrls([]);
+  }
+
   async function handlePreviewMockup() {
-    if ((!designFile && !previewUploadedUrl) || !selectedProduct || variants.length === 0) return;
+    const activeDsg = designs[activePlacement];
+    if ((!activeDsg?.file && !activeDsg?.uploadedUrl) || !selectedProduct || variants.length === 0) return;
     setPreviewState("loading");
     try {
-      const uploadUrl = previewUploadedUrl || await uploadDesign(designFile!);
-      if (!previewUploadedUrl) setPreviewUploadedUrl(uploadUrl);
+      let imageUrl = activeDsg.uploadedUrl;
+      if (!imageUrl && activeDsg.file) {
+        imageUrl = await uploadDesign(activeDsg.file);
+        setDesigns(prev => ({ ...prev, [activePlacement]: { ...prev[activePlacement], uploadedUrl: imageUrl! } }));
+      }
+      if (!imageUrl) throw new Error("No image URL");
       const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-      const nat = designNaturalSize ?? { w: 1, h: 1 };
-      const position = computePrintfulPosition(designPlacement, designScale, nat.w, nat.h);
+      const printArea = printAreas[activePlacement] ?? { width: 1800, height: 2400 };
+      const position = designToPosition(activeDsg, printArea);
       const res = await fetch("/api/printful/generate-mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, variantIds: inStockIds, designImageUrl: uploadUrl, position }),
+        body: JSON.stringify({ productId: selectedProduct.id, variantIds: inStockIds, designImageUrl: imageUrl, position }),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) {
@@ -312,7 +401,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     }
   }
 
-  // AI design generation
   async function handleGenerateDesign() {
     if (!aiPrompt.trim()) return;
     setAiState("loading");
@@ -341,26 +429,11 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     }
   }
 
-  // Select an AI-generated image as the design
-  function selectAiImage(url: string) {
-    setDesignPreview(url);
-    setPreviewUploadedUrl(url);
-    setDesignFile(null);
-    setDesignNaturalSize(null);
-    setPreviewState("idle");
-    setPreviewMockupUrls([]);
-    // Load natural dimensions for position calculations
-    const img = new Image();
-    img.onload = () => setDesignNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-    img.src = url;
-  }
-
-  // Generate mockups in background — doesn't block navigation
   async function generateMockups(
     imageUrl: string,
     productId: number,
     varIds: number[],
-    position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number },
+    position: ReturnType<typeof designToPosition>,
   ) {
     setMockupState("generating");
     try {
@@ -380,24 +453,35 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     }
   }
 
-  // Upload design and advance; reuse preview upload/mockups if already generated
   async function handleUploadAndNext() {
-    if (!designFile && !previewUploadedUrl) return;
+    const activeDsg = designs[activePlacement];
+    if (!activeDsg?.previewUrl) return;
     setUploading(true);
     setError(null);
     try {
-      const url = previewUploadedUrl || await uploadDesign(designFile!);
-      setDesignUrl(url);
+      // Upload all placements that have a design but no uploadedUrl yet
+      const updatedDesigns = { ...designs };
+      for (const [pl, d] of Object.entries(updatedDesigns)) {
+        if (d.previewUrl && !d.uploadedUrl) {
+          const url = d.file ? await uploadDesign(d.file) : d.previewUrl;
+          updatedDesigns[pl] = { ...d, uploadedUrl: url };
+        }
+      }
+      setDesigns(updatedDesigns);
       setStep(3);
-      if (previewMockupUrls.length > 0) {
-        // Reuse the mockups the user already previewed
-        setMockupUrls(previewMockupUrls);
-        setMockupState("done");
-      } else if (selectedProduct && variants.length > 0) {
-        const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-        const nat = designNaturalSize ?? { w: 1, h: 1 };
-        const position = computePrintfulPosition(designPlacement, designScale, nat.w, nat.h);
-        generateMockups(url, selectedProduct.id, inStockIds, position);
+
+      // Generate mockups in background using the front/first placement
+      const primaryKey = updatedDesigns['front'] ? 'front' : placements[0];
+      const primaryDsg = updatedDesigns[primaryKey];
+      if (primaryDsg?.uploadedUrl && selectedProduct && variants.length > 0) {
+        if (previewMockupUrls.length > 0) {
+          setMockupUrls(previewMockupUrls);
+          setMockupState("done");
+        } else {
+          const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
+          const printArea = printAreas[primaryKey] ?? { width: 1800, height: 2400 };
+          generateMockups(primaryDsg.uploadedUrl, selectedProduct.id, inStockIds, designToPosition(primaryDsg, printArea));
+        }
       }
     } catch (e: unknown) {
       setError((e as Error)?.message || "Upload failed. Please try again.");
@@ -406,17 +490,18 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     }
   }
 
-  // Final save
   async function handleSave() {
-    if (!selectedProduct || !designUrl || price < minPrice || !productName.trim()) return;
+    const primaryKey = designs['front'] ? 'front' : placements[0];
+    const primaryDsg = designs[primaryKey];
+    if (!selectedProduct || !primaryDsg?.uploadedUrl || price < minPrice || !productName.trim()) return;
     setSaving(true);
     setError(null);
 
-    // Build variant inputs — use all in-stock variants with the set retail price
     const retailPrice = price.toFixed(2);
-    const variantInputs = variants
-      .filter((v) => v.in_stock)
-      .map((v) => ({ variantId: v.id, retailPrice }));
+    const variantInputs = variants.filter((v) => v.in_stock).map((v) => ({ variantId: v.id, retailPrice }));
+    const placementFiles = placements
+      .filter(pl => designs[pl]?.uploadedUrl)
+      .map(pl => ({ placement: pl, url: designs[pl].uploadedUrl! }));
 
     try {
       const inStockVariantsForBody = variants.filter((v) => v.in_stock);
@@ -426,43 +511,32 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
         body: JSON.stringify({
           productName: productName.trim(),
           description: description.trim(),
-          designUrl,
+          designUrl: primaryDsg.uploadedUrl,
           variantInputs,
           projectId: projectId ?? undefined,
           printfulCatalogProductId: selectedProduct?.id ?? undefined,
-          printfulVariants: inStockVariantsForBody.map((v) => ({
-            id: v.id,
-            size: v.size,
-            color: v.color,
-            color_code: v.color_code,
-          })),
+          printfulVariants: inStockVariantsForBody.map((v) => ({ id: v.id, size: v.size, color: v.color, color_code: v.color_code })),
           mockupUrls: mockupUrls.length > 0 ? mockupUrls : undefined,
+          placementFiles: placementFiles.length > 0 ? placementFiles : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create product");
 
-      // Prefer generated mockup; fall back to Printful thumbnail, then raw design
-      const primaryImage = mockupUrls[0] || data.thumbnailUrl || designUrl || undefined;
-
+      const primaryImage = mockupUrls[0] || data.thumbnailUrl || primaryDsg.uploadedUrl || undefined;
       onProductCreated({
         id: data.productId || uid(),
         name: productName.trim(),
         description: description.trim(),
         price: `$${price}`,
         imageDataUrl: primaryImage,
-        design_url: designUrl || undefined,
+        design_url: primaryDsg.uploadedUrl || undefined,
         mockup_urls: mockupUrls.length > 0 ? mockupUrls : undefined,
         product_type: "physical",
         printful_sync_product_id: data.syncProductId,
         printful_catalog_product_id: selectedProduct.id,
         printful_variant_ids: inStockVariantsForBody.map((v) => v.id),
-        printful_variants: inStockVariantsForBody.map((v) => ({
-          id: v.id,
-          size: v.size,
-          color: v.color,
-          color_code: v.color_code,
-        })),
+        printful_variants: inStockVariantsForBody.map((v) => ({ id: v.id, size: v.size, color: v.color, color_code: v.color_code })),
       });
       setSuccess(true);
     } catch (e: unknown) {
@@ -478,7 +552,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     ? calculateProfitBreakdown(price, maxVariantCost, 0)
     : null;
 
-  // Colors grouped from variants (deduped)
   const colorGroups = variants.reduce<{ color: string; code?: string; count: number }[]>((acc, v) => {
     if (!acc.find((c) => c.color === v.color)) {
       acc.push({ color: v.color, code: v.color_code, count: variants.filter((x) => x.color === v.color).length });
@@ -487,6 +560,15 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   }, []).slice(0, 8);
 
   const sizes = [...new Set(variants.map((v) => v.size))].slice(0, 10);
+
+  const activeDsg = designs[activePlacement];
+  const hasDesignForActive = !!(activeDsg?.previewUrl);
+  const hasAnyDesign = placements.some(pl => !!designs[pl]?.previewUrl);
+
+  // Editor canvas dimensions: cap height at 300px while preserving aspect ratio
+  const printArea = printAreas[activePlacement] ?? { width: 1800, height: 2400 };
+  const editorMaxH = 300;
+  const editorW = Math.min(512, Math.round(editorMaxH * printArea.width / printArea.height));
 
   return (
     <div
@@ -539,12 +621,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
               </div>
               <div style={{ fontSize: 17, fontWeight: 700, color: "#1A1A1A", marginBottom: 6 }}>Product created!</div>
               <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>It&apos;s now in your store and ready to sell.</div>
-              <button
-                onClick={onClose}
-                style={{ padding: "10px 28px", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-              >
-                Done
-              </button>
+              <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 10, border: "none", background: "#0f172a", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Done</button>
             </div>
           )}
 
@@ -665,213 +742,224 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
           {/* ── STEP 2: Design ── */}
           {!success && step === 2 && (
             <div>
-              {/* Tab toggle */}
-              <div style={{ display: "flex", gap: 0, marginBottom: 16, border: "1.5px solid #E7E5E4", borderRadius: 10, overflow: "hidden" }}>
-                {([ { id: "upload", label: "Upload Design" }, { id: "ai", label: "Generate with AI" } ] as const).map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setDesignMode(tab.id)}
-                    style={{ flex: 1, padding: "9px 0", border: "none", background: designMode === tab.id ? "#0f172a" : "#FAFAF8", color: designMode === tab.id ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* ── UPLOAD tab ── */}
-              {designMode === "upload" && (
-                <div>
-                  {selectedCategory && (
-                    <div style={{ marginBottom: 14, fontSize: 12, color: "#888", background: "#FAFAF8", border: "1px solid #EEEDE9", borderRadius: 8, padding: "8px 12px" }}>
-                      <strong style={{ color: "#555" }}>Design requirements:</strong> {DESIGN_REQS[selectedCategory]}
-                    </div>
-                  )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    style={{ display: "none" }}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }}
-                  />
-                  {!designFile && !previewUploadedUrl ? (
-                    <div
-                      onClick={() => fileRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFileChange(f); }}
-                      style={{ border: "2px dashed #E7E5E4", borderRadius: 12, padding: "48px 24px", textAlign: "center", cursor: "pointer", transition: "border-color 0.15s" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#0f172a"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#E7E5E4"; }}
-                    >
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 12px" }}>
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                      </svg>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A", marginBottom: 4 }}>Upload your design</div>
-                      <div style={{ fontSize: 12, color: "#AAA" }}>PNG, JPG or WebP · max 25 MB · drag & drop or click</div>
-                    </div>
-                  ) : (
-                    <div>
-                      {/* Design / mockup preview area */}
-                      {previewState === "idle" && (
-                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
-                          {designPreview && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={designPreview} alt="Design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
-                          )}
-                        </div>
-                      )}
-                      {previewState === "loading" && (
-                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                          </svg>
-                          <div style={{ fontSize: 13, color: "#888" }}>Generating mockup… this takes ~30 seconds</div>
-                        </div>
-                      )}
-                      {previewState === "done" && previewMockupUrls.length > 0 && (
-                        <div style={{ marginBottom: 12 }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
-                          {previewMockupUrls.length > 1 && (
-                            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                              {previewMockupUrls.slice(0, 4).map((url, i) => (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img key={i} src={url} alt={`Angle ${i + 1}`} style={{ width: 58, height: 58, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4" }} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {previewState === "error" && (
-                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ flex: 1 }}>Preview generation failed. You can still proceed.</span>
-                          <button onClick={handlePreviewMockup} style={{ background: "none", border: "1px solid #D97706", borderRadius: 6, color: "#92400E", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{designFile?.name ?? "AI-generated design"}</span>
-                        <button onClick={() => { setDesignFile(null); setDesignPreview(null); setPreviewUploadedUrl(null); setPreviewState("idle"); setPreviewMockupUrls([]); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px", flexShrink: 0 }}>
-                          Change
+              {/* Placement tabs — only shown when multiple placements exist */}
+              {placements.length > 1 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
+                  <div style={{ display: "flex", gap: 0, border: "1.5px solid #E7E5E4", borderRadius: 10, overflow: "hidden" }}>
+                    {placements.map((pl) => {
+                      const hasDsg = !!designs[pl]?.previewUrl;
+                      const isActive = activePlacement === pl;
+                      return (
+                        <button
+                          key={pl}
+                          onClick={() => { setActivePlacement(pl); setPreviewState("idle"); setPreviewMockupUrls([]); }}
+                          style={{ flex: 1, padding: "9px 0", border: "none", background: isActive ? "#0f172a" : "#FAFAF8", color: isActive ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                        >
+                          {hasDsg && <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "#4ade80" : "#16a34a", flexShrink: 0 }} />}
+                          {placementLabels[pl] ?? pl}
                         </button>
-                      </div>
-
-                      {/* Placement presets */}
-                      <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
-                            <button
-                              key={preset.id}
-                              onClick={() => setDesignPlacement(preset.id)}
-                              style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
-                            >
-                              {preset.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Scale slider */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
-                          Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={40} max={90} step={5}
-                          value={designScale}
-                          onChange={(e) => setDesignScale(Number(e.target.value))}
-                          style={{ width: "100%", accentColor: "#0f172a" }}
-                        />
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}>
-                          <span>Small</span><span>Large</span>
-                        </div>
-                      </div>
-
-                      {/* Preview Mockup button */}
-                      <button
-                        onClick={handlePreviewMockup}
-                        disabled={previewState === "loading" || !selectedProduct || variants.length === 0}
-                        style={{
-                          width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a",
-                          background: previewState === "loading" ? "#F5F4F2" : "#fff",
-                          color: previewState === "loading" ? "#AAA" : "#0f172a",
-                          fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
-                      </button>
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* ── AI GENERATE tab ── */}
-              {designMode === "ai" && (
-                <div>
-                  {/* If AI image already selected, show it with placement controls */}
-                  {designPreview && previewUploadedUrl && !designFile ? (
-                    <div>
-                      {previewState === "idle" && (
-                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: 16, textAlign: "center" }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={designPreview} alt="Generated design" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
-                        </div>
-                      )}
-                      {previewState === "loading" && (
-                        <div style={{ borderRadius: 12, border: "1px solid #E7E5E4", background: "#F8F7F5", marginBottom: 12, padding: "32px 16px", textAlign: "center" }}>
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#BBB" strokeWidth="2" strokeLinecap="round" style={{ margin: "0 auto 10px", display: "block" }}>
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                          </svg>
-                          <div style={{ fontSize: 13, color: "#888" }}>Generating mockup…</div>
-                        </div>
-                      )}
-                      {previewState === "done" && previewMockupUrls.length > 0 && (
-                        <div style={{ marginBottom: 12 }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 12, border: "1px solid #E7E5E4", display: "block" }} />
-                        </div>
-                      )}
-                      {previewState === "error" && (
-                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ flex: 1 }}>Preview failed. You can still proceed.</span>
-                          <button onClick={handlePreviewMockup} style={{ background: "none", border: "1px solid #D97706", borderRadius: 6, color: "#92400E", fontSize: 11, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#888", marginBottom: 16 }}>
-                        <span>AI-generated design selected</span>
-                        <button onClick={() => { setDesignPreview(null); setPreviewUploadedUrl(null); setPreviewState("idle"); setPreviewMockupUrls([]); setAiState("done"); }} style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px" }}>
-                          Change
-                        </button>
+              {/* ── Design Editor (shown when a design is loaded for active placement) ── */}
+              {hasDesignForActive ? (
+                <div style={{ marginBottom: 16 }}>
+                  {/* Product reference bar */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "8px 10px", background: "#F8F7F5", borderRadius: 8, border: "1px solid #E7E5E4" }}>
+                    {selectedProduct?.thumbnail_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={selectedProduct.thumbnail_url} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#1A1A1A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selectedProduct?.title}</div>
+                      <div style={{ fontSize: 11, color: "#888", marginTop: 1 }}>
+                        {placementLabels[activePlacement] ?? activePlacement} · Drag to reposition · Corner handles to resize
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Editor canvas: represents the printable area at capped aspect ratio */}
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <div
+                      ref={editorContainerRef}
+                      onPointerMove={onEditorPointerMove}
+                      onPointerUp={onEditorPointerUp}
+                      onPointerLeave={onEditorPointerUp}
+                      style={{
+                        position: "relative",
+                        width: editorW,
+                        maxWidth: "100%",
+                        aspectRatio: `${printArea.width} / ${printArea.height}`,
+                        border: "2px dashed #D1D5DB",
+                        borderRadius: 10,
+                        background: selectedProduct?.thumbnail_url
+                          ? `url(${selectedProduct.thumbnail_url}) center/contain no-repeat #F9FAFB`
+                          : "#F9FAFB",
+                        overflow: "hidden",
+                        userSelect: "none",
+                        touchAction: "none",
+                        cursor: "default",
+                      }}
+                    >
+                      {/* Printfile area label */}
+                      <div style={{ position: "absolute", bottom: 4, left: 0, right: 0, textAlign: "center", fontSize: 10, color: "rgba(0,0,0,0.3)", pointerEvents: "none" }}>
+                        Print area — {printArea.width}×{printArea.height}px
                       </div>
 
-                      {/* Placement presets */}
-                      <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {([ { id: "center", label: "Center" }, { id: "top-center", label: "Top Center" }, { id: "left-chest", label: "Left Chest" } ] as const).map((preset) => (
-                            <button key={preset.id} onClick={() => setDesignPlacement(preset.id)} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${designPlacement === preset.id ? "#0f172a" : "#E7E5E4"}`, background: designPlacement === preset.id ? "#0f172a" : "#FAFAF8", color: designPlacement === preset.id ? "#fff" : "#1A1A1A", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
-                              {preset.label}
-                            </button>
+                      {/* Design overlay — draggable */}
+                      {activeDsg?.previewUrl && (
+                        <div
+                          onPointerDown={(e) => onDesignPointerDown(e, 'move')}
+                          style={{
+                            position: "absolute",
+                            left: `${activeDsg.xPct * 100}%`,
+                            top: `${activeDsg.yPct * 100}%`,
+                            width: `${activeDsg.wPct * 100}%`,
+                            cursor: "move",
+                            touchAction: "none",
+                            // Outline to show selection
+                            outline: "1.5px dashed rgba(15,23,42,0.5)",
+                            outlineOffset: 2,
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={activeDsg.previewUrl}
+                            alt="Design"
+                            style={{ display: "block", width: "100%", height: "auto", pointerEvents: "none", userSelect: "none" }}
+                            draggable={false}
+                          />
+                          {/* Corner resize handles */}
+                          {(['nw', 'ne', 'se', 'sw'] as const).map((handle) => (
+                            <div
+                              key={handle}
+                              onPointerDown={(e) => { e.stopPropagation(); onDesignPointerDown(e, `resize-${handle}` as 'resize-nw' | 'resize-ne' | 'resize-se' | 'resize-sw'); }}
+                              style={{
+                                position: "absolute",
+                                width: 10, height: 10,
+                                background: "#0f172a",
+                                border: "2px solid #fff",
+                                borderRadius: 2,
+                                zIndex: 2,
+                                touchAction: "none",
+                                ...(handle.includes('n') ? { top: -5 } : { bottom: -5 }),
+                                ...(handle.includes('w') ? { left: -5, cursor: handle === 'nw' ? 'nw-resize' : 'sw-resize' } : { right: -5, cursor: handle === 'ne' ? 'ne-resize' : 'se-resize' }),
+                              }}
+                            />
                           ))}
                         </div>
-                      </div>
-
-                      {/* Scale slider */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 6 }}>
-                          Design Size — <span style={{ textTransform: "none", letterSpacing: 0, color: "#1A1A1A" }}>{designScale}%</span>
-                        </div>
-                        <input type="range" min={40} max={90} step={5} value={designScale} onChange={(e) => setDesignScale(Number(e.target.value))} style={{ width: "100%", accentColor: "#0f172a" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#AAA", marginTop: 2 }}><span>Small</span><span>Large</span></div>
-                      </div>
-
-                      <button onClick={handlePreviewMockup} disabled={previewState === "loading" || !selectedProduct || variants.length === 0} style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "1.5px solid #0f172a", background: previewState === "loading" ? "#F5F4F2" : "#fff", color: previewState === "loading" ? "#AAA" : "#0f172a", fontSize: 13, fontWeight: 600, cursor: previewState === "loading" ? "not-allowed" : "pointer" }}>
-                        {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
-                      </button>
+                      )}
                     </div>
-                  ) : (
+                  </div>
+
+                  {/* Editor actions row */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                    <button
+                      onClick={() => {
+                        setDesigns(prev => ({ ...prev, [activePlacement]: makeDefaultDesign() }));
+                        setPreviewState("idle");
+                        setPreviewMockupUrls([]);
+                      }}
+                      style={{ background: "none", border: "none", color: "#AAA", cursor: "pointer", fontSize: 12, padding: 0 }}
+                    >
+                      Remove design
+                    </button>
+                    <button
+                      onClick={handlePreviewMockup}
+                      disabled={previewState === "loading"}
+                      style={{
+                        padding: "7px 14px", borderRadius: 8,
+                        border: "1.5px solid #0f172a", background: "#fff", color: "#0f172a",
+                        fontSize: 12, fontWeight: 600,
+                        cursor: previewState === "loading" ? "not-allowed" : "pointer",
+                        opacity: previewState === "loading" ? 0.5 : 1,
+                      }}
+                    >
+                      {previewState === "loading" ? "Generating…" : previewState === "done" ? "Regenerate Preview" : "Preview Mockup"}
+                    </button>
+                  </div>
+
+                  {/* Mockup preview result */}
+                  {previewState === "done" && previewMockupUrls.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={previewMockupUrls[0]} alt="Product mockup" style={{ width: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 10, border: "1px solid #E7E5E4", display: "block" }} />
+                      {previewMockupUrls.length > 1 && (
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          {previewMockupUrls.slice(0, 4).map((url, i) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={i} src={url} alt={`Angle ${i + 1}`} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4" }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {previewState === "error" && (
+                    <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ flex: 1 }}>Preview failed. You can still proceed.</span>
+                      <button onClick={handlePreviewMockup} style={{ background: "none", border: "1px solid #D97706", borderRadius: 6, color: "#92400E", fontSize: 11, padding: "3px 8px", cursor: "pointer" }}>Retry</button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── Upload / AI selection (no design yet for this placement) ── */
+                <div>
+                  {loadingPrintfiles && (
+                    <div style={{ fontSize: 12, color: "#AAA", marginBottom: 10, textAlign: "center" }}>Loading print area info…</div>
+                  )}
+
+                  {/* Tab toggle */}
+                  <div style={{ display: "flex", gap: 0, marginBottom: 14, border: "1.5px solid #E7E5E4", borderRadius: 10, overflow: "hidden" }}>
+                    {([ { id: "upload", label: "Upload Design" }, { id: "ai", label: "Generate with AI" } ] as const).map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setDesignMode(tab.id)}
+                        style={{ flex: 1, padding: "9px 0", border: "none", background: designMode === tab.id ? "#0f172a" : "#FAFAF8", color: designMode === tab.id ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ── UPLOAD tab ── */}
+                  {designMode === "upload" && (
                     <div>
-                      {/* Prompt input */}
+                      {selectedCategory && (
+                        <div style={{ marginBottom: 12, fontSize: 12, color: "#888", background: "#FAFAF8", border: "1px solid #EEEDE9", borderRadius: 8, padding: "8px 12px" }}>
+                          <strong style={{ color: "#555" }}>Design requirements:</strong> {DESIGN_REQS[selectedCategory]}
+                        </div>
+                      )}
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        style={{ display: "none" }}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); }}
+                      />
+                      <div
+                        onClick={() => fileRef.current?.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFileChange(f); }}
+                        style={{ border: "2px dashed #E7E5E4", borderRadius: 12, padding: "48px 24px", textAlign: "center", cursor: "pointer", transition: "border-color 0.15s" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#0f172a"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#E7E5E4"; }}
+                      >
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 12px" }}>
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A", marginBottom: 4 }}>Upload your design</div>
+                        <div style={{ fontSize: 12, color: "#AAA" }}>PNG, JPG or WebP · max 25 MB · drag &amp; drop or click</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── AI GENERATE tab ── */}
+                  {designMode === "ai" && (
+                    <div>
                       <div style={{ marginBottom: 12 }}>
                         <input
                           value={aiPrompt}
@@ -881,8 +969,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                           style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #E7E5E4", fontSize: 13, color: "#1A1A1A", background: "#fff", outline: "none", boxSizing: "border-box" }}
                         />
                       </div>
-
-                      {/* Style selector */}
                       <div style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Style</div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -897,8 +983,6 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                           ))}
                         </div>
                       </div>
-
-                      {/* Generate button */}
                       <button
                         onClick={handleGenerateDesign}
                         disabled={!aiPrompt.trim() || aiState === "loading"}
@@ -906,20 +990,12 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                       >
                         {aiState === "loading" ? "Generating design… (10–20 seconds)" : "Generate Design"}
                       </button>
-
-                      {/* Error */}
                       {aiState === "error" && aiError && (
-                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 12, color: "#991B1B" }}>
-                          {aiError}
-                        </div>
+                        <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 12, color: "#991B1B" }}>{aiError}</div>
                       )}
-
-                      {/* Generated results */}
                       {aiState === "done" && aiGeneratedUrls.length > 0 && (
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>
-                            Click an image to select it
-                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Click an image to place it on your product</div>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                             {aiGeneratedUrls.map((url, i) => (
                               <button
@@ -962,21 +1038,16 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
               )}
               {mockupState === "done" && mockupUrls.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>
-                    Product Preview
-                  </div>
-                  {/* Primary mockup — large */}
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Product Preview</div>
                   <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #E7E5E4", background: "#F8F7F5", textAlign: "center", padding: "12px 12px 6px", marginBottom: mockupUrls.length > 1 ? 8 : 0 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={mockupUrls[0]} alt="Product mockup" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
                   </div>
-                  {/* Additional angles — thumbnails */}
                   {mockupUrls.length > 1 && (
                     <div style={{ display: "flex", gap: 6 }}>
                       {mockupUrls.map((url, i) => (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img key={i} src={url} alt={`Mockup ${i + 1}`}
-                          style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4", cursor: "pointer", flexShrink: 0 }} />
+                        <img key={i} src={url} alt={`Mockup ${i + 1}`} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E7E5E4", cursor: "pointer", flexShrink: 0 }} />
                       ))}
                     </div>
                   )}
@@ -1110,8 +1181,8 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
             {step === 2 && (
               <button
                 onClick={handleUploadAndNext}
-                disabled={(!designFile && !previewUploadedUrl) || uploading}
-                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: (!designFile && !previewUploadedUrl) || uploading ? "#E5E7EB" : "#0f172a", color: (!designFile && !previewUploadedUrl) || uploading ? "#9CA3AF" : "#fff", fontSize: 13, fontWeight: 600, cursor: (!designFile && !previewUploadedUrl) || uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                disabled={!hasAnyDesign || uploading}
+                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: !hasAnyDesign || uploading ? "#E5E7EB" : "#0f172a", color: !hasAnyDesign || uploading ? "#9CA3AF" : "#fff", fontSize: 13, fontWeight: 600, cursor: !hasAnyDesign || uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
               >
                 {uploading ? "Uploading…" : "Next — Set Price"}
               </button>
