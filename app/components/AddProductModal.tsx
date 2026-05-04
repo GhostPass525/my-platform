@@ -745,19 +745,25 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
               {/* Placement tabs — only shown when multiple placements exist */}
               {placements.length > 1 && (
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA", marginBottom: 8 }}>Placement</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#AAA" }}>Placement</div>
+                    <div style={{ fontSize: 11, color: "#AAA" }}>— front required, others optional</div>
+                  </div>
                   <div style={{ display: "flex", gap: 0, border: "1.5px solid #E7E5E4", borderRadius: 10, overflow: "hidden" }}>
-                    {placements.map((pl) => {
+                    {placements.map((pl, pi) => {
                       const hasDsg = !!designs[pl]?.previewUrl;
                       const isActive = activePlacement === pl;
                       return (
                         <button
                           key={pl}
                           onClick={() => { setActivePlacement(pl); setPreviewState("idle"); setPreviewMockupUrls([]); }}
-                          style={{ flex: 1, padding: "9px 0", border: "none", background: isActive ? "#0f172a" : "#FAFAF8", color: isActive ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                          style={{ flex: 1, padding: "7px 4px", border: "none", background: isActive ? "#0f172a" : "#FAFAF8", color: isActive ? "#fff" : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
                         >
-                          {hasDsg && <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "#4ade80" : "#16a34a", flexShrink: 0 }} />}
-                          {placementLabels[pl] ?? pl}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            {hasDsg && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isActive ? "#4ade80" : "#16a34a", flexShrink: 0 }} />}
+                            {placementLabels[pl] ?? pl}
+                          </div>
+                          {pi > 0 && <span style={{ fontSize: 9, opacity: 0.55, fontWeight: 400 }}>optional</span>}
                         </button>
                       );
                     })}
@@ -796,15 +802,23 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
                         aspectRatio: `${printArea.width} / ${printArea.height}`,
                         border: "2px dashed #D1D5DB",
                         borderRadius: 10,
-                        background: selectedProduct?.thumbnail_url
-                          ? `url(${selectedProduct.thumbnail_url}) center/contain no-repeat #F9FAFB`
-                          : "#F9FAFB",
+                        background: "#F5F4F2",
                         overflow: "hidden",
                         userSelect: "none",
                         touchAction: "none",
                         cursor: "default",
                       }}
                     >
+                      {/* Product image background */}
+                      {selectedProduct?.thumbnail_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={selectedProduct.thumbnail_url}
+                          alt=""
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", userSelect: "none" }}
+                          draggable={false}
+                        />
+                      )}
                       {/* Printfile area label */}
                       <div style={{ position: "absolute", bottom: 4, left: 0, right: 0, textAlign: "center", fontSize: 10, color: "rgba(0,0,0,0.3)", pointerEvents: "none" }}>
                         Print area — {printArea.width}×{printArea.height}px
