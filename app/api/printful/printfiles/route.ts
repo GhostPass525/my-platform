@@ -49,6 +49,8 @@ export async function GET(req: Request) {
   }
 
   // Fetch template images (blank product photos with print area coordinates)
+  // Printful returns: result.variant_mapping (variant->template_id per placement)
+  // and result.templates (template detail objects with image_url, print_area_*, etc.)
   type TemplateImageInfo = {
     url: string;
     templateWidth: number;
@@ -63,29 +65,44 @@ export async function GET(req: Request) {
     const tmplRes = await fetch(`https://api.printful.com/mockup-generator/templates/${productId}`, { headers });
     if (tmplRes.ok) {
       const tmplData = await tmplRes.json();
-      const templates: Array<{
-        placement: string;
-        template_url: string;
+      const tmplResult = tmplData.result ?? {};
+
+      // Build a map of template_id -> template detail
+      type PFTemplate = {
+        template_id: number;
+        image_url: string;
+        background_url: string | null;
         template_width: number;
         template_height: number;
         print_area_top: number;
         print_area_left: number;
         print_area_width: number;
         print_area_height: number;
-      }> = tmplData.result?.templates ?? [];
-      for (const t of templates) {
-        // Use first template per placement (default color/variant)
-        if (t.placement && t.template_url && !templateImages[t.placement]) {
-          templateImages[t.placement] = {
-            url: t.template_url,
-            templateWidth: t.template_width,
-            templateHeight: t.template_height,
-            printAreaTop: t.print_area_top,
-            printAreaLeft: t.print_area_left,
-            printAreaWidth: t.print_area_width,
-            printAreaHeight: t.print_area_height,
-          };
-        }
+      };
+      const tmplDetailMap = new Map<number, PFTemplate>(
+        (tmplResult.templates as PFTemplate[] ?? []).map((t: PFTemplate) => [t.template_id, t])
+      );
+
+      // Use the first variant's mapping to pick a template per placement
+      const firstVariantMapping: Array<{ placement: string; template_id: number }> =
+        (tmplResult.variant_mapping?.[0]?.templates ?? []);
+
+      for (const { placement, template_id } of firstVariantMapping) {
+        if (templateImages[placement]) continue; // already have one
+        const t = tmplDetailMap.get(template_id);
+        if (!t) continue;
+        // Prefer background_url (colored product photo); fall back to image_url (ghost overlay)
+        const url = t.background_url || t.image_url;
+        if (!url) continue;
+        templateImages[placement] = {
+          url,
+          templateWidth: t.template_width,
+          templateHeight: t.template_height,
+          printAreaTop: t.print_area_top,
+          printAreaLeft: t.print_area_left,
+          printAreaWidth: t.print_area_width,
+          printAreaHeight: t.print_area_height,
+        };
       }
     }
   } catch { /* ignore — template images are best-effort */ }
