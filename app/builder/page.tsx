@@ -242,6 +242,7 @@ function injectInlineEditor(html: string): string {
       if(window.getComputedStyle(card).position==='static')card.style.position='relative';
       var btn=document.createElement('button');
       btn.setAttribute('type','button');
+      btn.setAttribute('data-vc-delete-btn','1');
       btn.style.cssText='position:absolute;top:6px;right:6px;z-index:20;width:24px;height:24px;border-radius:50%;background:rgba(239,68,68,0.92);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;color:#fff;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
       btn.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
       btn.addEventListener('click',function(e){
@@ -2477,7 +2478,15 @@ export default function Home() {
         <AddProductModal
           userId={userId}
           projectId={projectId}
-          uploadDesign={(file) => uploadSiteImage(file, "product-design")}
+          uploadDesign={async (file) => {
+            // Use Vercel Blob (public access) so Printful can download the design URL
+            const form = new FormData();
+            form.append("file", file);
+            const res = await fetch("/api/upload", { method: "POST", body: form });
+            if (!res.ok) throw new Error("Design upload failed");
+            const { url } = await res.json();
+            return url;
+          }}
           onProductCreated={(product: NewProduct) => {
             if (!site) return;
             const newProduct: Product = { ...product };

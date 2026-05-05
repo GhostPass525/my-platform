@@ -450,6 +450,9 @@
       if (e.target.closest('#vc-pdp') || e.target.closest('#vc-panel')) return;
     }
 
+    /* Ignore builder-injected delete/action buttons so they can handle their own events */
+    if (e.target && e.target.closest && e.target.closest('[data-vc-delete-btn]')) return;
+
     /* Case 1: click anywhere on a Printful product card (not just the button) */
     var pCard = e.target.closest && e.target.closest('[data-printful="true"][data-variants]');
     if (pCard) {
