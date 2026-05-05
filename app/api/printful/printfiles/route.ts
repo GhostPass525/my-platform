@@ -48,9 +48,52 @@ export async function GET(req: Request) {
     printAreas[placement] = { width: pf?.width ?? 1800, height: pf?.height ?? 2400 };
   }
 
+  // Fetch template images (blank product photos with print area coordinates)
+  type TemplateImageInfo = {
+    url: string;
+    templateWidth: number;
+    templateHeight: number;
+    printAreaTop: number;
+    printAreaLeft: number;
+    printAreaWidth: number;
+    printAreaHeight: number;
+  };
+  const templateImages: Record<string, TemplateImageInfo> = {};
+  try {
+    const tmplRes = await fetch(`https://api.printful.com/mockup-generator/templates/${productId}`, { headers });
+    if (tmplRes.ok) {
+      const tmplData = await tmplRes.json();
+      const templates: Array<{
+        placement: string;
+        template_url: string;
+        template_width: number;
+        template_height: number;
+        print_area_top: number;
+        print_area_left: number;
+        print_area_width: number;
+        print_area_height: number;
+      }> = tmplData.result?.templates ?? [];
+      for (const t of templates) {
+        // Use first template per placement (default color/variant)
+        if (t.placement && t.template_url && !templateImages[t.placement]) {
+          templateImages[t.placement] = {
+            url: t.template_url,
+            templateWidth: t.template_width,
+            templateHeight: t.template_height,
+            printAreaTop: t.print_area_top,
+            printAreaLeft: t.print_area_left,
+            printAreaWidth: t.print_area_width,
+            printAreaHeight: t.print_area_height,
+          };
+        }
+      }
+    }
+  } catch { /* ignore — template images are best-effort */ }
+
   return NextResponse.json({
     placements,
     placementLabels: availablePlacements,
     printAreas,
+    templateImages,
   });
 }
