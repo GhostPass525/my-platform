@@ -174,7 +174,7 @@ export async function POST(req: Request) {
       "subscription_data[trial_settings][end_behavior][missing_payment_method]": "cancel",
       "subscription_data[metadata][userId]": user.id,
       payment_method_collection: "always",
-      success_url: `${origin}/builder?${projectId ? `project=${projectId}&` : ""}subscribed=1`,
+      success_url: `${origin}/builder?${projectId ? `project=${projectId}&` : ""}subscribed=1&plan=${planId}&billing=${billingPeriod}`,
       cancel_url: `${origin}/builder${projectId ? `?project=${projectId}` : ""}`,
       "metadata[userId]": user.id,
       "metadata[type]": "platform_subscription",

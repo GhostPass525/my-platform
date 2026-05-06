@@ -44,6 +44,9 @@ export default function SignupForm() {
       await supabase.from('profiles').upsert({ id: data.user?.id, first_name: firstName.trim(), updated_at: new Date().toISOString() });
     }
     setDone(true);
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'CompleteRegistration');
+    }
     // If coming from /start, redirect immediately to continue the flow
     if (returnUrl) {
       setTimeout(() => router.push(returnUrl), 600);

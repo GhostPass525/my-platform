@@ -150,6 +150,13 @@ export default function SubscriptionPage() {
       if (!res.ok || data.error) {
         showToast("error", data.error || "Something went wrong.");
       } else {
+        if (modal.type === "upgrade") {
+          const plan = PLANS.find((p) => p.id === modal.planId);
+          const value = plan ? (modal.billing === "annual" ? plan.annualTotal : plan.monthly) : 0;
+          if (typeof window !== 'undefined' && (window as any).fbq) {
+            (window as any).fbq('track', 'Subscribe', { value, currency: 'USD' });
+          }
+        }
         showToast(modal.type === "upgrade" ? "success" : "info", data.message);
         setModal(null);
         await fetchSub();

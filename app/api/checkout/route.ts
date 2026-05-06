@@ -169,7 +169,7 @@ export async function POST(req: Request) {
     const sessionParams: Record<string, string> = {
       mode: "payment",
       success_url: publishId
-        ? `${origin}/s/${publishId}?checkout=success`
+        ? `${origin}/s/${publishId}?checkout=success&amount=${(totalCents / 100).toFixed(2)}`
         : `${origin}/checkout/success`,
       cancel_url: publishId
         ? `${origin}/s/${publishId}?checkout=cancelled`

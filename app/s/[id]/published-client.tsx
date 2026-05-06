@@ -307,6 +307,14 @@ function IframeStore({ html, title }: { html: string; title: string; products?: 
 }
 
 export default function PublishedClient({ site }: { site: SiteSpec }) {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success' && (window as any).fbq) {
+      const amount = parseFloat(params.get('amount') || '0');
+      (window as any).fbq('track', 'Purchase', { value: amount, currency: 'USD' });
+    }
+  }, []);
+
   if (site.generatedHtml) {
     return <IframeStore html={site.generatedHtml} title={site.brandName || "Store"} products={site.products} />;
   }

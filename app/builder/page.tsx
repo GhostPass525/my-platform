@@ -907,8 +907,21 @@ export default function Home() {
       setAutoPublishPending(true);
       setShowPaymentSuccess(true);
       setTimeout(() => setShowPaymentSuccess(false), 5000);
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        const planId = searchParams.get('plan') || 'starter';
+        const billing = searchParams.get('billing') || 'monthly';
+        const PRICES: Record<string, Record<string, number>> = {
+          starter: { monthly: 19, annual: 189 },
+          founder: { monthly: 39, annual: 389 },
+          empire:  { monthly: 99, annual: 987 },
+        };
+        const value = PRICES[planId]?.[billing] ?? 19;
+        (window as any).fbq('track', 'Subscribe', { value, currency: 'USD' });
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.delete("subscribed");
+      params.delete("plan");
+      params.delete("billing");
       const newPath = params.toString() ? `/builder?${params.toString()}` : "/builder";
       router.replace(newPath, { scroll: false });
     }
@@ -1578,6 +1591,9 @@ export default function Home() {
       const url = `${origin}/s/${data.id}`;
       console.log("[publish] published successfully:", url);
       trackAction("Published store");
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'Lead');
+      }
       const storageKey = projectId ?? data.id;
       const isFirstPublish = !publishedUrl && !localStorage.getItem(`launched_${storageKey}`);
       setPublishedUrl(url);
