@@ -633,7 +633,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       const res = await fetch("/api/printful/generate-mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, variantIds: inStockIds, designImageUrl: compositeUrl, position }),
+        body: JSON.stringify({ productId: selectedProduct.id, variantIds: inStockIds, designImageUrl: compositeUrl, position, placement: activePlacement }),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) throw new Error(data.error || "No mockups");
@@ -736,6 +736,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     const retailPrice = price.toFixed(2);
     const variantInputs = variants.filter(v => v.in_stock).map(v => ({ variantId: v.id, retailPrice }));
     const placementFiles = placements.filter(pl => compositeUrls[pl]).map(pl => ({ placement: pl, url: compositeUrls[pl] }));
+    console.log('[AddProductModal] placementFiles being sent to create-product:', JSON.stringify(placementFiles));
     try {
       const inStockV = variants.filter(v => v.in_stock);
       const res = await fetch("/api/printful/create-product", {

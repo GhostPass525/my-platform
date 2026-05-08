@@ -26,11 +26,11 @@ export async function POST(req: Request) {
 
   type PositionObj = { area_width: number; area_height: number; width: number; height: number; top: number; left: number };
   type PlacementFileInput = { placement: string; imageUrl: string; position: PositionObj };
-  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string; position?: PositionObj; placementFiles?: PlacementFileInput[] };
+  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string; position?: PositionObj; placementFiles?: PlacementFileInput[]; placement?: string };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { productId, variantIds, designImageUrl, scale, placementPreset, position, placementFiles: placementFilesInput } = body;
+  const { productId, variantIds, designImageUrl, scale, placementPreset, position, placementFiles: placementFilesInput, placement: requestedPlacement } = body;
   if (!productId || !Array.isArray(variantIds) || variantIds.length === 0 || !designImageUrl) {
     return NextResponse.json(
       { error: 'productId, variantIds, and designImageUrl are required' },
@@ -104,9 +104,11 @@ export async function POST(req: Request) {
       return { placement: pf.placement, image_url: pf.imageUrl, position: scalePosition(pf.position, areaWidth, areaHeight) };
     });
   } else {
-    // Single design — only use the primary (front) placement; never duplicate to back
+    // Single design — use the requested placement if valid, else default to front
     const preferredOrder = ['front', 'back', 'sleeve_left', 'sleeve_right'];
-    const primaryPlacement = preferredOrder.find(p => allPlacements.includes(p)) ?? allPlacements[0];
+    const primaryPlacement = (requestedPlacement && allPlacements.includes(requestedPlacement))
+      ? requestedPlacement
+      : (preferredOrder.find(p => allPlacements.includes(p)) ?? allPlacements[0]);
     if (!primaryPlacement) {
       return NextResponse.json({ error: 'No placements available for this product' }, { status: 422 });
     }

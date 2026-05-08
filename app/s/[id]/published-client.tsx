@@ -178,7 +178,12 @@ function buildVariantModalInjection(products: Product[]): string {
 .vc-ttl{font-size:15px;font-weight:600;color:#1A1A1A;font-family:system-ui,sans-serif}
 .vc-cls{background:none;border:none;cursor:pointer;color:#AAA;font-size:18px;line-height:1;padding:4px}
 .vc-body{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
-.vc-img{width:100%;max-height:200px;object-fit:contain;border-radius:12px;background:#F5F4F2}
+.vc-img{width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#F5F4F2}
+.vc-gallery{display:flex;flex-direction:column;gap:8px}
+.vc-main-img{width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#F5F4F2;display:block}
+.vc-thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.vc-thumb{width:60px;height:60px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;flex-shrink:0;opacity:0.55;transition:opacity .15s}
+.vc-thumb.sel{border-color:#0f172a;opacity:1}
 .vc-price{font-size:22px;font-weight:700;color:#1A1A1A;font-family:system-ui,sans-serif}
 .vc-desc{font-size:13px;color:#666;line-height:1.6;margin:0;font-family:system-ui,sans-serif}
 .vc-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#AAA;font-family:system-ui,sans-serif;margin-bottom:6px}
@@ -206,7 +211,10 @@ function show(btn,prod){
   var ss=sizes[0]||'',sc=cm[0]?cm[0].color:'';
   var ov=document.createElement('div');ov.id='vc-overlay';
   var can=(!sizes.length||!!ss)&&(!cm.length||!!sc);
-  var imgH=prod.mockup_urls&&prod.mockup_urls[0]?'<img src="'+esc(prod.mockup_urls[0])+'" class="vc-img" alt="'+esc(prod.name)+'" />':'';
+  var urls=prod.mockup_urls&&prod.mockup_urls.length?prod.mockup_urls:[];
+  var imgH='';
+  if(urls.length===1){imgH='<img src="'+esc(urls[0])+'" class="vc-img" alt="'+esc(prod.name)+'" />';}
+  else if(urls.length>1){var thumbsH=urls.map(function(u,i){return'<img src="'+esc(u)+'" class="vc-thumb'+(i===0?' sel':'')+'" data-idx="'+i+'" alt="View '+(i+1)+'" />';}).join('');imgH='<div class="vc-gallery"><img id="vc-main-img" src="'+esc(urls[0])+'" class="vc-main-img" alt="'+esc(prod.name)+'" /><div class="vc-thumbs">'+thumbsH+'</div></div>';}
   var descH=prod.description?'<p class="vc-desc">'+esc(prod.description)+'</p>':'';
   var colH=cm.length?'<div><div class="vc-lbl">Color: <span id="vc-cl">'+esc(sc)+'</span></div><div class="vc-swatches">'+cm.map(function(v){return'<button class="vc-sw'+(v.color===sc?' sel':'')+'" title="'+esc(v.color)+'" style="background:'+(v.color_code||'#ccc')+'" data-c="'+esc(v.color)+'"></button>';}).join('')+'</div></div>':'';
   var szH=sizes.length?'<div><div class="vc-lbl">Size</div><div class="vc-szs">'+sizes.map(function(s){return'<button class="vc-sz'+(s===ss?' sel':'')+'" data-s="'+esc(s)+'">'+esc(s)+'</button>';}).join('')+'</div></div>':'';
@@ -215,6 +223,15 @@ function show(btn,prod){
   function rm(){ov.remove();}
   ov.addEventListener('click',function(e){if(e.target===ov)rm();});
   document.getElementById('vc-x').addEventListener('click',rm);
+  ov.querySelectorAll('.vc-thumb').forEach(function(th){
+    th.addEventListener('click',function(){
+      var idx=parseInt(th.getAttribute('data-idx')||'0',10);
+      var mi=document.getElementById('vc-main-img');
+      if(mi&&urls[idx])mi.setAttribute('src',urls[idx]);
+      ov.querySelectorAll('.vc-thumb').forEach(function(x){x.classList.remove('sel');});
+      th.classList.add('sel');
+    });
+  });
   function upd(){
     var ok=(!sizes.length||!!ss)&&(!cm.length||!!sc);
     var ab=document.getElementById('vc-add');

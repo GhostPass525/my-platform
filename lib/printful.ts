@@ -91,7 +91,7 @@ export async function createPrintfulProduct(
     ? placementFiles.map(pf => ({ url: pf.url, type: pf.placement }))
     : [{ url: designUrl, type: 'default' }];
 
-  console.log('[printful] createProduct files array (placements sent to Printful):', JSON.stringify(variantFiles.map(f => ({ type: f.type, url: f.url.slice(0, 60) + '...' }))));
+  console.log('[printful] Files being sent to Printful:', JSON.stringify(variantFiles, null, 2));
 
   const response = await fetch(`${PRINTFUL_API}/store/products`, {
     method: 'POST',

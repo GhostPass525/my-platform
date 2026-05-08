@@ -1998,25 +1998,18 @@ export default function Home() {
           </div>
           {site && !generating && (
             <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0, position: "relative" }}>
-              <div style={{ display: "flex", gap: 0 }}>
-                <button
-                  onClick={() => { setShowAddProductModal(true); setAddProductDropdownOpen(false); }}
-                  style={{ flex: 1, padding: "7px 10px", borderRadius: "8px 0 0 8px", border: "1px solid #E5E7EB", borderRight: "none", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
-                >
+              <button
+                onClick={() => setAddProductDropdownOpen(prev => !prev)}
+                style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                   Add Product
-                </button>
-                <button
-                  onClick={() => setAddProductDropdownOpen(prev => !prev)}
-                  style={{ padding: "7px 8px", borderRadius: "0 8px 8px 0", border: "1px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 12, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.04)", display: "flex", alignItems: "center" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                </button>
-              </div>
+                </span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
               {addProductDropdownOpen && (
                 <div
                   style={{ position: "absolute", top: "calc(100% - 2px)", left: 16, right: 16, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}
