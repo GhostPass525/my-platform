@@ -23,7 +23,6 @@ export default async function DashboardLayout({
     firstName = (profile as { first_name?: string } | null)?.first_name?.trim() || undefined;
     stageIndex = computeStageIndex(
       (projectCount ?? 0) > 0,
-      true,
       !!siteRow,
       ordersCount ?? 0
     );

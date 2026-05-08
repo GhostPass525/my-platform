@@ -395,7 +395,9 @@ export default function DashboardClient({
       .catch(() => {});
   }, [hasPublished]);
 
-  const stageIndex = computeStageIndex(projects.length > 0, true, hasPublished, ordersCount);
+  // Cross-reference localStorage with actual projects to avoid stale published state
+  const hasPublishedActual = projects.some(p => p.status === 'live' || publishedIds.has(p.id));
+  const stageIndex = computeStageIndex(projects.length > 0, hasPublishedActual, ordersCount);
   const currentStage = STAGE_LABELS[stageIndex];
 
   useEffect(() => {

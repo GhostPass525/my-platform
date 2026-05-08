@@ -1311,7 +1311,7 @@ export default function Home() {
         setIsUpdatingStore(false);
       } else {
         // Normal mode: call /api/idea with mentor context
-        const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+        const stageIdx = computeStageIndex(!!site, !!publishedUrl, ordersCount);
         const stageLabels = ["Idea", "Setup", "Launch", "First Sale", "Growing"];
         const mentorContext = {
           brandName: site?.brandName || undefined,
@@ -1983,7 +1983,7 @@ export default function Home() {
           {/* Business stage tracker */}
           <div style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
             <StageTracker
-              activeIndex={computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount)}
+              activeIndex={computeStageIndex(!!site, !!publishedUrl, ordersCount)}
               accent={theme.accent}
             />
           </div>
@@ -2102,7 +2102,7 @@ export default function Home() {
           <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(0,0,0,0.06)", flexShrink: 0, background: "#F7F6F3" }}>
             {/* Suggestion chips */}
             {(() => {
-              const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+              const stageIdx = computeStageIndex(!!site, !!publishedUrl, ordersCount);
               const chips = getSuggestions(stageIdx);
               return (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -2241,7 +2241,7 @@ export default function Home() {
                   }
                 }}
                 placeholder={(() => {
-                  const stageIdx = computeStageIndex(!!site, (site?.products?.length ?? 0) > 0, !!publishedUrl, ordersCount);
+                  const stageIdx = computeStageIndex(!!site, !!publishedUrl, ordersCount);
                   if (stageIdx <= 1) return "What are you building?";
                   if (stageIdx === 2) return "How's the launch going?";
                   return "Tell me what to change, or ask for advice...";
