@@ -179,6 +179,7 @@ async function handleCheckoutComplete(
       preferred_datetime: customerData.preferredDateTime || null,
       customer_notes: customerData.notes || customerData.briefDescription || null,
       fulfillment_status: "unfulfilled",
+      fulfillment_type: session.metadata?.printful_sync_product_id ? "printful" : "manual",
       stripe_payment_intent_id: (session.payment_intent as string) || null,
       stripe_session_id: session.id,
       // Legacy columns kept for compatibility

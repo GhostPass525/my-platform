@@ -76,6 +76,28 @@ function StatCard({ label, value, sub, highlight }: { label: string; value: stri
   );
 }
 
+/* ─── Fulfillment Type Badge ─────────────────────────────────────── */
+
+function FulfillmentTypeBadge({ type }: { type: string | null }) {
+  if (type === "printful") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+        style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }}>
+        🏭 Auto-fulfilled by Printful
+      </span>
+    );
+  }
+  if (type === "manual" || !type) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+        style={{ background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A" }}>
+        📦 Manual fulfillment required
+      </span>
+    );
+  }
+  return null;
+}
+
 /* ─── Order Card ─────────────────────────────────────────────────── */
 
 function OrderCard({
@@ -85,13 +107,19 @@ function OrderCard({
   onToast,
 }: {
   order: Order;
-  onStatusChange: (id: string, status: string) => void;
+  onStatusChange: (id: string, status: string, tracking?: { number: string; carrier: string }) => void;
   onViewDetails: (order: Order) => void;
   onToast: (msg: string) => void;
 }) {
   const productType = order.product_type || "physical";
   const icon = PRODUCT_TYPE_ICON[productType] ?? "📦";
   const amount = orderAmount(order);
+  const isManual = order.fulfillment_type !== "printful";
+  const [showTrackingInput, setShowTrackingInput] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState(order.tracking_number || "");
+  const [trackingCarrier, setTrackingCarrier] = useState(order.tracking_carrier || "");
+  const [savingTracking, setSavingTracking] = useState(false);
+  const supabase = createClient();
 
   function copyToClipboard(text: string, msg: string) {
     navigator.clipboard.writeText(text).then(() => onToast(msg)).catch(() => onToast("Failed to copy"));
@@ -106,6 +134,19 @@ function OrderCard({
       ].filter(Boolean).join("\n")
     : null;
 
+  async function handleMarkAsShipped() {
+    setSavingTracking(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ tracking_number: trackingNumber || null, tracking_carrier: trackingCarrier || null })
+      .eq("id", order.id);
+    setSavingTracking(false);
+    if (error) { onToast("Failed to save tracking info"); return; }
+    onStatusChange(order.id, "fulfilled", { number: trackingNumber, carrier: trackingCarrier });
+    setShowTrackingInput(false);
+    onToast("Marked as shipped!");
+  }
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* Card header */}
@@ -118,6 +159,9 @@ function OrderCard({
           </div>
           <div className="text-sm font-semibold text-slate-800 mt-0.5 truncate">
             {order.product_name || "Order"}
+          </div>
+          <div className="mt-1">
+            <FulfillmentTypeBadge type={order.fulfillment_type} />
           </div>
         </div>
         <div className="text-right flex-shrink-0">
@@ -160,6 +204,45 @@ function OrderCard({
             <span className="italic text-slate-600 text-xs leading-relaxed">&ldquo;{order.customer_notes}&rdquo;</span>
           </div>
         )}
+
+        {/* Tracking info (if shipped) */}
+        {order.tracking_number && (
+          <div className="flex items-center gap-2 text-slate-700">
+            <span className="font-medium w-20 flex-shrink-0 text-xs text-slate-400 uppercase tracking-wide">Tracking</span>
+            <span className="text-xs font-mono">{order.tracking_carrier ? `${order.tracking_carrier}: ` : ""}{order.tracking_number}</span>
+          </div>
+        )}
+
+        {/* Mark as Shipped inline form */}
+        {isManual && showTrackingInput && (
+          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Shipping Info</div>
+            <div className="flex gap-2">
+              <input
+                value={trackingCarrier} onChange={e => setTrackingCarrier(e.target.value)}
+                placeholder="Carrier (e.g. USPS)"
+                className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+              <input
+                value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)}
+                placeholder="Tracking number (optional)"
+                className="flex-[2] px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleMarkAsShipped}
+                disabled={savingTracking}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-white hover:opacity-80 disabled:opacity-50 transition"
+              >
+                {savingTracking ? "Saving…" : "Confirm Shipped"}
+              </button>
+              <button onClick={() => setShowTrackingInput(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action buttons */}
@@ -185,12 +268,20 @@ function OrderCard({
           </ActionBtn>
         )}
 
-        {order.fulfillment_status === "unfulfilled" && (
+        {/* Manual fulfillment: Mark as Shipped button */}
+        {isManual && (order.fulfillment_status === "unfulfilled" || order.fulfillment_status === "in_progress") && !showTrackingInput && (
+          <ActionBtn accent onClick={() => setShowTrackingInput(true)}>
+            Mark as Shipped
+          </ActionBtn>
+        )}
+
+        {/* Printful or generic status buttons */}
+        {!isManual && order.fulfillment_status === "unfulfilled" && (
           <ActionBtn accent onClick={() => onStatusChange(order.id, "in_progress")}>
             Mark In Progress
           </ActionBtn>
         )}
-        {(order.fulfillment_status === "unfulfilled" || order.fulfillment_status === "in_progress") && (
+        {!isManual && (order.fulfillment_status === "unfulfilled" || order.fulfillment_status === "in_progress") && (
           <ActionBtn accent onClick={() => onStatusChange(order.id, "fulfilled")}>
             Mark Fulfilled
           </ActionBtn>
@@ -493,15 +584,17 @@ export default function OrdersClient({
   const inProgressCount  = orders.filter((o) => o.fulfillment_status === "in_progress").length;
   const totalRevenue     = orders.reduce((s, o) => s + orderAmount(o), 0);
 
-  async function handleStatusChange(orderId: string, newStatus: string) {
-    const { error } = await supabase
-      .from("orders")
-      .update({ fulfillment_status: newStatus })
-      .eq("id", orderId);
+  async function handleStatusChange(orderId: string, newStatus: string, tracking?: { number: string; carrier: string }) {
+    const update: Record<string, string | null> = { fulfillment_status: newStatus };
+    if (tracking) {
+      update.tracking_number = tracking.number || null;
+      update.tracking_carrier = tracking.carrier || null;
+    }
+    const { error } = await supabase.from("orders").update(update).eq("id", orderId);
 
     if (!error) {
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, fulfillment_status: newStatus } : o))
+        prev.map((o) => (o.id === orderId ? { ...o, fulfillment_status: newStatus, ...tracking ? { tracking_number: tracking.number || null, tracking_carrier: tracking.carrier || null } : {} } : o))
       );
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev) => prev ? { ...prev, fulfillment_status: newStatus } : prev);

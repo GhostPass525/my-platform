@@ -662,12 +662,13 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
   async function generateMockups(
     imageUrl: string, productId: number, varIds: number[],
     position: ReturnType<typeof imagePosToPosition>,
+    placementFiles?: Array<{ placement: string; imageUrl: string; position: ReturnType<typeof imagePosToPosition> }>,
   ) {
     setMockupState("generating");
     try {
       const res = await fetch("/api/printful/generate-mockup", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl, position }),
+        body: JSON.stringify({ productId, variantIds: varIds, designImageUrl: imageUrl, position, placementFiles }),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) throw new Error(data.error || "No mockups");
@@ -704,18 +705,23 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       setCompositeUrls(newComposites);
       setStep(3);
 
-      // 3. Generate mockups in background using primary placement
+      // 3. Generate mockups in background — only for placements with actual designs
       const primaryPl = newComposites["front"] ? "front" : Object.keys(newComposites)[0];
       const primaryUrl = newComposites[primaryPl];
       if (primaryUrl && selectedProduct && variants.length > 0) {
         if (previewMockupUrls.length > 0) { setMockupUrls(previewMockupUrls); setMockupState("done"); }
         else {
           const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-          const pa = printAreas[primaryPl] ?? { width: 1800, height: 2400 };
-          const firstImg = (updatedLayers[primaryPl] ?? []).find(l => l.kind === "image") as ImageLayer | undefined;
-          const position = firstImg ? imagePosToPosition(firstImg, pa)
-            : { area_width: pa.width, area_height: pa.height, width: Math.round(pa.width * 0.8), height: Math.round(pa.height * 0.8), top: Math.round(pa.height * 0.1), left: Math.round(pa.width * 0.1) };
-          generateMockups(primaryUrl, selectedProduct.id, inStockIds, position);
+          // Build per-placement files — only placements that have a composite URL (user added a design)
+          const placementFilesForMockup = Object.entries(newComposites).map(([pl, url]) => {
+            const pa = printAreas[pl] ?? { width: 1800, height: 2400 };
+            const firstImg = (updatedLayers[pl] ?? []).find(l => l.kind === "image") as ImageLayer | undefined;
+            const pos = firstImg ? imagePosToPosition(firstImg, pa)
+              : { area_width: pa.width, area_height: pa.height, width: Math.round(pa.width * 0.8), height: Math.round(pa.height * 0.8), top: Math.round(pa.height * 0.1), left: Math.round(pa.width * 0.1) };
+            return { placement: pl, imageUrl: url, position: pos };
+          });
+          const primaryPos = placementFilesForMockup.find(p => p.placement === primaryPl)?.position ?? placementFilesForMockup[0]!.position;
+          generateMockups(primaryUrl, selectedProduct.id, inStockIds, primaryPos, placementFilesForMockup);
         }
       }
     } catch (e: unknown) {

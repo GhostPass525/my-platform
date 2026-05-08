@@ -85,11 +85,13 @@ export async function createPrintfulProduct(
 ): Promise<{ id: number; external_id: string; name: string; thumbnail_url?: string }> {
   const externalId = `volcity_${userId}_${productId}`;
 
-  // Build the files array for each variant. If placementFiles are provided, use those;
-  // otherwise fall back to the single designUrl as the default/front file.
+  // Build the files array for each variant. If placementFiles are provided, use those
+  // (only the placements the user actually designed); otherwise fall back to designUrl as default.
   const variantFiles = placementFiles && placementFiles.length > 0
     ? placementFiles.map(pf => ({ url: pf.url, type: pf.placement }))
     : [{ url: designUrl, type: 'default' }];
+
+  console.log('[printful] createProduct files array (placements sent to Printful):', JSON.stringify(variantFiles.map(f => ({ type: f.type, url: f.url.slice(0, 60) + '...' }))));
 
   const response = await fetch(`${PRINTFUL_API}/store/products`, {
     method: 'POST',

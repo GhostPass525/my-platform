@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import LaunchMoment from "@/app/components/LaunchMoment";
 import AddProductModal, { type NewProduct } from "@/app/components/AddProductModal";
+import AddCustomProductModal, { type CustomProduct } from "@/app/components/AddCustomProductModal";
 import OnboardingTooltip from "@/app/components/OnboardingTooltip";
 import StageTracker, { computeStageIndex } from "@/app/components/StageTracker";
 import FloatingPanel from "@/app/components/FloatingPanel";
@@ -69,6 +70,12 @@ type Product = {
   printful_catalog_product_id?: number;
   printful_variant_ids?: number[];
   printful_variants?: Array<{ id: number; size: string; color: string; color_code?: string }>;
+  // Custom product fields (self-sourced, manual fulfillment)
+  fulfillment_type?: "printful" | "manual";
+  images?: string[];
+  compare_at_price?: string;
+  custom_variants?: Array<{ id: string; color?: string; color_code?: string; size?: string; price: number; inventory: number }>;
+  shipping?: { is_digital: boolean; flat_rate?: number; weight?: number };
 };
 
 type PageKey = "home" | "products" | "about" | "contact" | string;
@@ -681,6 +688,8 @@ export default function Home() {
   const [site, setSite] = useState<SiteSpec | null>(null);
   const [rightTab, setRightTab] = useState<"quick" | "content" | "design" | "pages" | "products" | "sections">("quick");
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showAddCustomProductModal, setShowAddCustomProductModal] = useState(false);
+  const [addProductDropdownOpen, setAddProductDropdownOpen] = useState(false);
   const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ productId: string; productName: string } | null>(null);
   const [activePageId, setActivePageId] = useState<string>("");
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -1988,16 +1997,57 @@ export default function Home() {
             />
           </div>
           {site && !generating && (
-            <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
-              <button
-                onClick={() => setShowAddProductModal(true)}
-                style={{ width: "100%", padding: "7px 12px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                Add Physical Product
-              </button>
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.06)", flexShrink: 0, position: "relative" }}>
+              <div style={{ display: "flex", gap: 0 }}>
+                <button
+                  onClick={() => { setShowAddProductModal(true); setAddProductDropdownOpen(false); }}
+                  style={{ flex: 1, padding: "7px 10px", borderRadius: "8px 0 0 8px", border: "1px solid #E5E7EB", borderRight: "none", background: "#fff", color: "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  Add Product
+                </button>
+                <button
+                  onClick={() => setAddProductDropdownOpen(prev => !prev)}
+                  style={{ padding: "7px 8px", borderRadius: "0 8px 8px 0", border: "1px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 12, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.04)", display: "flex", alignItems: "center" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#374151"; }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
+              </div>
+              {addProductDropdownOpen && (
+                <div
+                  style={{ position: "absolute", top: "calc(100% - 2px)", left: 16, right: 16, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}
+                >
+                  <button
+                    onClick={() => { setShowAddProductModal(true); setAddProductDropdownOpen(false); }}
+                    style={{ width: "100%", padding: "10px 14px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#374151", display: "flex", alignItems: "center", gap: 8 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                  >
+                    <span style={{ fontSize: 15 }}>🏭</span>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Printful Product</div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF" }}>Print-on-demand, auto-fulfilled</div>
+                    </div>
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6" }} />
+                  <button
+                    onClick={() => { setShowAddCustomProductModal(true); setAddProductDropdownOpen(false); }}
+                    style={{ width: "100%", padding: "10px 14px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#374151", display: "flex", alignItems: "center", gap: 8 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                  >
+                    <span style={{ fontSize: 15 }}>📦</span>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Custom Product</div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF" }}>Self-sourced, manual fulfillment</div>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2562,6 +2612,64 @@ export default function Home() {
             }
           }}
           onClose={() => setShowAddProductModal(false)}
+        />
+      )}
+
+      {/* Add Custom Product Modal */}
+      {showAddCustomProductModal && (
+        <AddCustomProductModal
+          uploadImage={async (file) => {
+            const form = new FormData();
+            form.append("file", file);
+            const res = await fetch("/api/upload", { method: "POST", body: form });
+            if (!res.ok) throw new Error("Image upload failed");
+            const { url } = await res.json();
+            return url;
+          }}
+          onProductCreated={(product: CustomProduct) => {
+            if (!site) return;
+            const newProduct: Product = {
+              ...product,
+              imageDataUrl: product.images[0],
+            };
+
+            const newHtml = site.generatedHtml
+              ? injectProductCardIntoHtml(site.generatedHtml, {
+                  id: newProduct.id,
+                  name: newProduct.name,
+                  description: newProduct.description,
+                  price: newProduct.price,
+                  imageDataUrl: newProduct.imageDataUrl,
+                })
+              : site.generatedHtml;
+
+            const updatedSite = {
+              ...site,
+              products: [...(site.products ?? []), newProduct],
+              generatedHtml: newHtml,
+            };
+            setSite(updatedSite);
+            trackAction("Added a product");
+            setShowAddCustomProductModal(false);
+
+            const productsPage = updatedSite.pages.find((p) => p.key === "products");
+            if (productsPage) setActivePageId(productsPage.id);
+
+            if (projectId) {
+              setSaveStatus("saving");
+              fetch(`/api/projects/${projectId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ site: sanitizeSiteJson(updatedSite) }),
+              })
+                .then(async (r) => {
+                  if (r.ok) { setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 3000); }
+                  else { const err = await r.json().catch(() => ({})); console.error("[builder] PATCH failed:", r.status, err); setSaveStatus("failed"); }
+                })
+                .catch((err) => { console.error("[builder] PATCH threw:", err); setSaveStatus("failed"); });
+            }
+          }}
+          onClose={() => setShowAddCustomProductModal(false)}
         />
       )}
 

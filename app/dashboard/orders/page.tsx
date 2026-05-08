@@ -29,6 +29,9 @@ export type Order = {
   customer_notes: string | null;
   fulfillment_status: string;
   fulfillment_notes: string | null;
+  fulfillment_type: string | null;
+  tracking_number: string | null;
+  tracking_carrier: string | null;
   stripe_payment_intent_id: string | null;
   stripe_session_id: string | null;
   // Legacy
@@ -53,7 +56,8 @@ export default async function OrdersPage() {
        product_name, product_type, product_variants,
        amount, currency, shipping_address,
        preferred_datetime, customer_notes,
-       fulfillment_status, fulfillment_notes,
+       fulfillment_status, fulfillment_notes, fulfillment_type,
+       tracking_number, tracking_carrier,
        stripe_payment_intent_id, stripe_session_id,
        total, status`
     )

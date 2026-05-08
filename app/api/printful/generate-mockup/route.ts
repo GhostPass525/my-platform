@@ -25,11 +25,12 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   type PositionObj = { area_width: number; area_height: number; width: number; height: number; top: number; left: number };
-  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string; position?: PositionObj };
+  type PlacementFileInput = { placement: string; imageUrl: string; position: PositionObj };
+  let body: { productId?: number; variantIds?: number[]; designImageUrl?: string; scale?: number; placementPreset?: string; position?: PositionObj; placementFiles?: PlacementFileInput[] };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
 
-  const { productId, variantIds, designImageUrl, scale, placementPreset, position } = body;
+  const { productId, variantIds, designImageUrl, scale, placementPreset, position, placementFiles: placementFilesInput } = body;
   if (!productId || !Array.isArray(variantIds) || variantIds.length === 0 || !designImageUrl) {
     return NextResponse.json(
       { error: 'productId, variantIds, and designImageUrl are required' },
@@ -58,87 +59,94 @@ export async function POST(req: Request) {
   };
 
   const allPlacements = Object.keys(pfResult.available_placements ?? {});
-  // Prefer front/back; fall back to whatever is available
-  const preferredOrder = ['front', 'back', 'sleeve_left', 'sleeve_right'];
-  const placements = [
-    ...preferredOrder.filter(p => allPlacements.includes(p)),
-    ...allPlacements.filter(p => !preferredOrder.includes(p)),
-  ].slice(0, 2); // max 2 placements per task
-
-  if (placements.length === 0) {
-    return NextResponse.json({ error: 'No placements available for this product' }, { status: 422 });
-  }
 
   const printfileMap = new Map<number, PrintfileInfo>(
     (pfResult.printfiles ?? []).map(pf => [pf.printfile_id, pf])
   );
 
-  // ── Build files array for the task ───────────────────────────────────────
-  const files = placements.map((placement, idx) => {
+  // Helper: scale + clamp a position to match actual printfile dimensions
+  function scalePosition(pos: PositionObj, areaWidth: number, areaHeight: number): PositionObj {
+    const scaleX = areaWidth  / (pos.area_width  || 1800);
+    const scaleY = areaHeight / (pos.area_height || 2400);
+    const scaled = (scaleX === 1 && scaleY === 1) ? pos : {
+      area_width: areaWidth, area_height: areaHeight,
+      width:  Math.round(pos.width  * scaleX),
+      height: Math.round(pos.height * scaleY),
+      top:    Math.round(pos.top    * scaleY),
+      left:   Math.round(pos.left   * scaleX),
+    };
+    return {
+      ...scaled,
+      top:  Math.max(0, Math.min(scaled.top,  areaHeight - scaled.height)),
+      left: Math.max(0, Math.min(scaled.left, areaWidth  - scaled.width)),
+    };
+  }
+
+  // Helper: get print area dimensions for a placement
+  function getPrintArea(placement: string): { areaWidth: number; areaHeight: number } {
     const vp = (pfResult.variant_printfiles ?? []).find(
       v => v.placement === placement && variantIds.includes(v.variant_id)
     );
     const pfId = vp?.printfile_id ?? pfResult.printfiles[0]?.printfile_id;
     const pf   = pfId != null ? printfileMap.get(pfId) : undefined;
+    return { areaWidth: pf?.width ?? 1800, areaHeight: pf?.height ?? 2400 };
+  }
 
-    const areaWidth  = pf?.width  ?? 1800;
-    const areaHeight = pf?.height ?? 2400;
+  // ── Build files array — only include placements the user has designs for ─
+  let files: Array<{ placement: string; image_url: string; position: PositionObj }>;
 
-    console.log(`[generate-mockup] placement "${placement}": printfile area ${areaWidth}×${areaHeight} (printfile_id=${pfId})`);
-
-    // Use client-provided position for the primary (front) placement; compute for others
-    if (position && idx === 0) {
-      // Scale/clamp position to match actual printfile dimensions
-      const scaleX = areaWidth  / (position.area_width  || 1800);
-      const scaleY = areaHeight / (position.area_height || 2400);
-      const scaledPosition = (scaleX === 1 && scaleY === 1) ? position : {
-        area_width:  areaWidth,
-        area_height: areaHeight,
-        width:  Math.round(position.width  * scaleX),
-        height: Math.round(position.height * scaleY),
-        top:    Math.round(position.top    * scaleY),
-        left:   Math.round(position.left   * scaleX),
-      };
-      // Clamp to ensure within bounds
-      const clampedPosition = {
-        ...scaledPosition,
-        top:  Math.max(0, Math.min(scaledPosition.top,  areaHeight - scaledPosition.height)),
-        left: Math.max(0, Math.min(scaledPosition.left, areaWidth  - scaledPosition.width)),
-      };
-      console.log(`[generate-mockup] using client position (scaled ${scaleX.toFixed(2)}x,${scaleY.toFixed(2)}y):`, JSON.stringify(clampedPosition));
-      return { placement, image_url: designImageUrl, position: clampedPosition };
+  if (placementFilesInput && placementFilesInput.length > 0) {
+    // Per-placement designs provided — use exactly those placements
+    console.log('[generate-mockup] using per-placement files:', placementFilesInput.map(p => p.placement));
+    files = placementFilesInput.map(pf => {
+      const { areaWidth, areaHeight } = getPrintArea(pf.placement);
+      console.log(`[generate-mockup] placement "${pf.placement}": area ${areaWidth}×${areaHeight}`);
+      return { placement: pf.placement, image_url: pf.imageUrl, position: scalePosition(pf.position, areaWidth, areaHeight) };
+    });
+  } else {
+    // Single design — only use the primary (front) placement; never duplicate to back
+    const preferredOrder = ['front', 'back', 'sleeve_left', 'sleeve_right'];
+    const primaryPlacement = preferredOrder.find(p => allPlacements.includes(p)) ?? allPlacements[0];
+    if (!primaryPlacement) {
+      return NextResponse.json({ error: 'No placements available for this product' }, { status: 422 });
     }
+    const { areaWidth, areaHeight } = getPrintArea(primaryPlacement);
+    console.log(`[generate-mockup] placement "${primaryPlacement}": printfile area ${areaWidth}×${areaHeight} (single design mode)`);
 
-    // Fallback: compute from placementPreset + scale
-    const scaleRatio = Math.min(Math.max(scale ?? 65, 40), 90) / 100;
-    let designW: number, designH: number, top: number, left: number;
-    if (placementPreset === 'left-chest') {
-      designW = Math.round(areaWidth * Math.min(scaleRatio, 0.35));
-      designH = designW;
-      top  = Math.round(areaHeight * 0.08);
-      left = Math.round(areaWidth  * 0.08);
-    } else if (placementPreset === 'top-center') {
-      designW = Math.round(areaWidth * scaleRatio);
-      designH = designW;
-      top  = Math.round(areaHeight * 0.05);
-      left = Math.round((areaWidth - designW) / 2);
+    let filePosition: PositionObj;
+    if (position) {
+      filePosition = scalePosition(position, areaWidth, areaHeight);
+      console.log('[generate-mockup] using client position:', JSON.stringify(filePosition));
     } else {
-      // center (default)
-      designW = Math.round(areaWidth * scaleRatio);
-      designH = designW;
-      top  = Math.round((areaHeight - designH) / 2);
-      left = Math.round((areaWidth  - designW) / 2);
+      const scaleRatio = Math.min(Math.max(scale ?? 65, 40), 90) / 100;
+      let designW: number, designH: number, top: number, left: number;
+      if (placementPreset === 'left-chest') {
+        designW = Math.round(areaWidth * Math.min(scaleRatio, 0.35));
+        designH = designW;
+        top  = Math.round(areaHeight * 0.08);
+        left = Math.round(areaWidth  * 0.08);
+      } else if (placementPreset === 'top-center') {
+        designW = Math.round(areaWidth * scaleRatio);
+        designH = designW;
+        top  = Math.round(areaHeight * 0.05);
+        left = Math.round((areaWidth - designW) / 2);
+      } else {
+        designW = Math.round(areaWidth * scaleRatio);
+        designH = designW;
+        top  = Math.round((areaHeight - designH) / 2);
+        left = Math.round((areaWidth  - designW) / 2);
+      }
+      filePosition = { area_width: areaWidth, area_height: areaHeight, width: designW, height: designH, top, left };
     }
+    files = [{ placement: primaryPlacement, image_url: designImageUrl, position: filePosition }];
+  }
 
-    return {
-      placement,
-      image_url: designImageUrl,
-      position: { area_width: areaWidth, area_height: areaHeight, width: designW, height: designH, top, left },
-    };
-  });
+  if (files.length === 0) {
+    return NextResponse.json({ error: 'No placements available for this product' }, { status: 422 });
+  }
 
   const taskBody = { variant_ids: variantIds.slice(0, 3), files };
-  console.log('[generate-mockup] Step 2: creating task, placements:', placements, 'variants:', variantIds.slice(0, 3));
+  console.log('[generate-mockup] Step 2: creating task, placements:', files.map(f => f.placement), 'variants:', variantIds.slice(0, 3));
   console.log('[generate-mockup] create-task body:', JSON.stringify(taskBody));
 
   // ── Step 2: Create mockup task (with one retry) ───────────────────────────
