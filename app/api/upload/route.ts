@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const originalName = (file as File).name ?? `canvas-${Date.now()}.png`;
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const contentType = file.type || "image/png";
-    const fileName = `designs/${Date.now()}-${safeName}`;
+    const fileName = `${Date.now()}-${safeName}`;
 
     // Convert to Buffer — required for Node.js runtime; raw File/Blob may not upload correctly
     const arrayBuffer = await file.arrayBuffer();
