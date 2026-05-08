@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   // Helper: get print area dimensions for a placement
   function getPrintArea(placement: string): { areaWidth: number; areaHeight: number } {
     const vp = (pfResult.variant_printfiles ?? []).find(
-      v => v.placement === placement && variantIds.includes(v.variant_id)
+      v => v.placement === placement && variantIds!.includes(v.variant_id)
     );
     const pfId = vp?.printfile_id ?? pfResult.printfiles[0]?.printfile_id;
     const pf   = pfId != null ? printfileMap.get(pfId) : undefined;
