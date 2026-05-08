@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient as createAuthClient } from "@/utils/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 
-const storage = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: Request) {
   const supabase = await createAuthClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -37,11 +32,20 @@ export async function POST(req: Request) {
     const originalName = (file as File).name ?? `canvas-${Date.now()}.png`;
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const contentType = file.type || "image/png";
-    const fileName = `${Date.now()}-${safeName}`;
+    const fileName = `designs/${Date.now()}-${safeName}`;
+
+    // Convert to Buffer — required for Node.js runtime; raw File/Blob may not upload correctly
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const storage = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     const { data, error } = await storage.storage
       .from("designs")
-      .upload(fileName, file, { contentType, upsert: true });
+      .upload(fileName, buffer, { contentType, upsert: true });
 
     if (error) {
       console.error('Supabase Storage upload error:', JSON.stringify(error));
