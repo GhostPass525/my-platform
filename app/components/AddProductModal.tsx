@@ -709,20 +709,18 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       const primaryPl = newComposites["front"] ? "front" : Object.keys(newComposites)[0];
       const primaryUrl = newComposites[primaryPl];
       if (primaryUrl && selectedProduct && variants.length > 0) {
-        if (previewMockupUrls.length > 0) { setMockupUrls(previewMockupUrls); setMockupState("done"); }
-        else {
-          const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
-          // Build per-placement files — only placements that have a composite URL (user added a design)
-          const placementFilesForMockup = Object.entries(newComposites).map(([pl, url]) => {
-            const pa = printAreas[pl] ?? { width: 1800, height: 2400 };
-            const firstImg = (updatedLayers[pl] ?? []).find(l => l.kind === "image") as ImageLayer | undefined;
-            const pos = firstImg ? imagePosToPosition(firstImg, pa)
-              : { area_width: pa.width, area_height: pa.height, width: Math.round(pa.width * 0.8), height: Math.round(pa.height * 0.8), top: Math.round(pa.height * 0.1), left: Math.round(pa.width * 0.1) };
-            return { placement: pl, imageUrl: url, position: pos };
-          });
-          const primaryPos = placementFilesForMockup.find(p => p.placement === primaryPl)?.position ?? placementFilesForMockup[0]!.position;
-          generateMockups(primaryUrl, selectedProduct.id, inStockIds, primaryPos, placementFilesForMockup);
-        }
+        const inStockIds = variants.filter(v => v.in_stock).slice(0, 3).map(v => v.id);
+        // Build per-placement files — only placements that have a composite URL (user added a design)
+        const placementFilesForMockup = Object.entries(newComposites).map(([pl, url]) => {
+          const pa = printAreas[pl] ?? { width: 1800, height: 2400 };
+          const firstImg = (updatedLayers[pl] ?? []).find(l => l.kind === "image") as ImageLayer | undefined;
+          const pos = firstImg ? imagePosToPosition(firstImg, pa)
+            : { area_width: pa.width, area_height: pa.height, width: Math.round(pa.width * 0.8), height: Math.round(pa.height * 0.8), top: Math.round(pa.height * 0.1), left: Math.round(pa.width * 0.1) };
+          return { placement: pl, imageUrl: url, position: pos };
+        });
+        console.log('Files being sent to Printful:', JSON.stringify(placementFilesForMockup.map(p => ({ placement: p.placement, url: p.imageUrl })), null, 2));
+        const primaryPos = placementFilesForMockup.find(p => p.placement === primaryPl)?.position ?? placementFilesForMockup[0]!.position;
+        generateMockups(primaryUrl, selectedProduct.id, inStockIds, primaryPos, placementFilesForMockup);
       }
     } catch (e: unknown) {
       setError((e as Error)?.message || "Upload failed. Please try again.");

@@ -179,11 +179,11 @@ function buildVariantModalInjection(products: Product[]): string {
 .vc-cls{background:none;border:none;cursor:pointer;color:#AAA;font-size:18px;line-height:1;padding:4px}
 .vc-body{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
 .vc-img{width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#F5F4F2}
-.vc-gallery{display:flex;flex-direction:column;gap:8px}
-.vc-main-img{width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#F5F4F2;display:block}
-.vc-thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
-.vc-thumb{width:60px;height:60px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;flex-shrink:0;opacity:0.55;transition:opacity .15s}
+.vc-gallery{display:flex;gap:0}
+.vc-thumbs{display:flex;flex-direction:column;gap:6px;padding:0 8px 0 0;overflow-y:auto;flex-shrink:0;max-height:240px}
+.vc-thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;flex-shrink:0;opacity:0.55;transition:opacity .15s,border-color .15s}
 .vc-thumb.sel{border-color:#0f172a;opacity:1}
+.vc-main-img{flex:1;max-height:240px;width:100%;object-fit:contain;border-radius:12px;background:#F5F4F2;display:block}
 .vc-price{font-size:22px;font-weight:700;color:#1A1A1A;font-family:system-ui,sans-serif}
 .vc-desc{font-size:13px;color:#666;line-height:1.6;margin:0;font-family:system-ui,sans-serif}
 .vc-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#AAA;font-family:system-ui,sans-serif;margin-bottom:6px}
@@ -214,7 +214,7 @@ function show(btn,prod){
   var urls=prod.mockup_urls&&prod.mockup_urls.length?prod.mockup_urls:[];
   var imgH='';
   if(urls.length===1){imgH='<img src="'+esc(urls[0])+'" class="vc-img" alt="'+esc(prod.name)+'" />';}
-  else if(urls.length>1){var thumbsH=urls.map(function(u,i){return'<img src="'+esc(u)+'" class="vc-thumb'+(i===0?' sel':'')+'" data-idx="'+i+'" alt="View '+(i+1)+'" />';}).join('');imgH='<div class="vc-gallery"><img id="vc-main-img" src="'+esc(urls[0])+'" class="vc-main-img" alt="'+esc(prod.name)+'" /><div class="vc-thumbs">'+thumbsH+'</div></div>';}
+  else if(urls.length>1){var thumbsH=urls.map(function(u,i){return'<img src="'+esc(u)+'" class="vc-thumb'+(i===0?' sel':'')+'" data-idx="'+i+'" alt="View '+(i+1)+'" />';}).join('');imgH='<div class="vc-gallery"><div class="vc-thumbs">'+thumbsH+'</div><img id="vc-main-img" src="'+esc(urls[0])+'" class="vc-main-img" alt="'+esc(prod.name)+'" /></div>';}
   var descH=prod.description?'<p class="vc-desc">'+esc(prod.description)+'</p>':'';
   var colH=cm.length?'<div><div class="vc-lbl">Color: <span id="vc-cl">'+esc(sc)+'</span></div><div class="vc-swatches">'+cm.map(function(v){return'<button class="vc-sw'+(v.color===sc?' sel':'')+'" title="'+esc(v.color)+'" style="background:'+(v.color_code||'#ccc')+'" data-c="'+esc(v.color)+'"></button>';}).join('')+'</div></div>':'';
   var szH=sizes.length?'<div><div class="vc-lbl">Size</div><div class="vc-szs">'+sizes.map(function(s){return'<button class="vc-sz'+(s===ss?' sel':'')+'" data-s="'+esc(s)+'">'+esc(s)+'</button>';}).join('')+'</div></div>':'';
@@ -1207,33 +1207,35 @@ function ProductDetailModal({ product, theme, onClose, onAddToCart }: {
 
         {/* Body */}
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {/* Main image */}
-          <div style={{ aspectRatio: "1", background: "#F5F4F2", overflow: "hidden" }}>
-            {mainImg ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={mainImg} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
-                </svg>
+          {/* Image area: thumbnails left + main image right */}
+          <div style={{ display: "flex", gap: 0 }}>
+            {/* Left thumbnail column — shown only when multiple images */}
+            {mockupUrls && mockupUrls.length > 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 0 12px 12px", overflowY: "auto", flexShrink: 0, maxHeight: 320 }}>
+                {mockupUrls.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i} src={url} alt={`View ${i + 1}`}
+                    onClick={() => setSelectedMockupIdx(i)}
+                    style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0, cursor: "pointer", border: selectedMockupIdx === i ? `2px solid ${theme.accent}` : "2px solid transparent", opacity: selectedMockupIdx === i ? 1 : 0.6, transition: "opacity 0.15s, border-color 0.15s" }}
+                  />
+                ))}
               </div>
             )}
-          </div>
-
-          {/* Mockup thumbnail strip */}
-          {mockupUrls && mockupUrls.length > 1 && (
-            <div style={{ display: "flex", gap: 8, padding: "10px 16px 0", overflowX: "auto" }}>
-              {mockupUrls.map((url, i) => (
+            {/* Main image */}
+            <div style={{ flex: 1, aspectRatio: "1", background: "#F5F4F2", overflow: "hidden" }}>
+              {mainImg ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i} src={url} alt={`View ${i + 1}`}
-                  onClick={() => setSelectedMockupIdx(i)}
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0, cursor: "pointer", border: selectedMockupIdx === i ? `2px solid ${theme.accent}` : "2px solid transparent", opacity: selectedMockupIdx === i ? 1 : 0.6, transition: "opacity 0.15s" }}
-                />
-              ))}
+                <img src={mainImg} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+                  </svg>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           <div style={{ padding: "20px 20px 24px" }}>
             {/* Price */}
