@@ -65,7 +65,9 @@ export async function POST(req: Request) {
     ]);
 
     if (subRow?.status === "active" || subRow?.status === "trialing") {
-      let tier: Tier = "starter";
+      // Default to "legacy" (3-store limit) so a Stripe API failure doesn't
+      // incorrectly lock users out at the 1-store starter limit.
+      let tier: Tier = "legacy";
 
       if (subRow.stripe_subscription_id && process.env.STRIPE_SECRET_KEY) {
         try {
@@ -78,7 +80,7 @@ export async function POST(req: Request) {
             const priceId: string = s?.items?.data?.[0]?.price?.id ?? "";
             if (priceId) tier = detectTier(priceId);
           }
-        } catch { /* fail open */ }
+        } catch { /* fail open — keep legacy default */ }
       }
 
       const limit = getStoreLimit(tier);
