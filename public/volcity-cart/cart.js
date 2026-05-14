@@ -306,17 +306,24 @@
   function openPDPFromCard(card) {
     try {
       var variants = JSON.parse(card.dataset.variants || '[]');
-      if (!variants || variants.length === 0) return false;
+      if (!variants || variants.length === 0) {
+        console.warn('[volcity-cart] openPDPFromCard: no variants on card', card.dataset.variants);
+        return false;
+      }
       var btn = card.querySelector('[data-add-to-cart]');
-      var priceCents = btn ? parseInt(btn.dataset.productPrice || '0', 10) : 0;
+      /* Read data from card div first (most reliable), fall back to inner button */
+      var priceCents = parseInt(card.dataset.productPrice || (btn && btn.dataset.productPrice) || '0', 10);
       var nameEl = card.querySelector('h3,[class*="product-name"]');
-      var name = (btn && btn.dataset.productName) || (nameEl ? nameEl.textContent.trim() : '') || 'Product';
+      var name = card.dataset.productName || (btn && btn.dataset.productName) || (nameEl ? nameEl.textContent.trim() : '') || 'Product';
       var mockupUrls = [];
       try { if (card.dataset.mockupUrls) mockupUrls = JSON.parse(card.dataset.mockupUrls); } catch (ex) {}
       var imgEl = card.querySelector('img');
-      var image = (btn && btn.dataset.productImage) || (imgEl ? imgEl.src : null);
+      var image = card.dataset.productImage || (btn && btn.dataset.productImage) || (imgEl ? imgEl.getAttribute('src') : null) || null;
+      /* Treat empty-string image as missing */
+      if (!image) image = null;
       var descEl = card.querySelector('[class*="product-desc"],.product-desc');
       var description = card.dataset.description || (descEl ? descEl.textContent.trim() : '');
+      console.log('[volcity-cart] openPDPFromCard:', { name: name, priceCents: priceCents, variants: variants.length, mockups: mockupUrls.length, image: image ? image.slice(0, 60) : null, btnFound: !!btn });
       openPDP(card, { variants: variants, mockupUrls: mockupUrls, priceCents: priceCents, name: name.slice(0, 100), image: image, description: description });
       return true;
     } catch (ex) {
