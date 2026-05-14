@@ -295,8 +295,52 @@ function injectProductCardIntoHtml(
   while ((m = cardOpenRe.exec(html)) !== null) lastMatch = m;
 
   if (!lastMatch) {
-    console.warn("[injectProductCard] no existing product-card found in HTML — skipping inject");
-    return html;
+    console.warn("[injectProductCard] no existing product-card found — attempting container fallback");
+    // Build the card HTML first (reused below after normal path too)
+    const esc2 = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const priceNum2 = parseFloat(product.price.replace(/[^0-9.]/g, "")) || 0;
+    const priceCents2 = Math.round(priceNum2 * 100);
+    const priceDisplay2 = product.price.startsWith("$") ? product.price : `$${product.price}`;
+    const imageHtml2 = product.imageDataUrl
+      ? `<div class="product-image-placeholder" style="padding:0;overflow:hidden;"><img src="${esc2(product.imageDataUrl)}" alt="${esc2(product.name)}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`
+      : `<div class="product-image-placeholder">${esc2(product.name)}</div>`;
+    const variantsAttr2 = product.printful_variants && product.printful_variants.length > 0
+      ? ` data-printful="true" data-variants='${JSON.stringify(product.printful_variants).replace(/'/g, "&#39;")}'`
+      : "";
+    const mockupAttr2 = product.mockup_urls && product.mockup_urls.length > 0
+      ? ` data-mockup-urls='${JSON.stringify(product.mockup_urls).replace(/'/g, "&#39;")}'`
+      : "";
+    const descAttr2 = product.description ? ` data-description="${esc2(product.description)}"` : "";
+    const fallbackCard = `\n<div class="product-card" data-product-card${variantsAttr2}${mockupAttr2}${descAttr2}>\n  ${imageHtml2}\n  <div class="product-info">\n    <h3 class="product-name">${esc2(product.name)}</h3>\n    <p class="product-desc">${esc2(product.description || "")}</p>\n    <div class="product-price">${priceDisplay2}</div>\n    <button class="add-to-cart" data-add-to-cart data-product-id="${esc2(product.id)}" data-product-name="${esc2(product.name)}" data-product-price="${priceCents2}" data-product-image="${esc2(product.imageDataUrl || "")}">Add to Cart — ${priceDisplay2}</button>\n  </div>\n</div>`;
+
+    // Try to find an existing products container (grid, section, etc.)
+    const containerRe = /<(?:section|div)[^>]*class="[^"]*(?:products?[-_ ]?(?:grid|list|section|container|wrap(?:per)?)|collection|shop(?:-grid)?|store(?:-grid)?)[^"]*"[^>]*>/i;
+    const containerMatch = containerRe.exec(html);
+    if (containerMatch) {
+      // Find the closing tag of this container and insert just before it
+      let cDepth = 1;
+      let cPos = containerMatch.index + containerMatch[0].length;
+      const tagName = containerMatch[0].match(/^<(\w+)/)?.[1]?.toLowerCase() ?? "div";
+      const openRe = new RegExp(`<${tagName}[^>]*>`, "gi");
+      const closeRe = new RegExp(`</${tagName}>`, "gi");
+      while (cDepth > 0 && cPos < html.length) {
+        openRe.lastIndex = cPos; closeRe.lastIndex = cPos;
+        const nextOpen = openRe.exec(html);
+        const nextClose = closeRe.exec(html);
+        if (!nextClose) break;
+        if (nextOpen && nextOpen.index < nextClose.index) { cDepth++; cPos = nextOpen.index + nextOpen[0].length; }
+        else { cDepth--; cPos = nextClose.index + (cDepth > 0 ? nextClose[0].length : 0); }
+      }
+      console.log("[injectProductCard] inserting into container at position", cPos);
+      return html.slice(0, cPos) + fallbackCard + "\n" + html.slice(cPos);
+    }
+
+    // No container found — inject a new products section before </footer> or </body>
+    const anchorMatch = /<\/footer>/i.exec(html) ?? /<\/body>/i.exec(html);
+    const insertAt = anchorMatch ? anchorMatch.index : html.length;
+    const productsSection = `\n<section class="products-section" style="padding:40px 20px;max-width:1200px;margin:0 auto;">\n  <div class="products-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:24px;">${fallbackCard}\n  </div>\n</section>\n`;
+    console.log("[injectProductCard] creating new products section at position", insertAt);
+    return html.slice(0, insertAt) + productsSection + html.slice(insertAt);
   }
 
   // Walk forward to find the balanced closing </div> for this card

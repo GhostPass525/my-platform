@@ -673,7 +673,16 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.mockupUrls) || data.mockupUrls.length === 0) throw new Error(data.error || "No mockups");
       setMockupUrls(data.mockupUrls); setMockupState("done");
-    } catch { setMockupState("error"); }
+    } catch (e: unknown) {
+      console.error('[generateMockups] mockup generation failed:', (e as Error)?.message);
+      // Use catalog thumbnail as fallback so the product card shows a product photo
+      const catalogThumb = selectedProduct?.thumbnail_url;
+      if (catalogThumb) {
+        console.log('[generateMockups] falling back to catalog thumbnail:', catalogThumb);
+        setMockupUrls([catalogThumb]);
+      }
+      setMockupState("error");
+    }
   }
 
   async function handleUploadAndNext() {
@@ -754,7 +763,7 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
       onProductCreated({
         id: data.productId || uid(),
         name: productName.trim(), description: description.trim(), price: `$${price}`,
-        imageDataUrl: mockupUrls[0] || data.thumbnailUrl || primaryUrl,
+        imageDataUrl: mockupUrls[0] || data.thumbnailUrl || selectedProduct?.thumbnail_url || primaryUrl,
         design_url: primaryUrl,
         mockup_urls: mockupUrls.length > 0 ? mockupUrls : undefined,
         product_type: "physical",
