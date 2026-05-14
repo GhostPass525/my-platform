@@ -741,11 +741,16 @@ export default function AddProductModal({ userId: _userId, projectId, onProductC
     if (!selectedProduct || !primaryUrl || price < minPrice || !productName.trim()) return;
     setSaving(true); setError(null);
     const retailPrice = price.toFixed(2);
-    const variantInputs = variants.filter(v => v.in_stock).map(v => ({ variantId: v.id, retailPrice }));
+    // Fall back to all variants if Printful doesn't mark any as in_stock
+    // (some API responses omit or set in_stock:false even for orderable variants)
+    const inStockV = variants.filter(v => v.in_stock).length > 0
+      ? variants.filter(v => v.in_stock)
+      : variants;
+    const variantInputs = inStockV.map(v => ({ variantId: v.id, retailPrice }));
     const placementFiles = placements.filter(pl => compositeUrls[pl]).map(pl => ({ placement: pl, url: compositeUrls[pl] }));
     console.log('[AddProductModal] placementFiles being sent to create-product:', JSON.stringify(placementFiles));
+    console.log('[AddProductModal] inStockV count:', inStockV.length, 'of', variants.length, 'total variants');
     try {
-      const inStockV = variants.filter(v => v.in_stock);
       const res = await fetch("/api/printful/create-product", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

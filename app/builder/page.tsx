@@ -241,27 +241,44 @@ function injectInlineEditor(html: string): string {
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',makeEditable);}else{makeEditable();}
 
   // ── Delete-product overlays (builder-only) ───────────────────────────────
+  function attachDeleteOverlay(card){
+    if(card.getAttribute('data-vc-has-delete'))return;
+    card.setAttribute('data-vc-has-delete','1');
+    if(window.getComputedStyle(card).position==='static')card.style.position='relative';
+    var btn=document.createElement('button');
+    btn.setAttribute('type','button');
+    btn.setAttribute('data-vc-delete-btn','1');
+    btn.style.cssText='position:absolute;top:6px;right:6px;z-index:20;width:24px;height:24px;border-radius:50%;background:rgba(239,68,68,0.92);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;color:#fff;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+    btn.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();e.preventDefault();
+      /* Read product-id from card div first (Printful cards), then inner button (AI cards) */
+      var pid=card.getAttribute('data-product-id')||'';
+      var pname=card.getAttribute('data-product-name')||'';
+      if(!pid){var addBtn=card.querySelector('[data-add-to-cart]');if(addBtn){pid=addBtn.getAttribute('data-product-id')||'';pname=pname||addBtn.getAttribute('data-product-name')||'';}}
+      if(!pname)pname='this product';
+      window.parent.postMessage({type:'VOLCITY_DELETE_PRODUCT',productId:pid,productName:pname},'*');
+    });
+    card.appendChild(btn);
+    card.addEventListener('mouseenter',function(){btn.style.display='flex';});
+    card.addEventListener('mouseleave',function(){btn.style.display='none';});
+  }
   function addDeleteOverlays(){
+    /* Standard selector — covers AI-generated cards and injected Printful cards */
     var cards=document.querySelectorAll('[data-product-card],.product-card');
-    Array.prototype.forEach.call(cards,function(card){
-      if(card.getAttribute('data-vc-has-delete'))return;
-      card.setAttribute('data-vc-has-delete','1');
-      if(window.getComputedStyle(card).position==='static')card.style.position='relative';
-      var btn=document.createElement('button');
-      btn.setAttribute('type','button');
-      btn.setAttribute('data-vc-delete-btn','1');
-      btn.style.cssText='position:absolute;top:6px;right:6px;z-index:20;width:24px;height:24px;border-radius:50%;background:rgba(239,68,68,0.92);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;color:#fff;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
-      btn.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-      btn.addEventListener('click',function(e){
-        e.stopPropagation();e.preventDefault();
-        var addBtn=card.querySelector('[data-add-to-cart]');
-        var pid=addBtn?addBtn.getAttribute('data-product-id')||'':'';
-        var pname=addBtn?addBtn.getAttribute('data-product-name')||'this product':'this product';
-        window.parent.postMessage({type:'VOLCITY_DELETE_PRODUCT',productId:pid,productName:pname},'*');
-      });
-      card.appendChild(btn);
-      card.addEventListener('mouseenter',function(){btn.style.display='flex';});
-      card.addEventListener('mouseleave',function(){btn.style.display='none';});
+    Array.prototype.forEach.call(cards,function(card){attachDeleteOverlay(card);});
+    /* Fallback: find any [data-add-to-cart] button whose parent card wasn't matched above
+       (covers old AI-generated stores with non-standard class names) */
+    var atcBtns=document.querySelectorAll('[data-add-to-cart]');
+    Array.prototype.forEach.call(atcBtns,function(atcBtn){
+      /* Walk up to find the nearest block container that isn't already marked */
+      var el=atcBtn.parentElement;
+      while(el&&el!==document.body){
+        if(el.getAttribute('data-vc-has-delete'))return; /* already handled */
+        var tag=el.tagName.toLowerCase();
+        if(tag==='div'||tag==='article'||tag==='li'||tag==='section'){attachDeleteOverlay(el);return;}
+        el=el.parentElement;
+      }
     });
   }
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',addDeleteOverlays);}else{addDeleteOverlays();}
