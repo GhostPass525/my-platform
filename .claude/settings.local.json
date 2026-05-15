@@ -39,7 +39,11 @@
       "Read(//c/Users/Deadn/AppData/Local/**)",
       "Read(//c/Users/Deadn/**)",
       "Bash(ls dir:*)",
-      "Bash(where vercel:*)"
+      "Bash(where vercel:*)",
+      "Bash(npx vercel:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -218,7 +218,7 @@ function JourneyProgress({ stageIndex }: { stageIndex: number }) {
   );
 }
 
-const STRIPE_BANNER_KEY = "stripe_connect_banner_dismissed";
+const STRIPE_BANNER_KEY = "volcity_payments_banner_dismissed";
 
 function SetupBanner({ hasPublished }: { hasPublished: boolean }) {
   const [status, setStatus] = useState<{ stripe: { connected: boolean; onboarded: boolean } } | null>(null);
@@ -257,17 +257,17 @@ function SetupBanner({ hasPublished }: { hasPublished: boolean }) {
         </svg>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#1e40af", marginBottom: 4 }}>Connect Stripe to accept payments</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "#1e40af", marginBottom: 4 }}>Set up Volcity Payments to accept orders</div>
         <p style={{ fontSize: 15, color: "#3b82f6", margin: "0 0 12px", lineHeight: 1.6 }}>
           {!status.stripe.connected
-            ? "Your store is live! Connect your Stripe account to start accepting orders and getting paid."
-            : "Almost there — your Stripe account needs a few more details before it can accept payments."}
+            ? "Your store is live! Activate Volcity Payments to start accepting credit cards and getting paid."
+            : "Almost there — a few more details and you'll be ready to accept payments."}
         </p>
         <a
-          href="/dashboard/connect"
+          href="/dashboard/payments"
           style={{ display: "inline-block", padding: "8px 18px", borderRadius: 8, background: "#2563eb", color: "#fff", fontSize: 15, fontWeight: 600, textDecoration: "none" }}
         >
-          {!status.stripe.connected ? "Connect Stripe" : "Finish setup"}
+          {!status.stripe.connected ? "Activate Payments" : "Finish Setup"}
         </a>
       </div>
       <button

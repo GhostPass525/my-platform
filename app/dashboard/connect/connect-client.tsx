@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type ConnectStatus = {
   connected: boolean;
@@ -89,6 +89,7 @@ const SpinIcon = () => (
 
 export default function ConnectClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isConnected = searchParams.get("connected") === "1";
   const isRefresh = searchParams.get("refresh") === "1";
 
@@ -113,23 +114,9 @@ export default function ConnectClient() {
     }
   }, []);
 
-  const startOnboarding = useCallback(async () => {
-    setOnboarding(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/connect/onboard", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.url) {
-        window.location.href = data.url;
-      } else {
-        setError(data?.error || "Failed to start payout setup.");
-        setOnboarding(false);
-      }
-    } catch (e: unknown) {
-      setError((e as Error)?.message || "Network error.");
-      setOnboarding(false);
-    }
-  }, []);
+  const startOnboarding = useCallback(() => {
+    router.push("/dashboard/payments");
+  }, [router]);
 
   useEffect(() => {
     fetchStatus();
@@ -175,7 +162,7 @@ export default function ConnectClient() {
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Payouts</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1A1A1A", margin: 0, letterSpacing: "-0.01em" }}>Volcity Payments</h1>
         <p style={{ fontSize: 13, color: "#888", margin: "4px 0 0" }}>Manage how you receive money from sales</p>
       </div>
 
@@ -183,7 +170,7 @@ export default function ConnectClient() {
       {showBanner && (
         <div style={{ ...CARD, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 13, display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-          Payouts set up successfully!
+          Volcity Payments is active!
         </div>
       )}
 
@@ -200,9 +187,9 @@ export default function ConnectClient() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Payouts Active</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A" }}>Volcity Payments Active</div>
                 <div style={{ fontSize: 13, color: "#888", marginTop: 1 }}>
-                  {status?.payouts_enabled ? "Weekly payouts to your bank account" : "Payouts pending — finish setup in Stripe"}
+                  {status?.payouts_enabled ? "Payouts every 2 business days to your bank account" : "Almost ready — finish setup to enable payouts"}
                 </div>
               </div>
             </div>
@@ -210,12 +197,10 @@ export default function ConnectClient() {
               <div style={{ fontSize: 12, color: "#991B1B", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
             )}
             <a
-              href="https://dashboard.stripe.com/express"
-              target="_blank" rel="noopener noreferrer"
+              href="/dashboard/payments"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#1A1A1A", color: "#fff", textDecoration: "none", width: "fit-content" }}
             >
-              Manage Settings
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+              Manage Payments
             </a>
           </div>
         ) : status?.connected && !status.charges_enabled ? (
@@ -225,9 +210,9 @@ export default function ConnectClient() {
             <button
               onClick={startOnboarding}
               disabled={onboarding}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.6 : 1, width: "fit-content" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#D97706", color: "#fff", border: "none", cursor: "pointer", width: "fit-content" }}
             >
-              {onboarding ? <><SpinIcon /> Redirecting…</> : "Complete Setup"}
+              Finish Setup
             </button>
           </div>
         ) : (
@@ -248,9 +233,9 @@ export default function ConnectClient() {
             <button
               onClick={startOnboarding}
               disabled={onboarding}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: onboarding ? "not-allowed" : "pointer", opacity: onboarding ? 0.4 : 1, width: "fit-content" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: "#0f172a", color: "#fff", border: "none", cursor: "pointer", width: "fit-content" }}
             >
-              {onboarding ? <><SpinIcon /> Redirecting…</> : "Set Up Payouts"}
+              Activate Payments
             </button>
           </div>
         )}
@@ -263,7 +248,7 @@ export default function ConnectClient() {
           {[
             { n: "1", title: "Customer orders", body: "Someone buys a product from your store — we handle checkout and payment processing." },
             { n: "2", title: "We print & ship", body: "Your order goes straight to print. The product ships directly to your customer — no inventory, no hassle." },
-            { n: "3", title: "You get paid", body: "After Stripe and Volcity fees, your profit is deposited weekly to your bank account." },
+            { n: "3", title: "You get paid", body: "After Volcity Payments fees, your profit is deposited every 2 business days to your bank account." },
           ].map(({ n, title, body }, i) => (
             <div key={n} style={{ display: "flex", gap: 14, paddingBottom: i < 2 ? 20 : 0, marginBottom: i < 2 ? 20 : 0, borderBottom: i < 2 ? "1px solid #F0EFED" : "none" }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EEEDE9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#888" }}>{n}</div>
