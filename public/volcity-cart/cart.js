@@ -116,6 +116,11 @@
   };
 
   function openPDP(card, data) {
+    console.log('[volcity-cart] openPDP called:', { name: data.name, priceCents: data.priceCents, variantCount: (data.variants||[]).length, mockupCount: (data.mockupUrls||[]).length, hasImage: !!data.image });
+    var nameEl = document.getElementById('vc-pdp-name');
+    var priceEl = document.getElementById('vc-pdp-price');
+    var pdpEl = document.getElementById('vc-pdp');
+    console.log('[volcity-cart] DOM elements:', { pdp: !!pdpEl, name: !!nameEl, price: !!priceEl, pdpIsThis: pdpEl === pdp });
     Object.assign(pdpState, {
       variants: data.variants || [],
       mockupUrls: data.mockupUrls || [],
@@ -195,6 +200,7 @@
     updatePDPAddBtn();
     pdp.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    console.log('[volcity-cart] openPDP complete — pdp.style.display:', pdp.style.display, 'colors:', pdpState.variants.reduce(function(a,v){if(a.indexOf(v.color)<0)a.push(v.color);return a;},[]).length, 'variants:', pdpState.variants.length);
   }
 
   function closePDP() {
