@@ -109,6 +109,23 @@
   ].join('');
   document.body.appendChild(pdp);
 
+  /* Pre-bind all PDP child elements so we never rely on document.getElementById
+     (which can return stale elements if the document has been re-written) */
+  var pdpNameEl       = pdp.querySelector('#vc-pdp-name');
+  var pdpPriceEl      = pdp.querySelector('#vc-pdp-price');
+  var pdpQtyValEl     = pdp.querySelector('#vc-pdp-qty-val');
+  var pdpDescEl       = pdp.querySelector('#vc-pdp-desc');
+  var pdpMainImgEl    = pdp.querySelector('#vc-pdp-main-img');
+  var pdpThumbsEl     = pdp.querySelector('#vc-pdp-thumbs');
+  var pdpColorSectEl  = pdp.querySelector('#vc-pdp-color-sect');
+  var pdpColorLabelEl = pdp.querySelector('#vc-pdp-color-label');
+  var pdpSwatchesEl   = pdp.querySelector('#vc-pdp-color-swatches');
+  var pdpSizeBtnsEl   = pdp.querySelector('#vc-pdp-size-btns');
+  var pdpAddBtn       = pdp.querySelector('#vc-pdp-add');
+  var pdpCloseBtn     = pdp.querySelector('#vc-pdp-close');
+  var pdpQtyMinusBtn  = pdp.querySelector('#vc-pdp-qty-minus');
+  var pdpQtyPlusBtn   = pdp.querySelector('#vc-pdp-qty-plus');
+
   /* PDP state */
   var pdpState = {
     variants: [], mockupUrls: [], selectedColor: null, selectedSize: null,
@@ -116,11 +133,6 @@
   };
 
   function openPDP(card, data) {
-    console.log('[volcity-cart] openPDP called:', { name: data.name, priceCents: data.priceCents, variantCount: (data.variants||[]).length, mockupCount: (data.mockupUrls||[]).length, hasImage: !!data.image });
-    var nameEl = document.getElementById('vc-pdp-name');
-    var priceEl = document.getElementById('vc-pdp-price');
-    var pdpEl = document.getElementById('vc-pdp');
-    console.log('[volcity-cart] DOM elements:', { pdp: !!pdpEl, name: !!nameEl, price: !!priceEl, pdpIsThis: pdpEl === pdp });
     Object.assign(pdpState, {
       variants: data.variants || [],
       mockupUrls: data.mockupUrls || [],
@@ -128,20 +140,18 @@
       qty: 1, card: card, priceCents: data.priceCents || 0, name: data.name || 'Product',
     });
 
-    document.getElementById('vc-pdp-name').textContent = pdpState.name;
-    document.getElementById('vc-pdp-price').textContent = '$' + (pdpState.priceCents / 100).toFixed(2);
-    document.getElementById('vc-pdp-qty-val').textContent = '1';
-    document.getElementById('vc-pdp-desc').textContent = data.description || '';
+    pdpNameEl.textContent = pdpState.name;
+    pdpPriceEl.textContent = '$' + (pdpState.priceCents / 100).toFixed(2);
+    pdpQtyValEl.textContent = '1';
+    pdpDescEl.textContent = data.description || '';
 
     /* Image gallery */
-    var mainImg = document.getElementById('vc-pdp-main-img');
-    var thumbsEl = document.getElementById('vc-pdp-thumbs');
-    thumbsEl.innerHTML = '';
-    thumbsEl.style.display = '';
+    pdpThumbsEl.innerHTML = '';
+    pdpThumbsEl.style.display = '';
 
     var images = pdpState.mockupUrls.length > 0 ? pdpState.mockupUrls : (data.image ? [data.image] : []);
-    if (images.length > 0) { mainImg.src = images[0]; mainImg.style.display = ''; }
-    else { mainImg.src = ''; mainImg.style.display = 'none'; }
+    if (images.length > 0) { pdpMainImgEl.src = images[0]; pdpMainImgEl.style.display = ''; }
+    else { pdpMainImgEl.src = ''; pdpMainImgEl.style.display = 'none'; }
 
     if (images.length > 1) {
       images.forEach(function (url, i) {
@@ -152,28 +162,27 @@
         img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:6px;display:block;';
         thumb.appendChild(img);
         thumb.addEventListener('click', function () {
-          mainImg.src = url;
-          thumbsEl.querySelectorAll('button').forEach(function (b, j) {
+          pdpMainImgEl.src = url;
+          pdpThumbsEl.querySelectorAll('button').forEach(function (b, j) {
             b.style.border = '2px solid ' + (j === i ? '#0f172a' : 'transparent');
           });
         });
-        thumbsEl.appendChild(thumb);
+        pdpThumbsEl.appendChild(thumb);
       });
     } else {
-      thumbsEl.style.display = 'none';
+      pdpThumbsEl.style.display = 'none';
     }
 
     /* Colors */
     var colors = pdpState.variants.reduce(function (acc, v) {
       if (acc.indexOf(v.color) === -1) acc.push(v.color); return acc;
     }, []);
-    var swatchEl = document.getElementById('vc-pdp-color-swatches');
-    swatchEl.innerHTML = '';
-    document.getElementById('vc-pdp-color-sect').style.display = colors.length > 1 ? '' : 'none';
-    document.getElementById('vc-pdp-color-label').textContent = '';
+    pdpSwatchesEl.innerHTML = '';
+    pdpColorSectEl.style.display = colors.length > 1 ? '' : 'none';
+    pdpColorLabelEl.textContent = '';
     if (colors.length === 1) {
       pdpState.selectedColor = colors[0];
-      document.getElementById('vc-pdp-color-label').textContent = colors[0];
+      pdpColorLabelEl.textContent = colors[0];
     }
     colors.forEach(function (color) {
       var v0 = pdpState.variants.find(function (v) { return v.color === color; });
@@ -187,20 +196,19 @@
         pdpState.selectedColor = color;
         pdpState.selectedSize = null;
         pdpState.selectedVariantId = null;
-        document.getElementById('vc-pdp-color-label').textContent = color;
-        swatchEl.querySelectorAll('button').forEach(function (b) { b.style.border = '2.5px solid #E7E5E4'; });
+        pdpColorLabelEl.textContent = color;
+        pdpSwatchesEl.querySelectorAll('button').forEach(function (b) { b.style.border = '2.5px solid #E7E5E4'; });
         swatch.style.border = '2.5px solid #0f172a';
         renderPDPSizes();
         updatePDPAddBtn();
       });
-      swatchEl.appendChild(swatch);
+      pdpSwatchesEl.appendChild(swatch);
     });
 
     renderPDPSizes();
     updatePDPAddBtn();
     pdp.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    console.log('[volcity-cart] openPDP complete — pdp.style.display:', pdp.style.display, 'colors:', pdpState.variants.reduce(function(a,v){if(a.indexOf(v.color)<0)a.push(v.color);return a;},[]).length, 'variants:', pdpState.variants.length);
   }
 
   function closePDP() {
@@ -209,8 +217,7 @@
   }
 
   function renderPDPSizes() {
-    var sizeEl = document.getElementById('vc-pdp-size-btns');
-    sizeEl.innerHTML = '';
+    pdpSizeBtnsEl.innerHTML = '';
     var pool = pdpState.selectedColor
       ? pdpState.variants.filter(function (v) { return v.color === pdpState.selectedColor; })
       : pdpState.variants;
@@ -233,30 +240,29 @@
         renderPDPSizes();
         updatePDPAddBtn();
       });
-      sizeEl.appendChild(btn);
+      pdpSizeBtnsEl.appendChild(btn);
     });
   }
 
   function updatePDPAddBtn() {
-    var addBtn = document.getElementById('vc-pdp-add');
     var colors = pdpState.variants.reduce(function (acc, v) {
       if (acc.indexOf(v.color) === -1) acc.push(v.color); return acc;
     }, []);
     var needColor = colors.length > 1 && !pdpState.selectedColor;
     var needSize = !pdpState.selectedSize;
-    if (needColor && needSize) addBtn.textContent = 'Select color & size';
-    else if (needColor) addBtn.textContent = 'Select a color';
-    else if (needSize) addBtn.textContent = 'Select a size';
-    else addBtn.textContent = 'Add to Cart';
+    if (needColor && needSize) pdpAddBtn.textContent = 'Select color & size';
+    else if (needColor) pdpAddBtn.textContent = 'Select a color';
+    else if (needSize) pdpAddBtn.textContent = 'Select a size';
+    else pdpAddBtn.textContent = 'Add to Cart';
     var ready = !needColor && !needSize;
-    addBtn.disabled = !ready;
-    addBtn.style.background = ready ? '#FF9900' : '#E5E7EB';
-    addBtn.style.color = ready ? '#111' : '#9CA3AF';
-    addBtn.style.cursor = ready ? 'pointer' : 'not-allowed';
+    pdpAddBtn.disabled = !ready;
+    pdpAddBtn.style.background = ready ? '#FF9900' : '#E5E7EB';
+    pdpAddBtn.style.color = ready ? '#111' : '#9CA3AF';
+    pdpAddBtn.style.cursor = ready ? 'pointer' : 'not-allowed';
   }
 
   /* PDP close */
-  document.getElementById('vc-pdp-close').addEventListener('click', function (e) {
+  pdpCloseBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     closePDP();
   });
@@ -265,15 +271,15 @@
   });
 
   /* Qty buttons */
-  document.getElementById('vc-pdp-qty-minus').addEventListener('click', function () {
-    if (pdpState.qty > 1) { pdpState.qty--; document.getElementById('vc-pdp-qty-val').textContent = String(pdpState.qty); }
+  pdpQtyMinusBtn.addEventListener('click', function () {
+    if (pdpState.qty > 1) { pdpState.qty--; pdpQtyValEl.textContent = String(pdpState.qty); }
   });
-  document.getElementById('vc-pdp-qty-plus').addEventListener('click', function () {
-    if (pdpState.qty < 10) { pdpState.qty++; document.getElementById('vc-pdp-qty-val').textContent = String(pdpState.qty); }
+  pdpQtyPlusBtn.addEventListener('click', function () {
+    if (pdpState.qty < 10) { pdpState.qty++; pdpQtyValEl.textContent = String(pdpState.qty); }
   });
 
   /* Add to Cart from PDP */
-  document.getElementById('vc-pdp-add').addEventListener('click', function () {
+  pdpAddBtn.addEventListener('click', function () {
     if (!pdpState.selectedSize) return;
     var colorLabel = pdpState.selectedColor || '';
     var sizeLabel = pdpState.selectedSize || '';
@@ -282,7 +288,7 @@
     var sourceBtn = pdpState.card && pdpState.card.querySelector('[data-add-to-cart]');
     var baseId = (sourceBtn && sourceBtn.dataset.productId) || pdpState.name;
     var cartId = baseId + '::' + (pdpState.selectedVariantId || variantLabel);
-    var imgSrc = document.getElementById('vc-pdp-main-img').src || null;
+    var imgSrc = pdpMainImgEl.src || null;
     if (imgSrc && imgSrc.slice(-1) === '/') imgSrc = null; /* avoid base URL */
 
     var existing = cart.find(function (i) { return i.id === cartId; });
@@ -297,10 +303,9 @@
     }
 
     /* Brief success animation */
-    var addBtn = document.getElementById('vc-pdp-add');
-    addBtn.textContent = 'Added to Cart \u2713';
-    addBtn.style.background = '#16a34a';
-    addBtn.style.color = '#fff';
+    pdpAddBtn.textContent = 'Added to Cart \u2713';
+    pdpAddBtn.style.background = '#16a34a';
+    pdpAddBtn.style.color = '#fff';
     setTimeout(function () {
       closePDP();
       render();
