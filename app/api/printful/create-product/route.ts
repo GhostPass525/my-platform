@@ -140,6 +140,7 @@ export async function POST(req: Request) {
             products: [...currentProducts, newProduct],
           };
 
+          console.log('[create-product] PRODUCT BEING SAVED:', JSON.stringify(newProduct, null, 2));
           console.log('[create-product] Step 5: saving updated site_json, new products count:', updatedSite.products.length);
 
           const { error: saveError } = await supabase

@@ -386,6 +386,10 @@ function injectProductCardIntoHtml(
     ? `<div class="product-image-placeholder" style="padding:0;overflow:hidden;"><img src="${esc(product.imageDataUrl)}" alt="${esc(product.name)}" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>`
     : `<div class="product-image-placeholder">${esc(product.name)}</div>`;
 
+  console.log('[INJECT] printful_variants:', product.printful_variants);
+  console.log('[INJECT] variants:', (product as Record<string, unknown>).variants);
+  console.log('[INJECT] printful_variant_ids:', (product as Record<string, unknown>).printful_variant_ids);
+
   const variantsAttr = product.printful_variants && product.printful_variants.length > 0
     ? ` data-printful="true" data-variants='${JSON.stringify(product.printful_variants).replace(/'/g, "&#39;")}'`
     : "";
@@ -2607,6 +2611,9 @@ export default function Home() {
           onProductCreated={(product: NewProduct) => {
             if (!site) return;
             const newProduct: Product = { ...product };
+
+            console.log('[builder] onProductCreated newProduct.printful_variants:', newProduct.printful_variants);
+            console.log('[builder] onProductCreated newProduct.product_type:', newProduct.product_type);
 
             // Inject a product card into the HTML so the preview updates immediately
             const newHtml = site.generatedHtml
